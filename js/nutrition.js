@@ -313,7 +313,7 @@ async function doFoodSearch(meal) {
       <div style="flex:1;min-width:0;">
         <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
           ${f.name}
-          ${f._isAU ? '<span style="font-size:9px;background:rgba(0,180,0,.18);color:var(--green);border-radius:4px;padding:1px 5px;margin-left:4px;">\ud83c\uddau\ud83c\uddfa</span>' : ''}
+          ${f._isAU ? '<span style="font-size:9px;background:rgba(0,180,0,.18);color:var(--green);border-radius:4px;padding:1px 5px;margin-left:4px;">🇦🇺</span>' : ''}
         </div>
         ${f.brand ? `<div style="font-size:10px;color:var(--text-dim);">${f.brand}</div>` : ''}
         <div style="font-size:10px;color:var(--text-dim);margin-top:2px;">

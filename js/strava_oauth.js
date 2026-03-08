@@ -3,7 +3,7 @@
 // ===================================================================
 
 const STRAVA_CLIENT_ID = '208609';
-const STRAVA_REDIRECT_URI = 'https://magicmaniac407.github.io/tricoach/';
+const STRAVA_REDIRECT_URI = 'https://magicmaniac407.github.io/tricoach';
 const STRAVA_AUTH_URL = 'https://www.strava.com/oauth/authorize';
 const STRAVA_TOKEN_URL = 'https://www.strava.com/oauth/token';
 const STRAVA_API_URL = 'https://www.strava.com/api/v3';
