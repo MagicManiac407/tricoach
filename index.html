@@ -180,7 +180,7 @@
   <div class="g2" style="margin-bottom:16px;">
     <div class="card" style="margin:0;">
       <div class="sl">This Week — <span id="d-week-lbl" style="color:var(--text-mid);"></span></div>
-      <div id="d-sync-status" style="font-size:11px;padding:6px 10px;border-radius:6px;margin-bottom:8px;background:var(--surface2);border:1px solid var(--border);">⚪ Garmin not connected — go to <strong>Athletes → Connect Garmin</strong></div>
+      <div id="d-sync-status" style="font-size:11px;padding:6px 10px;border-radius:6px;margin-bottom:8px;background:var(--surface2);border:1px solid var(--border);">⚪ Never synced — run <strong>python3 sync.py</strong> in Terminal</div>
       <div id="d-week-snap" style="margin-bottom:12px;"></div>
       <div class="tot-bar" style="margin-top:0;" id="d-totals-bar">
         <div class="ti"><div class="tv sw" id="dt-swim">0</div><div class="tl">Swims</div></div>
@@ -369,7 +369,7 @@
   <div class="pt">MORNING CHECK</div>
   <div class="ps">Before coffee. Before training. 2–3 minutes.</div>
   <div style="display:flex;gap:10px;margin-bottom:14px;align-items:center;flex-wrap:wrap;">
-    <button class="btn" id="mrn-garmin-btn" onclick="doGarminSyncNow()" style="background:var(--blue);color:#fff;font-weight:700;">🔄 Sync Garmin Now</button>
+    <button class="btn" id="mrn-garmin-btn" onclick="serverSync('garmin')" style="background:var(--blue);color:#fff;font-weight:700;">🔄 Sync Garmin Now</button>
     <span id="mrn-garmin-status" style="font-size:12px;color:var(--text-dim);">Auto-fills HRV, sleep, RHR and stress below</span>
   </div>
   <div class="g2">
@@ -983,11 +983,25 @@
 
   <!-- Daily totals bar -->
   <div class="card" id="nut-totals-card" style="margin-bottom:14px;padding:14px 18px;">
+    <!-- Main 4 macros -->
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;text-align:center;">
       <div><div style="font-family:'Bebas Neue',sans-serif;font-size:28px;color:var(--green);" id="nt-cal">0</div><div style="font-size:10px;color:var(--text-dim);">CALORIES</div><div style="font-size:9px;color:var(--text-dim);" id="nt-cal-goal"></div></div>
       <div><div style="font-family:'Bebas Neue',sans-serif;font-size:28px;color:#64b5f6;" id="nt-pro">0g</div><div style="font-size:10px;color:var(--text-dim);">PROTEIN</div></div>
       <div><div style="font-family:'Bebas Neue',sans-serif;font-size:28px;color:#ffb74d;" id="nt-carb">0g</div><div style="font-size:10px;color:var(--text-dim);">CARBS</div></div>
       <div><div style="font-family:'Bebas Neue',sans-serif;font-size:28px;color:#f48fb1;" id="nt-fat">0g</div><div style="font-size:10px;color:var(--text-dim);">FAT</div></div>
+    </div>
+    <!-- Burned / Net row -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;text-align:center;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);">
+      <div>
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;color:#ef9a9a;" id="nt-burned">&mdash;</div>
+        <div style="font-size:10px;color:var(--text-dim);">BURNED 🔥</div>
+        <div style="font-size:9px;color:var(--text-dim);">from Strava</div>
+      </div>
+      <div>
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;color:var(--text-dim);" id="nt-net">&mdash;</div>
+        <div style="font-size:10px;color:var(--text-dim);">NET CALORIES</div>
+        <div style="font-size:9px;color:var(--text-dim);">eaten &minus; burned</div>
+      </div>
     </div>
     <!-- Calorie progress bar -->
     <div style="margin-top:10px;">
@@ -998,19 +1012,49 @@
         <div id="nt-cal-bar" style="height:100%;background:var(--green);border-radius:4px;transition:width .3s;width:0%;"></div>
       </div>
     </div>
+    <!-- Macro progress bars (shown only when goals are set) -->
+    <div id="nt-macro-bars" style="display:none;margin-top:10px;display:flex;flex-direction:column;gap:6px;">
+      <div>
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:#64b5f6;margin-bottom:3px;">
+          <span>Protein</span><span id="nt-pro-pct"></span>
+        </div>
+        <div style="background:var(--bg);border-radius:4px;height:5px;overflow:hidden;">
+          <div id="nt-pro-bar" style="height:100%;background:#64b5f6;border-radius:4px;transition:width .3s;width:0%;"></div>
+        </div>
+      </div>
+      <div>
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:#ffb74d;margin-bottom:3px;">
+          <span>Carbs</span><span id="nt-carb-pct"></span>
+        </div>
+        <div style="background:var(--bg);border-radius:4px;height:5px;overflow:hidden;">
+          <div id="nt-carb-bar" style="height:100%;background:#ffb74d;border-radius:4px;transition:width .3s;width:0%;"></div>
+        </div>
+      </div>
+      <div>
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:#f48fb1;margin-bottom:3px;">
+          <span>Fat</span><span id="nt-fat-pct"></span>
+        </div>
+        <div style="background:var(--bg);border-radius:4px;height:5px;overflow:hidden;">
+          <div id="nt-fat-bar" style="height:100%;background:#f48fb1;border-radius:4px;transition:width .3s;width:0%;"></div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- Goals setting (collapsible) -->
   <details style="margin-bottom:14px;">
-    <summary style="cursor:pointer;font-size:11px;color:var(--text-dim);padding:8px;background:var(--card);border-radius:8px;list-style:none;">⚙️ Daily Targets (click to set)</summary>
+    <summary style="cursor:pointer;font-size:11px;color:var(--text-dim);padding:8px;background:var(--card);border-radius:8px;list-style:none;">⚙️ Daily Targets &amp; Settings (click to expand)</summary>
     <div class="card" style="margin-top:6px;padding:14px 18px;">
+      <div style="font-size:11px;color:var(--text-dim);margin-bottom:10px;">Set your nutrition goals — progress bars appear automatically</div>
       <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;">
         <div><label style="font-size:10px;color:var(--text-dim);">Calorie Target</label><input type="number" id="nut-goal-cal" placeholder="e.g. 2800" oninput="saveNutGoals()" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 10px;"></div>
         <div><label style="font-size:10px;color:var(--text-dim);">Protein Target (g)</label><input type="number" id="nut-goal-pro" placeholder="e.g. 160" oninput="saveNutGoals()" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 10px;"></div>
         <div><label style="font-size:10px;color:var(--text-dim);">Carbs Target (g)</label><input type="number" id="nut-goal-carb" placeholder="e.g. 300" oninput="saveNutGoals()" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 10px;"></div>
         <div><label style="font-size:10px;color:var(--text-dim);">Fat Target (g)</label><input type="number" id="nut-goal-fat" placeholder="e.g. 80" oninput="saveNutGoals()" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 10px;"></div>
-        <div><label style="font-size:10px;color:var(--text-dim);">Cal Burned (exercise)</label><input type="number" id="nut-goal-burned" placeholder="e.g. 600" oninput="saveNutGoals()" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 10px;"></div>
+        <div><label style="font-size:10px;color:var(--text-dim);">Burned Override (kcal)</label><input type="number" id="nut-goal-burned" placeholder="manual fallback if no Strava" oninput="saveNutGoals()" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 10px;"></div>
+        <div><label style="font-size:10px;color:var(--text-dim);">Claude API Key (for 🏷 Label OCR)</label><input type="password" id="nut-claude-key" placeholder="sk-ant-api03-..." oninput="saveNutGoals()" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 10px;" autocomplete="off"></div>
       </div>
+      <div style="font-size:9px;color:var(--text-dim);margin-top:8px;">🔑 API key is stored locally in your browser — never sent anywhere except api.anthropic.com for label scanning</div>
     </div>
   </details>
 
@@ -1059,25 +1103,6 @@
       </label>
     </div>
     <div id="share-status" style="font-size:11px;color:var(--text-dim);margin-top:10px;"></div>
-  </div>
-
-  <!-- Garmin Connection -->
-  <div class="card" style="margin-bottom:14px;padding:16px 20px;">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-      <div class="sl" style="margin:0;">⌚ Garmin Connection</div>
-    </div>
-    <div id="garmin-connection-card">
-      <div style="text-align:center;padding:16px 0;">
-        <div style="font-size:32px;margin-bottom:8px;">⌚</div>
-        <div style="font-size:13px;color:var(--text);margin-bottom:4px;">Connect your Garmin account</div>
-        <div style="font-size:11px;color:var(--text-dim);line-height:1.5;margin-bottom:16px;">
-          Auto-sync HRV, sleep, resting HR and stress data. No Python script required.
-        </div>
-        <button class="btn" onclick="showGarminConnectModal()" style="background:var(--blue);color:#fff;font-weight:700;padding:10px 24px;">
-          ⌚ Connect Garmin
-        </button>
-      </div>
-    </div>
   </div>
 
   <!-- Athletes list -->
@@ -1172,6 +1197,7 @@
 <script src="js/dashboard.js"></script>
 <script src="js/performance.js"></script>
 <script src="js/strava.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/quagga@0.12.1/dist/quagga.min.js"></script>
 <script src="js/nutrition.js"></script>
 <script src="js/init.js"></script>
 </body>
