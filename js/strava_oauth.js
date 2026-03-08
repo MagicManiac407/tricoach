@@ -31,25 +31,37 @@ async function handleStravaCallback() {
 
   if (error) {
     showToast('Strava connection cancelled', true);
-    // Clean up URL
     window.history.replaceState({}, document.title, window.location.pathname);
     return;
   }
 
   if (!code) return; // No callback params — normal page load
 
-  // Show connecting state
   showToast('Connecting Strava...', false);
 
-  try {
-    // Exchange code for tokens via Supabase Edge Function
-    const result = await stravaEdgeCall('exchange_token', { code });
+  // Wait for Supabase auth session to be ready (up to 5 seconds)
+  let waited = 0;
+  while ((!supa || !currentUser) && waited < 5000) {
+    await new Promise(r => setTimeout(r, 200));
+    waited += 200;
+    if (supa && !currentUser) {
+      const { data: { session } } = await supa.auth.getSession();
+      if (session && session.user) currentUser = session.user;
+    }
+  }
 
+  if (!currentUser) {
+    showToast('Strava connection failed: Not signed in', true);
+    window.history.replaceState({}, document.title, window.location.pathname);
+    return;
+  }
+
+  try {
+    const result = await stravaEdgeCall('exchange_token', { code });
     if (result.ok) {
-      showToast('✅ Strava connected!');
+      showToast('Strava connected!');
       await loadStravaStatus();
       renderStravaConnection();
-      // Trigger initial activity sync
       await syncStravaActivities();
     } else {
       showToast('Strava connection failed: ' + (result.error || 'Unknown error'), true);
@@ -106,29 +118,27 @@ async function syncStravaActivities(showFeedback = true) {
   if (!supa || !currentUser) return;
   if (showFeedback) {
     const btn = document.getElementById('strava-sync-btn');
-    if (btn) { btn.disabled = true; btn.textContent = '⏳ Syncing...'; }
+    if (btn) { btn.disabled = true; btn.textContent = 'Syncing...'; }
   }
 
   const result = await stravaEdgeCall('sync_activities');
 
   if (result.ok) {
-    // Merge new activities into STRAVA_ACTS
     if (result.activities && result.activities.length > 0) {
       mergeStravaActivities(result.activities);
     }
-    // Update last sync time in status
     await loadStravaStatus();
     renderStravaConnection();
     refreshPlannerFromStrava();
     updateDashboard();
-    if (showFeedback) showToast('✅ Strava synced — ' + (result.count || 0) + ' activities');
+    if (showFeedback) showToast('Strava synced — ' + (result.count || 0) + ' activities');
   } else {
     if (showFeedback) showToast('Strava sync failed: ' + (result.error || 'Unknown'), true);
   }
 
   if (showFeedback) {
     const btn = document.getElementById('strava-sync-btn');
-    if (btn) { btn.disabled = false; btn.textContent = '🔄 Sync Now'; }
+    if (btn) { btn.disabled = false; btn.textContent = 'Sync Now'; }
   }
 }
 
@@ -147,7 +157,6 @@ function mergeStravaActivities(newActs) {
     added++;
   });
 
-  // Sort by date
   existing.sort((a, b) => a.d.localeCompare(b.d));
   STRAVA_ACTS.acts = existing;
 }
@@ -175,7 +184,7 @@ function renderStravaConnection() {
     return;
   }
 
-  const connected = STRAVA_STATUS?.strava_connected;
+  const connected = STRAVA_STATUS && STRAVA_STATUS.strava_connected;
 
   if (connected) {
     const lastSync = STRAVA_STATUS.strava_last_sync
@@ -190,7 +199,7 @@ function renderStravaConnection() {
     const pic = STRAVA_STATUS.strava_athlete_pic;
     const avatar = pic
       ? `<img src="${pic}" style="width:40px;height:40px;border-radius:50%;object-fit:cover;" onerror="this.style.display='none'">`
-      : `<div style="width:40px;height:40px;background:#fc4c02;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;">🏃</div>`;
+      : `<div style="width:40px;height:40px;background:#fc4c02;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;">&#x1F3C3;</div>`;
 
     el.innerHTML = `
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
@@ -206,25 +215,25 @@ function renderStravaConnection() {
           <div style="font-size:9px;color:var(--text-dim);margin-top:2px;">LAST SYNC</div>
         </div>
         <div style="background:var(--surface2);border-radius:8px;padding:10px;text-align:center;">
-          <div style="font-family:'DM Mono',monospace;font-size:13px;color:var(--green);">✅ OK</div>
+          <div style="font-family:'DM Mono',monospace;font-size:13px;color:var(--green);">OK</div>
           <div style="font-size:9px;color:var(--text-dim);margin-top:2px;">STATUS</div>
         </div>
       </div>
       <div style="font-size:11px;color:var(--text-dim);margin-bottom:10px;">Auto-syncs when you open the app. Fetches last 30 days of activities.</div>
       <div style="display:flex;gap:8px;">
-        <button class="btn" id="strava-sync-btn" onclick="syncStravaActivities()" style="flex:1;background:#fc4c02;color:#fff;font-weight:700;">🔄 Sync Now</button>
+        <button class="btn" id="strava-sync-btn" onclick="syncStravaActivities()" style="flex:1;background:#fc4c02;color:#fff;font-weight:700;">&#x1F504; Sync Now</button>
         <button class="btn sec" onclick="disconnectStrava()" style="color:var(--red);border-color:rgba(244,67,54,.3);">Disconnect</button>
       </div>`;
   } else {
     el.innerHTML = `
       <div style="text-align:center;padding:16px 0;">
-        <div style="font-size:32px;margin-bottom:8px;">🏃</div>
+        <div style="font-size:32px;margin-bottom:8px;">&#x1F3C3;</div>
         <div style="font-size:13px;color:var(--text);margin-bottom:4px;">Connect your Strava account</div>
         <div style="font-size:11px;color:var(--text-dim);line-height:1.5;margin-bottom:16px;max-width:280px;margin-left:auto;margin-right:auto;">
           Auto-import your runs, rides and swims. Activities appear in your planner automatically.
         </div>
         <button class="btn" onclick="connectStrava()" style="background:#fc4c02;color:#fff;font-weight:700;padding:10px 24px;">
-          🏃 Connect Strava
+          &#x1F3C3; Connect Strava
         </button>
       </div>`;
   }
