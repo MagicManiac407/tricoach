@@ -4,7 +4,7 @@
 //                                    → Settings → API Keys (Publishable key)
 // ===================================================================
 const SUPABASE_URL  = 'https://vhdzkmjfivfuverqhxip.supabase.co';
-const SUPABASE_ANON = 'sb_publishable_A14st8S-OPSBBOZ8SzQshQ_D56nk0nz';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZoZHprbWpmaXZmdXZlcnFoeGlwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI4MTUyOTEsImV4cCI6MjA4ODM5MTI5MX0.b5Vc4waPmO88VO0EBjPmMI0Dycnb6VjFvtG7g-JrsRo';
 
 // ── Supabase client (null if not configured yet) ─────────────────
 const supa = (SUPABASE_URL && SUPABASE_ANON)
