@@ -382,27 +382,36 @@ def inject_into_html(garmin_data, strava_acts):
     print(f"\n  Updating {html_path.name}...")
     html = html_path.read_text(encoding="utf-8")
 
-    # ── 1. Inject Garmin data ──────────────────────────────────────
+    # Garmin health data goes to js/strava.js, Strava activities go to js/dashboard.js
+    garmin_js_path = html_path.parent / "js" / "strava.js"
+    dash_js_path = html_path.parent / "js" / "dashboard.js"
+
+    # ── 1. Inject Garmin data into js/strava.js ───────────────────
     garmin_json = json.dumps(garmin_data) if garmin_data else "null"
-    html = re.sub(
-        r'const GARMIN_TODAY = [^;]*;[^\n]*@@GARMIN_INJECT@@[^\n]*',
-        f'const GARMIN_TODAY = {garmin_json}; // @@GARMIN_INJECT@@ — do not edit this line',
-        html
-    )
+    if garmin_js_path.exists():
+        garmin_html = garmin_js_path.read_text(encoding="utf-8")
+        garmin_html = re.sub(
+            r'const GARMIN_TODAY = [^;]*;[^\n]*@@GARMIN_INJECT@@[^\n]*',
+            f'const GARMIN_TODAY = {garmin_json}; // @@GARMIN_INJECT@@ — do not edit this line',
+            garmin_html
+        )
+        meta = {"synced_at": datetime.now().isoformat(), "strava_count": len(strava_acts)}
+        meta_json = json.dumps(meta)
+        garmin_html = re.sub(
+            r'const SYNC_META = [^;]*;[^\n]*@@SYNC_META@@[^\n]*',
+            f'const SYNC_META = {meta_json};    // @@SYNC_META@@    — do not edit this line',
+            garmin_html
+        )
+        garmin_js_path.write_text(garmin_html, encoding="utf-8")
+        print(f'  ✅ js/strava.js updated with Garmin data')
 
-    # ── 2. Inject sync metadata ────────────────────────────────────
-    meta = {"synced_at": datetime.now().isoformat(), "strava_count": len(strava_acts)}
-    meta_json = json.dumps(meta)
-    html = re.sub(
-        r'const SYNC_META = [^;]*;[^\n]*@@SYNC_META@@[^\n]*',
-        f'const SYNC_META = {meta_json};    // @@SYNC_META@@    — do not edit this line',
-        html
-    )
-
-    # ── 3. Merge new Strava activities into STRAVA_ACTS ────────────
+    # ── 2. Merge new Strava activities into js/dashboard.js ────────
+    if dash_js_path.exists():
+        html = dash_js_path.read_text(encoding="utf-8")
     if strava_acts:
-        # Extract existing acts from HTML
-        m = re.search(r'const STRAVA_ACTS = (\{.*?\});', html, re.DOTALL)
+        # Extract existing acts from dashboard.js
+        dash_html = dash_js_path.read_text(encoding="utf-8") if dash_js_path.exists() else ""
+        m = re.search(r'const STRAVA_ACTS = (\{.*?\});', dash_html, re.DOTALL)
         if m:
             try:
                 raw_json = m.group(1)
@@ -462,9 +471,9 @@ def inject_into_html(garmin_data, strava_acts):
             except Exception as e:
                 print(f"  ⚠  Could not merge Strava activities: {e}")
 
-    # ── 4. Save HTML ───────────────────────────────────────────────
-    html_path.write_text(html, encoding="utf-8")
-    print(f"  ✅ {html_path.name} updated successfully")
+    # ── 4. Save Strava activities to js/dashboard.js ─────────────
+    dash_js_path.write_text(html, encoding="utf-8")
+    print(f"  ✅ js/dashboard.js updated with Strava activities")
     return True
 
 # ─────────────────────────────────────────────────────────────────

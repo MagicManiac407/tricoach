@@ -119,21 +119,44 @@ function renderHistory(){
   const allLines = comp.split('\n').filter(l=>l.trim() && !l.startsWith('---') && /^(Run:|Rouvy:|Ride:|Swim:)/i.test(l.trim()));
   const statLines = allLines.map(line => {
     const kmM = line.match(/(\d+\.?\d*)km/);
+    const mM  = line.match(/(\d+)m(?!in)/);  // metres for swim
     const paceM = line.match(/(\d:\d{2})\/km/);
+    const swimPaceM = line.match(/(\d:\d{2})\/100m/);
     const wattM = line.match(/NP (\d+)W/);
+    const avgWM = line.match(/(\d+)W avg/);
     const hrM = line.match(/@ (\d+)bpm/);
+    const minM = line.match(/(\d+\.?\d*)min/);
     const efM = line.match(/\[(Z[2-5]|INTERVAL|WU|CD)\]/);
     const sport = line.match(/^(\w+):/)?.[1] || '';
     const sportColor = /Swim/i.test(sport)?'#2196f3':/Rouvy|Ride/i.test(sport)?'#ff9800':'#00e676';
     const efColor = efM?{Z2:'#00e676',Z3:'#ff9800',Z4:'#ff7043',Z5:'#f44336',INTERVAL:'#f44336',WU:'var(--text-dim)',CD:'var(--text-dim)'}[efM[1]]||'var(--text-dim)':'';
-    const parts = [
-      kmM ? kmM[1]+'km' : '',
-      paceM ? '<span style="font-family:monospace;">'+paceM[1]+'/km</span>' : '',
-      wattM ? wattM[1]+'W NP' : '',
-      hrM ? hrM[1]+'bpm' : '',
-      efM ? '<span style="font-size:9px;font-weight:700;color:'+efColor+';">'+efM[1]+'</span>' : ''
-    ].filter(Boolean).join(' ');
-    return parts ? '<span style="color:'+sportColor+';font-size:9px;font-weight:700;">'+sport.toUpperCase()+'</span> <span style="font-size:10px;color:var(--text-mid);">'+parts+'</span>' : '';
+
+    let parts = [];
+    if(/Swim/i.test(sport)) {
+      // Swim: distance, time, pace per 100m
+      if(mM && parseInt(mM[1]) > 100) parts.push(mM[1]+'m');
+      else if(kmM) parts.push((parseFloat(kmM[1])*1000).toFixed(0)+'m');
+      if(minM) parts.push(parseFloat(minM[1]).toFixed(0)+'min');
+      if(swimPaceM) parts.push('<span style="font-family:monospace;">'+swimPaceM[1]+'/100m</span>');
+      if(hrM) parts.push(hrM[1]+'bpm');
+    } else if(/Rouvy|Ride/i.test(sport)) {
+      // Bike: distance, time, power (NP preferred), HR
+      if(kmM) parts.push(parseFloat(kmM[1]).toFixed(0)+'km');
+      if(minM) parts.push(parseFloat(minM[1]).toFixed(0)+'min');
+      if(wattM) parts.push('<span style="color:#ff9800;font-weight:600;">'+wattM[1]+'W NP</span>');
+      else if(avgWM) parts.push('<span style="color:#ff9800;">'+avgWM[1]+'W avg</span>');
+      if(hrM) parts.push(hrM[1]+'bpm');
+    } else {
+      // Run: distance, pace, HR
+      if(kmM) parts.push(kmM[1]+'km');
+      if(paceM) parts.push('<span style="font-family:monospace;">'+paceM[1]+'/km</span>');
+      if(hrM) parts.push(hrM[1]+'bpm');
+    }
+    if(efM) parts.push('<span style="font-size:9px;font-weight:700;color:'+efColor+';">'+efM[1]+'</span>');
+
+    return parts.length
+      ? '<span style="color:'+sportColor+';font-size:9px;font-weight:700;">'+sport.toUpperCase()+'</span> <span style="font-size:10px;color:var(--text-mid);">'+parts.join(' · ')+'</span>'
+      : '';
   }).filter(Boolean);
   const stats = statLines.join('<br>') || comp.split('\n').find(l=>l.trim()&&!l.startsWith('---'))?.slice(0,60) || '—';
   return`<tr>

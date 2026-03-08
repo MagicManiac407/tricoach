@@ -51,8 +51,26 @@ function getDayTotals(date) {
   return {cal:Math.round(t.cal),protein:Math.round(t.protein),carbs:Math.round(t.carbs),fat:Math.round(t.fat)};
 }
 
-// ── BURNED CALORIES FROM STRAVA ──────────────────────────────────────
+// ── BURNED CALORIES — Garmin first, Strava fallback ──────────────────────────
 function getBurnedCalories(date) {
+  // 1) Try Garmin cloud data (total day burn = active + resting)
+  // GARMIN_CLOUD is populated in strava_oauth.js after login
+  if (typeof GARMIN_CLOUD !== 'undefined' && GARMIN_CLOUD) {
+    const gd = GARMIN_CLOUD;
+    // Garmin typically gives total day burn. Use bodyBattery as proxy if calOut missing.
+    // We check if today — if so use live data
+    const today = localDateStr(new Date());
+    if (date === today || date === (()=>{const d=new Date();d.setDate(d.getDate()-1);return localDateStr(d);})()) {
+      // Use garmin calories if available
+      if (gd.totalCalories && gd.totalCalories > 0) return gd.totalCalories;
+      if (gd.activeCalories && gd.activeCalories > 0) {
+        const resting = gd.restingCalories || 1800;
+        return Math.round(gd.activeCalories + resting);
+      }
+    }
+  }
+
+  // 2) Try Strava activities for this date (active calories via rate × time)
   const BURN_RATE = {run:10, bike:8, swim:9, other:7};
   let burned = 0;
   try {
@@ -67,8 +85,15 @@ function getBurnedCalories(date) {
       burned += mins * rate;
     });
   } catch(e) {}
-  // Fall back to manual override if no Strava data found
-  if(burned === 0 && D.nutGoals?.burned) burned = D.nutGoals.burned;
+
+  // Add estimated resting metabolic rate if we have active calories from Strava
+  if (burned > 0) {
+    const restingRMR = 1800; // reasonable estimate for athletic male
+    burned = Math.round(burned + restingRMR);
+  }
+
+  // 3) Fall back to manual override if no data found
+  if (burned === 0 && D.nutGoals?.burned) burned = D.nutGoals.burned;
   return Math.round(burned);
 }
 
@@ -190,7 +215,8 @@ function renderNutrition() {
         <div style="display:flex;gap:6px;flex-wrap:wrap;">
           <button class="btn sec sml" onclick="openFoodSearch('${meal}')">🔍 Search Foods</button>
           <button class="btn sec sml" onclick="openMyFoods('${meal}')">📋 My Foods</button>
-          <button class="btn sec sml" onclick="openAddTemplateToMeal('${meal}')">🍽 Template</button>
+          <button class="btn sec sml" onclick="openAddTemplateToMeal('${meal}')">🍽 Load Template</button>
+          <button class="btn sec sml" onclick="openSaveMealTemplateModal('${meal}')" title="Save this meal as a template">💾 Save Meal</button>
         </div>
       </div>
       ${entries.length > 0 ? `<div style="overflow-x:auto;"><table class="tbl" style="width:100%;">
@@ -218,20 +244,17 @@ function removeEntry(meal, idx) {
 // ── OPEN FOOD FACTS SEARCH — AU-prioritised ──────────────────────────
 async function searchOpenFoodFacts(query) {
   const fields = 'product_name,brands,nutriments,serving_size,serving_quantity,countries_tags';
-  const base   = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&search_simple=1&action=process&json=1&sort_by=unique_scans_n&fields=${fields}`;
-  const auUrl  = base + '&page_size=20&tagtype_0=countries&tag_contains_0=contains&tag_0=australia';
-  const glUrl  = base + '&page_size=20';
 
   function parseProduct(p) {
-    const n      = p.nutriments;
+    const n      = p.nutriments || {};
     const cal100  = n['energy-kcal_100g'] || n['energy-kcal'] || Math.round((n['energy_100g']||0)/4.184) || 0;
     const pro100  = n['proteins_100g']        || 0;
     const carb100 = n['carbohydrates_100g']   || 0;
     const fat100  = n['fat_100g']             || 0;
     const serving = parseFloat(p.serving_quantity) || 100;
-    const isAU    = (p.countries_tags||[]).some(t => t.includes('australia'));
+    const isAU    = (p.countries_tags||[]).some(t => t.includes('australia') || t.includes('en:australia'));
     return {
-      name: p.product_name, brand: p.brands || '',
+      name: (p.product_name||'').trim(), brand: (p.brands || '').trim(),
       servingQty: serving, unit: 'g',
       cal: Math.round(cal100),
       protein: Math.round(pro100  * 10) / 10,
@@ -241,26 +264,54 @@ async function searchOpenFoodFacts(query) {
     };
   }
 
-  try {
-    // AU-filtered search first (most popular AU products by scan count)
-    const r1  = await fetch(auUrl);
-    const d1  = await r1.json();
-    const auP = (d1.products||[]).filter(p => p.product_name && p.nutriments);
-    let merged = auP.map(parseProduct);
+  // Try the v2 API first (more reliable, better CORS headers)
+  const v2Url = `https://world.openfoodfacts.org/api/v2/search?search_terms=${encodeURIComponent(query)}&fields=${encodeURIComponent(fields)}&sort_by=unique_scans_n&page_size=25`;
+  const auV2Url = `https://world.openfoodfacts.org/api/v2/search?search_terms=${encodeURIComponent(query)}&fields=${encodeURIComponent(fields)}&sort_by=unique_scans_n&page_size=20&countries_tags_en=australia`;
 
-    // If fewer than 6 AU results, pad with global results
-    if(auP.length < 6) {
-      const r2  = await fetch(glUrl);
-      const d2  = await r2.json();
-      const glP = (d2.products||[]).filter(p => p.product_name && p.nutriments);
+  // Fallback: old CGI endpoint
+  const cgiBase = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&search_simple=1&action=process&json=1&sort_by=unique_scans_n&fields=${fields}`;
+  const cgiAuUrl = cgiBase + '&page_size=20&tagtype_0=countries&tag_contains_0=contains&tag_0=australia';
+  const cgiGlUrl = cgiBase + '&page_size=25';
+
+  async function tryFetch(url) {
+    const r = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+    return (d.products || []).filter(p => p.product_name && p.nutriments);
+  }
+
+  try {
+    let merged = [];
+
+    // Try AU-scoped v2 first
+    try {
+      const auProds = await tryFetch(auV2Url);
+      merged = auProds.map(parseProduct);
+    } catch(e) {
+      // v2 failed — try old CGI AU
+      try {
+        const auProds = await tryFetch(cgiAuUrl);
+        merged = auProds.map(parseProduct);
+      } catch(e2) { /* continue to global */ }
+    }
+
+    // If few AU results, pad with global
+    if (merged.length < 6) {
+      let globalProds = [];
+      try {
+        globalProds = await tryFetch(v2Url);
+      } catch(e) {
+        try { globalProds = await tryFetch(cgiGlUrl); } catch(e2) {}
+      }
       const seen = new Set(merged.map(p => p.name + '|' + p.brand));
-      glP.forEach(p => {
+      globalProds.forEach(p => {
         const parsed = parseProduct(p);
-        const key    = parsed.name + '|' + parsed.brand;
-        if(!seen.has(key)) { merged.push(parsed); seen.add(key); }
+        const key = parsed.name + '|' + parsed.brand;
+        if (!seen.has(key)) { merged.push(parsed); seen.add(key); }
       });
     }
-    return merged.slice(0, 25);
+
+    return merged.filter(p => p.name).slice(0, 25);
   } catch(e) {
     console.error('Food search error:', e);
     return [];
@@ -730,40 +781,94 @@ function renderMealTemplates() {
   if(!el) return;
   const templates = D.mealTemplates || [];
   if(!templates.length) {
-    el.innerHTML = '<div style="font-size:11px;color:var(--text-dim);">No templates yet \u2014 log a full day then click "Save Current Day as Template".</div>';
+    el.innerHTML = '<div style="font-size:11px;color:var(--text-dim);">No templates yet — save a meal or full day using the buttons below each meal card.</div>';
     return;
   }
+  const mealIcon = {breakfast:'🌅',lunch:'☀️',dinner:'🌙',snacks:'🍎'};
   el.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:8px;">
-    ${templates.map((t,i) => `<div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 14px;display:flex;align-items:center;gap:10px;">
-      <div>
-        <div style="font-size:13px;font-weight:600;">${t.name}</div>
-        <div style="font-size:10px;color:var(--text-dim);">${t.totalCal} kcal \u00b7 ${t.totalPro}g protein</div>
-      </div>
-      <button class="btn sec sml" style="font-size:10px;" onclick="applyTemplate(${i})">Apply to Today</button>
-      <button style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:12px;" onclick="deleteTemplate(${i})" title="Delete">\u2715</button>
-    </div>`).join('')}
+    ${templates.map((t,i) => {
+      const typeLabel = t.mealType ? (mealIcon[t.mealType]||'🍽') + ' ' + t.mealType : '📅 Full day';
+      return `<div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <div>
+          <div style="font-size:13px;font-weight:600;">${t.name}</div>
+          <div style="font-size:10px;color:var(--text-dim);">${typeLabel} · ${t.totalCal} kcal · ${t.totalPro}g protein</div>
+        </div>
+        ${t.mealType
+          ? `<button class="btn sec sml" style="font-size:10px;" onclick="applyMealTemplate(${i})">Apply to ${t.mealType}</button>`
+          : `<button class="btn sec sml" style="font-size:10px;" onclick="applyTemplate(${i})">Apply full day</button>`}
+        <button style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:12px;" onclick="deleteTemplate(${i})" title="Delete">✕</button>
+      </div>`;
+    }).join('')}
   </div>`;
 }
 
+// Save full-day template (existing flow)
 function openSaveTemplateModal() {
   const date = nutDate();
   const t    = getDayTotals(date);
   if(!t.cal) { showToast('No food logged today to save as template', true); return; }
   const html = `<div id="edit-modal-bg" onclick="closeEditModal()" style="position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9999;display:flex;align-items:center;justify-content:center;">
     <div onclick="event.stopPropagation()" style="background:var(--card);border-radius:12px;padding:24px;width:min(400px,95vw);">
-      <div style="font-family:'Bebas Neue',sans-serif;font-size:18px;color:var(--green);margin-bottom:14px;">SAVE AS TEMPLATE</div>
-      <div style="font-size:12px;color:var(--text-dim);margin-bottom:12px;">Saving ${date}: ${t.cal} kcal \u00b7 ${t.protein}g protein \u00b7 ${t.carbs}g carbs \u00b7 ${t.fat}g fat</div>
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:18px;color:var(--green);margin-bottom:14px;">SAVE DAY AS TEMPLATE</div>
+      <div style="font-size:12px;color:var(--text-dim);margin-bottom:12px;">Saving ${date}: ${t.cal} kcal · ${t.protein}g protein · ${t.carbs}g carbs · ${t.fat}g fat</div>
       <label style="font-size:10px;color:var(--text-dim);">Template Name</label>
       <input type="text" id="tmpl-name" placeholder="e.g. Race Day, Hard Training, Rest Day"
         style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:8px 10px;margin-bottom:14px;box-sizing:border-box;">
       <div style="display:flex;gap:8px;justify-content:flex-end;">
         <button class="btn sec sml" onclick="closeEditModal()">Cancel</button>
-        <button class="btn" style="background:var(--green);color:#000;font-weight:700;" onclick="saveTemplate('${date}')">\ud83d\udcbe Save Template</button>
+        <button class="btn" style="background:var(--green);color:#000;font-weight:700;" onclick="saveTemplate('${date}')">💾 Save Full Day</button>
       </div>
     </div>
   </div>`;
   document.body.insertAdjacentHTML('beforeend', html);
   document.getElementById('tmpl-name')?.focus();
+}
+
+// Save a single meal as a template
+function openSaveMealTemplateModal(meal) {
+  const date = nutDate();
+  const entries = (D.foodlog[date]?.meals?.[meal] || []);
+  if(!entries.length) { showToast(`No food logged in ${meal} yet`, true); return; }
+  const mealCal = entries.reduce((s,e) => s + (e.cal||0), 0);
+  const mealPro = entries.reduce((s,e) => s + (e.protein||0), 0);
+  const mealIcon = {breakfast:'🌅',lunch:'☀️',dinner:'🌙',snacks:'🍎'}[meal]||'🍽';
+  const html = `<div id="edit-modal-bg" onclick="closeEditModal()" style="position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9999;display:flex;align-items:center;justify-content:center;">
+    <div onclick="event.stopPropagation()" style="background:var(--card);border-radius:12px;padding:24px;width:min(400px,95vw);">
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:18px;color:var(--green);margin-bottom:8px;">SAVE ${meal.toUpperCase()} TEMPLATE</div>
+      <div style="font-size:12px;color:var(--text-dim);margin-bottom:4px;">${mealIcon} ${entries.length} items · ${Math.round(mealCal)} kcal · ${Math.round(mealPro)}g protein</div>
+      <div style="font-size:11px;color:var(--text-dim);margin-bottom:12px;">${entries.map(e=>e.name).join(', ')}</div>
+      <label style="font-size:10px;color:var(--text-dim);">Template Name</label>
+      <input type="text" id="tmpl-name" placeholder="e.g. Pre-race breakfast, Post-ride lunch"
+        style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:8px 10px;margin-bottom:14px;box-sizing:border-box;"
+        value="${meal.charAt(0).toUpperCase()+meal.slice(1)} — ${date}">
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button class="btn sec sml" onclick="closeEditModal()">Cancel</button>
+        <button class="btn" style="background:var(--green);color:#000;font-weight:700;" onclick="saveMealTemplate('${date}','${meal}')">💾 Save</button>
+      </div>
+    </div>
+  </div>`;
+  document.body.insertAdjacentHTML('beforeend', html);
+  setTimeout(() => { const n = document.getElementById('tmpl-name'); if(n){n.select();} }, 100);
+}
+
+function saveMealTemplate(date, meal) {
+  const name = document.getElementById('tmpl-name')?.value?.trim();
+  if(!name) { showToast('Give the template a name', true); return; }
+  const entries = D.foodlog[date]?.meals?.[meal] || [];
+  if(!entries.length) { showToast('No entries to save', true); return; }
+  if(!D.mealTemplates) D.mealTemplates = [];
+  const mealCal = entries.reduce((s,e) => s + (e.cal||0), 0);
+  const mealPro = entries.reduce((s,e) => s + (e.protein||0), 0);
+  // Build meals object with only this meal's entries
+  const mealsObj = { breakfast:[], lunch:[], dinner:[], snacks:[] };
+  mealsObj[meal] = JSON.parse(JSON.stringify(entries));
+  D.mealTemplates.push({
+    name, date, mealType: meal,
+    totalCal: Math.round(mealCal), totalPro: Math.round(mealPro),
+    meals: mealsObj
+  });
+  save(); closeEditModal(); renderMealTemplates();
+  showToast(`Template "${name}" saved ✓`);
 }
 
 function saveTemplate(date) {
@@ -773,11 +878,12 @@ function saveTemplate(date) {
   if(!D.mealTemplates) D.mealTemplates = [];
   const t = getDayTotals(date);
   D.mealTemplates.push({
-    name, date, totalCal: t.cal, totalPro: t.protein,
+    name, date, mealType: null,  // null = full day
+    totalCal: t.cal, totalPro: t.protein,
     meals: JSON.parse(JSON.stringify(day.meals))
   });
   save(); closeEditModal(); renderMealTemplates();
-  showToast('Template "' + name + '" saved \u2713');
+  showToast('Template "' + name + '" saved ✓');
 }
 
 function applyTemplate(idx) {
@@ -787,7 +893,21 @@ function applyTemplate(idx) {
   if(!confirm('Apply template "' + tmpl.name + '" to ' + date + '? This will REPLACE what is currently logged.')) return;
   getNutDay(date).meals = JSON.parse(JSON.stringify(tmpl.meals));
   save(); renderNutrition(); syncNutritionToMorning(date);
-  showToast('Template applied to ' + date + ' \u2713');
+  showToast('Template applied to ' + date + ' ✓');
+}
+
+// Apply a per-meal template — adds entries INTO the target meal
+function applyMealTemplate(idx) {
+  const tmpl = (D.mealTemplates||[])[idx];
+  if(!tmpl || !tmpl.mealType) return;
+  const meal = tmpl.mealType;
+  const date = nutDate();
+  const entries = tmpl.meals[meal] || [];
+  if(!entries.length) { showToast('Template has no entries', true); return; }
+  const day = getNutDay(date);
+  entries.forEach(e => day.meals[meal].push({...e}));
+  save(); renderNutrition(); syncNutritionToMorning(date);
+  showToast(`${meal.charAt(0).toUpperCase()+meal.slice(1)} template applied ✓`);
 }
 
 function deleteTemplate(idx) {
@@ -797,18 +917,35 @@ function deleteTemplate(idx) {
 }
 
 function openAddTemplateToMeal(meal) {
-  const templates = D.mealTemplates || [];
-  if(!templates.length) { showToast('No templates saved yet', true); return; }
+  const templates = (D.mealTemplates || []).filter(t => !t.mealType || t.mealType === meal);
+  if(!templates.length) {
+    // Show all templates if no meal-specific ones
+    const allTemplates = D.mealTemplates || [];
+    if(!allTemplates.length) { showToast('No templates saved yet — save a meal first', true); return; }
+    // Fall back to showing all
+    return openAddAnyTemplateToMeal(meal, allTemplates);
+  }
+  openAddAnyTemplateToMeal(meal, templates);
+}
+
+function openAddAnyTemplateToMeal(meal, templates) {
+  const mealIcon = {breakfast:'🌅',lunch:'☀️',dinner:'🌙',snacks:'🍎'}[meal]||'🍽';
   const html = `<div id="edit-modal-bg" onclick="closeEditModal()" style="position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9999;display:flex;align-items:center;justify-content:center;">
-    <div onclick="event.stopPropagation()" style="background:var(--card);border-radius:12px;padding:24px;width:min(420px,95vw);">
-      <div style="font-family:'Bebas Neue',sans-serif;font-size:18px;color:var(--green);margin-bottom:14px;">ADD TEMPLATE TO ${meal.toUpperCase()}</div>
-      ${templates.map((t,i) => `<div style="padding:10px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
-        <div>
-          <div style="font-size:13px;font-weight:600;">${t.name}</div>
-          <div style="font-size:10px;color:var(--text-dim);">${t.totalCal} kcal \u00b7 ${t.totalPro}g protein</div>
-        </div>
-        <button class="btn sec sml" style="font-size:10px;" onclick="addTemplateToMeal(${i},'${meal}')">Add</button>
-      </div>`).join('')}
+    <div onclick="event.stopPropagation()" style="background:var(--card);border-radius:12px;padding:24px;width:min(420px,95vw);max-height:80vh;overflow-y:auto;">
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:18px;color:var(--green);margin-bottom:14px;">${mealIcon} ADD TO ${meal.toUpperCase()}</div>
+      ${templates.map((t,i) => {
+        const realIdx = (D.mealTemplates||[]).indexOf(t);
+        const mealEntries = t.mealType ? (t.meals[t.mealType]||[]) : (t.meals[meal]||[]);
+        const typeLabel = t.mealType ? t.mealType : 'full day';
+        return `<div style="padding:10px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:10px;">
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:13px;font-weight:600;">${t.name}</div>
+            <div style="font-size:10px;color:var(--text-dim);">${typeLabel} · ${t.totalCal} kcal · ${t.totalPro}g protein</div>
+            ${mealEntries.length ? '<div style="font-size:9px;color:var(--text-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + mealEntries.map(e=>e.name).join(', ') + '</div>' : ''}
+          </div>
+          <button class="btn sec sml" style="font-size:10px;flex-shrink:0;" onclick="addTemplateToMeal(${realIdx},'${meal}')">Add</button>
+        </div>`;
+      }).join('')}
       <div style="margin-top:12px;text-align:right;"><button class="btn sec sml" onclick="closeEditModal()">Close</button></div>
     </div>
   </div>`;
@@ -817,11 +954,17 @@ function openAddTemplateToMeal(meal) {
 
 function addTemplateToMeal(tmplIdx, meal) {
   const tmpl = D.mealTemplates[tmplIdx];
+  if(!tmpl) return;
   const date = nutDate();
   const day  = getNutDay(date);
-  MEALS.forEach(m => { (tmpl.meals[m]||[]).forEach(e => day.meals[meal].push({...e})); });
+  // Only copy the matching meal's entries, not all meals
+  const sourceEntries = tmpl.mealType
+    ? (tmpl.meals[tmpl.mealType] || [])  // per-meal template: use its mealType
+    : (tmpl.meals[meal] || []);           // full-day template: use target meal
+  if(!sourceEntries.length) { showToast('No entries for this meal in the template', true); return; }
+  sourceEntries.forEach(e => day.meals[meal].push({...e}));
   save(); closeEditModal(); renderNutrition(); syncNutritionToMorning(date);
-  showToast('Template added to ' + meal + ' \u2713');
+  showToast('Template added to ' + meal + ' ✓');
 }
 
 // ── CUSTOM FOOD MANUAL ENTRY ───────────────────────────────────────

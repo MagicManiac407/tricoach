@@ -184,7 +184,57 @@ function updateAutoTotals() {
   if(wuc) wuc.textContent = t.wuCount > 0 ? t.wuCount : '0';
 }
 
-function autoFillCIFromPlanner() { autoFillCI(); }
+// ===== TRAINING LOAD SCORE (replaces Z2 Pace in check-in) =====
+// Score based on: total volume (hrs), session count, effort distribution, avg HR
+// Returns {score, label, color, detail} — score is 0-100 arbitrary load index
+function calcWeekTrainingLoad(weekKey) {
+  const t = calcWeekTotalsFromStrava(weekKey);
+  if(!t.totalSessions && !t.totalMin) return null;
+
+  const totalHrs = t.totalMin / 60;
+
+  // Volume score (0-35 pts): 10hrs = ~25pts, 15hrs = 35pts, scale linearly
+  const volumeScore = Math.min(35, totalHrs * 2.3);
+
+  // Session count score (0-20 pts): 7 sessions = 20pts
+  const sessionScore = Math.min(20, t.totalSessions * 2.9);
+
+  // Effort distribution score (0-25 pts): balanced mix = high score
+  // Ideal: ~20% hard, ~60% z2, ~20% moderate
+  const totalEff = t.hardCount + t.z2Count + t.z3Count;
+  let effortScore = 0;
+  if(totalEff > 0) {
+    const hardRatio = t.hardCount / totalEff;
+    const z2Ratio = t.z2Count / totalEff;
+    // Sweet spot: 15-30% hard, 50-70% z2
+    const hardOk = hardRatio >= 0.1 && hardRatio <= 0.35;
+    const z2Ok = z2Ratio >= 0.4;
+    effortScore = (hardOk ? 12 : hardRatio > 0.35 ? 6 : 8) + (z2Ok ? 13 : 7);
+  } else {
+    effortScore = 10; // no effort data — neutral
+  }
+
+  // Sport variety score (0-20 pts): doing all 3 disciplines = 20pts
+  const sports = (t.runSessions > 0 ? 1 : 0) + (t.swimSessions > 0 ? 1 : 0) + (t.bikeSessions > 0 ? 1 : 0);
+  const varietyScore = sports * 7; // max 21, cap at 20
+
+  const rawScore = Math.round(volumeScore + sessionScore + effortScore + Math.min(20, varietyScore));
+  const score = Math.min(100, rawScore);
+
+  // Build breakdown detail text
+  const parts = [];
+  if(totalHrs > 0) parts.push(totalHrs.toFixed(1) + 'h total');
+  if(t.totalSessions > 0) parts.push(t.totalSessions + ' sessions');
+  if(t.hardCount > 0) parts.push(t.hardCount + ' hard');
+  if(t.z2Count > 0) parts.push(t.z2Count + ' Z2');
+  const sportLabels = [t.runSessions?t.runSessions+' runs':'', t.swimSessions?t.swimSessions+' swims':'', t.bikeSessions?t.bikeSessions+' bikes':''].filter(Boolean);
+  if(sportLabels.length) parts.push(sportLabels.join(', '));
+
+  const label = score >= 75 ? 'HIGH' : score >= 50 ? 'MODERATE' : score >= 25 ? 'LOW' : 'MINIMAL';
+  const color = score >= 75 ? 'var(--red)' : score >= 50 ? 'var(--orange)' : score >= 25 ? 'var(--green)' : 'var(--text-dim)';
+
+  return { score, label, color, detail: parts.join(' · ') || 'No Strava data' };
+}
 
 // ===== AUTO-POPULATE PLANNER FROM STRAVA =====
 function autoPopulatePlannerFromStrava() {
@@ -261,7 +311,13 @@ function applySyncData() {
 
   // ── Garmin: auto-fill morning check fields ──────────────────────
   // Priority: 1) Cloud data from Supabase, 2) Hardcoded GARMIN_TODAY fallback
-  const garmin = getGarminData();
+  let garmin = null;
+  // getGarminData is defined in strava_oauth.js (loaded after strava.js)
+  if(typeof getGarminData === 'function') {
+    garmin = getGarminData();
+  } else if(typeof GARMIN_TODAY !== 'undefined') {
+    garmin = GARMIN_TODAY;
+  }
   if(garmin) {
     const fill = (id, val) => {
       const el = document.getElementById(id);
@@ -285,8 +341,8 @@ function updateGarminSyncStatus() {
   const syncEl = document.getElementById('d-sync-status');
   if(!syncEl) return;
 
-  // Check cloud sync status first
-  if(GARMIN_CLOUD && GARMIN_CLOUD.synced_at) {
+  // Check cloud sync status first (GARMIN_CLOUD is defined in strava_oauth.js)
+  if(typeof GARMIN_CLOUD !== 'undefined' && GARMIN_CLOUD && GARMIN_CLOUD.synced_at) {
     const syncedAt = new Date(GARMIN_CLOUD.synced_at);
     const minsAgo = Math.round((Date.now() - syncedAt) / 60000);
     const label = minsAgo < 60 ? minsAgo + 'min ago' : Math.round(minsAgo/60) + 'hrs ago';
@@ -305,18 +361,8 @@ function updateGarminSyncStatus() {
     return;
   }
 
-  // Check if Garmin is connected but never synced
-  if(GARMIN_STATUS && !GARMIN_STATUS.last_sync_at) {
-    syncEl.innerHTML = '⚠️ Garmin connected — tap <strong>Sync Now</strong> to pull data';
-    syncEl.style.color = 'var(--orange)';
-    return;
-  }
-
-  // Not connected
-  if(!GARMIN_STATUS) {
-    syncEl.innerHTML = '⚪ Garmin not connected — go to <strong>Athletes → Connect Garmin</strong>';
-    syncEl.style.color = 'var(--text-dim)';
-  }
+  syncEl.innerHTML = '⚪ Garmin not connected — go to <strong>Athletes → Connect Garmin</strong>';
+  syncEl.style.color = 'var(--text-dim)';
 }
 
 

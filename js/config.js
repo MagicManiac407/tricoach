@@ -84,6 +84,13 @@ async function loadFromSupabase() {
     if(!D.foodlog) D.foodlog = {};
     if(!D.mealTemplates) D.mealTemplates = [];
     if(!D.nutGoals) D.nutGoals = {};
+    // Restore Strava activities from saved data
+    if(D._stravaActs && Array.isArray(D._stravaActs)) {
+      STRAVA_ACTS.acts = D._stravaActs;
+    }
+    if(D._stravaPbs) {
+      STRAVA_ACTS.pbs = D._stravaPbs;
+    }
     // Also cache locally
     localStorage.setItem('tc26v4', JSON.stringify(D));
   } else {
@@ -91,6 +98,9 @@ async function loadFromSupabase() {
     const local = localStorage.getItem('tc26v4');
     if(local) {
       D = JSON.parse(local);
+      if(D._stravaActs && Array.isArray(D._stravaActs)) {
+        STRAVA_ACTS.acts = D._stravaActs;
+      }
       await pushToSupabase(); // upload local data to cloud
       showToast('Local data migrated to your cloud account ✓');
     }
@@ -193,6 +203,13 @@ let currentWeekKey = getWeekKey(new Date());
 let chartInstance = null;
 
 function save(){
+  // Persist Strava activities in D so they survive page reloads
+  if(typeof STRAVA_ACTS !== 'undefined' && STRAVA_ACTS.acts && STRAVA_ACTS.acts.length > 0) {
+    D._stravaActs = STRAVA_ACTS.acts;
+  }
+  if(typeof STRAVA_ACTS !== 'undefined' && STRAVA_ACTS.pbs && Object.keys(STRAVA_ACTS.pbs).length > 0) {
+    D._stravaPbs = STRAVA_ACTS.pbs;
+  }
   localStorage.setItem('tc26v4', JSON.stringify(D));
   // Debounce cloud sync — waits 2s after last save to avoid hammering API
   if(supa && currentUser) {

@@ -113,23 +113,27 @@ function liveUpdateTotals(){
   DAYS.forEach((_,di)=>{
     const t=(document.getElementById('tp-'+di)?.value||'').toLowerCase();
     const p=(document.getElementById('pl-'+di)?.value||'').toLowerCase();
-    if(/swim/.test(t)){swim++;sessions++;}
-    if(/bike|cycle/.test(t)){bike++;sessions++;}
-    if(/run/.test(t)){run++;sessions++;}
-    if(!t.trim()||/rest/.test(t))rest++;
-    if(/interval|effort|threshold|max|285|260|245|hard|vo2/i.test(p))hard++;
-    if(/z2|zone 2|145|150|155|160/i.test(p))z2++;
+    const c=(document.getElementById('cp-'+di)?.value||'').toLowerCase();
+    const anyContent=t.trim()||p.trim()||c.trim();
+    if(/swim/.test(t)||/swim/.test(c)){swim++;sessions++;}
+    else if(/bike|cycle|rouvy|ride/.test(t)||/bike|cycle|rouvy|ride/.test(c)){bike++;sessions++;}
+    else if(/run/.test(t)||/run/.test(c)){run++;sessions++;}
+    else if(anyContent&&!/rest/.test(t)){sessions++;}
+    if(!anyContent||/rest/.test(t))rest++;
+    if(/interval|effort|threshold|max|285|260|245|hard|vo2/i.test(p)||/interval|effort|threshold|max|hard|vo2/i.test(c))hard++;
+    if(/z2|zone 2|145|150|155|160/i.test(p)||/\[z2\]/i.test(c))z2++;
   });
   const easy=Math.max(0,sessions-hard);
   const ratio=hard>0?Math.round((easy/hard)*10)/10+'x':hard===0&&sessions>0?'∞':'—';
-  document.getElementById('tot-swim').textContent=swim;
-  document.getElementById('tot-bike').textContent=bike;
-  document.getElementById('tot-run').textContent=run;
-  document.getElementById('tot-hard').textContent=hard;
-  document.getElementById('tot-sessions').textContent=sessions;
-  document.getElementById('tot-z2').textContent=z2;
-  document.getElementById('tot-rest').textContent=rest;
-  document.getElementById('tot-ratio').textContent=ratio;
+  const setEl=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v;};
+  setEl('tot-swim',swim);
+  setEl('tot-bike',bike);
+  setEl('tot-run',run);
+  setEl('tot-hard',hard);
+  setEl('tot-sessions',sessions);
+  setEl('tot-z2',z2);
+  setEl('tot-rest',rest);
+  setEl('tot-ratio',ratio);
 }
 
 function checkStack(){

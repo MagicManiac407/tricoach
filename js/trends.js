@@ -82,7 +82,7 @@ function getChartData(){
         calIn:avg(weekMornings,'calIn'),calOut:avg(weekMornings,'calOut'),
         protein:avg(weekMornings,'protein'),
         sessionQuality:qCount?totalQ/qCount:null,
-        trainingLoad:manHrs,
+        trainingLoad: (()=>{ const tl=calcWeekTrainingLoad(wk); return tl?tl.score:null; })(),
         massage:null,foam:null,stretch:null,ice:null,compression:null,nap:null,
         noRecovery: weekMornings.length ? weekMornings.filter(m=>m.recovery?.none).length/weekMornings.length : null,
         supplements: weekMornings.length ? weekMornings.filter(m=>m.supplements===true).length/weekMornings.length : null
@@ -518,39 +518,37 @@ function autoFillCI() {
     sleepTrend.textContent='No morning data';
   }
 
-  // ── Z2 pace: avg pace of easy runs this week vs last ─────────────
-  const fmtPace = p => { const m=Math.floor(p),s=Math.round((p-m)*60); return m+':'+(s<10?'0':'')+s; };
-  const easyRuns = wkKey => {
-    const [s,e]=weekDateRange(wkKey);
-    const acts=STRAVA_ACTS.acts.filter(a=>a.s==='Run'&&a.ef==='easy'&&a.p&&a.p>0&&a.dk>=5&&a.d>=s&&a.d<=e);
-    if(!acts.length) return null;
-    return acts.reduce((s,a)=>s+a.p,0)/acts.length;
-  };
-  const thisZ2  = easyRuns(wk);
-  const prevZ2  = easyRuns(prevWk);
-  const z2El    = document.getElementById('ci-z2pace-display');
-  const z2Trend = document.getElementById('ci-z2pace-trend');
-  const z2Auto  = document.getElementById('ci-z2-autotext');
-  if(thisZ2) {
-    z2El.textContent = fmtPace(thisZ2)+'/km';
-    z2El.style.color = 'var(--text)';
-    if(prevZ2) {
-      const diff = thisZ2 - prevZ2; // negative = faster = better
-      const improved = diff < -0.05;
-      const declined = diff > 0.05;
-      z2Trend.innerHTML = improved
-        ? '<span style="color:var(--green)">📈 '+Math.abs(diff*60).toFixed(0)+'s faster vs last week</span>'
-        : declined
-        ? '<span style="color:var(--red)">📉 '+Math.abs(diff*60).toFixed(0)+'s slower vs last week</span>'
-        : '<span style="color:var(--text-dim)">➡️ Held steady</span>';
-      document.getElementById('q3').value = improved?'improving':declined?'declining':'holding';
-      if(z2Auto) z2Auto.innerHTML = '<span style="color:var(--text-dim)">Auto: '+(improved?'improving':declined?'declining':'holding')+'</span>';
-    } else {
-      z2Trend.textContent = 'No previous week Z2 data';
+  // ── Training Load Score (replaces Z2 pace) ────────────────────────
+  const tl = calcWeekTrainingLoad(wk);
+  const tlEl    = document.getElementById('ci-z2pace-display');
+  const tlTrend = document.getElementById('ci-z2pace-trend');
+  const tlAuto  = document.getElementById('ci-z2-autotext');
+  const tlLabel = document.querySelector('[data-ci-label="z2pace"]'); // label element if any
+
+  if(tl) {
+    if(tlEl) { tlEl.textContent = tl.score; tlEl.style.color = tl.color; tlEl.style.fontSize = '28px'; }
+    if(tlTrend) tlTrend.innerHTML = '<span style="color:var(--text-dim);">' + tl.label + ' · ' + tl.detail + '</span>';
+
+    // Compare to last week's load
+    const prevTl = calcWeekTrainingLoad(prevWk);
+    if(prevTl && tlAuto) {
+      const diff = tl.score - prevTl.score;
+      const up = diff >= 5, down = diff <= -5;
+      tlAuto.innerHTML = up
+        ? '<span style="color:var(--green)">Auto: ↑ +' + diff + ' pts vs last week</span>'
+        : down
+        ? '<span style="color:var(--orange)">Auto: ↓ ' + diff + ' pts vs last week</span>'
+        : '<span style="color:var(--text-dim)">Auto: similar to last week</span>';
+    }
+    // Auto-set Q3 based on load vs last week
+    if(prevTl) {
+      const diff = tl.score - prevTl.score;
+      document.getElementById('q3').value = diff >= 5 ? 'improving' : diff <= -5 ? 'declining' : 'holding';
     }
   } else {
-    z2El.textContent='—'; z2El.style.color='var(--text-dim)';
-    z2Trend.textContent='No Z2 runs ≥5km this week';
+    if(tlEl) { tlEl.textContent = '—'; tlEl.style.color = 'var(--text-dim)'; }
+    if(tlTrend) tlTrend.textContent = 'No Strava data — run sync first';
+    if(tlAuto) tlAuto.textContent = '';
   }
 
   showToast('✅ Auto-filled from your week data');

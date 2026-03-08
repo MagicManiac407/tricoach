@@ -155,15 +155,98 @@ function mergeStravaActivities(newActs) {
   const existingKeys = new Set(existing.map(a => a.d + '|' + a.n));
 
   let added = 0;
+  const genuinelyNew = [];
   newActs.forEach(act => {
     if (act.id && existingIds.has(act.id)) return;
     if (existingKeys.has(act.d + '|' + act.n)) return;
     existing.push(act);
+    genuinelyNew.push(act);
     added++;
   });
 
   existing.sort((a, b) => a.d.localeCompare(b.d));
   STRAVA_ACTS.acts = existing;
+
+  // Auto-update PBs from genuinely new activities
+  if (genuinelyNew.length) autoUpdatePBsFromStrava(genuinelyNew);
+}
+
+// Auto-detect and update PBs from new Strava activities
+function autoUpdatePBsFromStrava(acts) {
+  if (!acts || !acts.length) return;
+  let updated = false;
+
+  acts.forEach(a => {
+    // Run distance PBs
+    if (a.s === 'Run' && a.dk && a.p) {
+      const fmtP = p => { const m=Math.floor(p),s=Math.round((p-m)*60); return m+':'+(s<10?'0':'')+s; };
+      const fmtT = mins => { const h=Math.floor(mins/60),m=Math.round(mins%60); return h>0?h+'h'+m+'min':m+'min'; };
+      const dist = a.dk;
+      const checkDistPB = (minKm, maxKm, label) => {
+        if (dist >= minKm && dist <= maxKm) {
+          const timeStr = a.mm ? fmtT(a.mm) : fmtP(a.p)+'/km';
+          const existing = (D.pbs.run||[]).find(p=>p.n===label);
+          // Only flag as candidate — don't auto-overwrite, show toast
+          if (!existing || existing.v === '—') {
+            if (!D.pbs.run) D.pbs.run = [];
+            const idx = D.pbs.run.findIndex(p=>p.n===label);
+            if (idx < 0) { D.pbs.run.push({n:label, v:timeStr, note:'Auto-detected '+a.d}); updated = true; }
+          }
+        }
+      };
+      checkDistPB(0.35, 0.45, 'Run 400m');
+      checkDistPB(0.95, 1.05, 'Run 1km');
+      checkDistPB(4.8, 5.3, 'Run 5km');
+      checkDistPB(9.8, 10.3, 'Run 10km');
+      checkDistPB(21.0, 21.5, 'Run Half Marathon');
+      checkDistPB(42.0, 42.5, 'Run Marathon');
+    }
+
+    // Bike power PBs (NP or avg watts)
+    if ((a.s === 'Bike') && (a.nw || a.w)) {
+      const watts = a.nw || a.w;
+      if (watts > 0) {
+        const durationMin = a.mm || 0;
+        const checkBikePB = (minMin, maxMin, label) => {
+          if (durationMin >= minMin && durationMin <= maxMin) {
+            const existing = (D.pbs.bike||[]).find(p=>p.n===label);
+            const newVal = Math.round(watts)+'W';
+            if (!existing) {
+              if (!D.pbs.bike) D.pbs.bike = [];
+              D.pbs.bike.push({n:label, v:newVal, note:'Auto '+a.d}); updated = true;
+            }
+          }
+        };
+        checkBikePB(55, 70, '1 hr power');
+        checkBikePB(28, 35, '30 min power');
+        checkBikePB(18, 25, '20 min power');
+        checkBikePB(9, 12, '10 min power');
+      }
+    }
+
+    // Swim PBs
+    if (a.s === 'Swim' && a.dk && a.sp) {
+      const fmtP = p => { const m=Math.floor(p),s=Math.round((p-m)*60); return m+':'+(s<10?'0':'')+s; };
+      const metres = a.dk * 1000;
+      const checkSwimPB = (minM, maxM, label) => {
+        if (metres >= minM && metres <= maxM) {
+          const existing = (D.pbs.swim||[]).find(p=>p.n===label);
+          if (!existing) {
+            if (!D.pbs.swim) D.pbs.swim = [];
+            D.pbs.swim.push({n:label, v:fmtP(a.sp)+'/100m', note:'Auto '+a.d}); updated = true;
+          }
+        }
+      };
+      checkSwimPB(480, 520, 'Swim 500m');
+      checkSwimPB(980, 1020, 'Swim 1000m');
+      checkSwimPB(1480, 1520, 'Swim 1500m');
+    }
+  });
+
+  if (updated) {
+    save();
+    showToast('🏅 New PB candidates detected — check PBs tab to review!');
+  }
 }
 
 // ── Disconnect Strava ────────────────────────────────────────────
@@ -176,6 +259,149 @@ async function disconnectStrava() {
     showToast('Strava disconnected');
   } else {
     showToast('Failed to disconnect: ' + (result.error || 'Unknown'), true);
+  }
+}
+
+// ── Garmin Connection Status & Render ────────────────────────────
+let GARMIN_STATUS = null;
+let GARMIN_CLOUD = null;
+
+async function loadGarminStatus() {
+  if (!supa || !currentUser) return;
+  try {
+    const { data } = await supa
+      .from('garmin_credentials')
+      .select('id, connected_at, last_sync_at')
+      .eq('user_id', currentUser.id)
+      .single();
+    GARMIN_STATUS = data || null;
+
+    // Also load latest garmin data for the cloud sync timestamp
+    const { data: gd } = await supa
+      .from('garmin_data')
+      .select('synced_at, hrv, hrv7, sleep_score, sleep_hrs, rhr, stress, body_battery')
+      .eq('user_id', currentUser.id)
+      .order('synced_at', { ascending: false })
+      .limit(1)
+      .single();
+    if (gd) {
+      GARMIN_CLOUD = {
+        synced_at: gd.synced_at,
+        hrv: gd.hrv, hrv7: gd.hrv7,
+        sleepScore: gd.sleep_score, sleepHrs: gd.sleep_hrs,
+        rhr: gd.rhr, yesterdayStress: gd.stress, bodyBattery: gd.body_battery
+      };
+    }
+  } catch(e) {
+    GARMIN_STATUS = null;
+    GARMIN_CLOUD = null;
+  }
+}
+
+function getGarminData() {
+  // Priority: cloud data (from Supabase garmin_data), then hardcoded GARMIN_TODAY
+  if (GARMIN_CLOUD && GARMIN_CLOUD.hrv) return GARMIN_CLOUD;
+  return (typeof GARMIN_TODAY !== 'undefined') ? GARMIN_TODAY : null;
+}
+
+function renderGarminConnection() {
+  const el = document.getElementById('garmin-connection-card');
+  if (!el) return;
+
+  if (!supa || !currentUser) {
+    el.innerHTML = `<div style="text-align:center;padding:20px;color:var(--text-dim);font-size:12px;">Sign in to connect Garmin.</div>`;
+    return;
+  }
+
+  const connected = GARMIN_STATUS && GARMIN_STATUS.id;
+  const lastSync = GARMIN_STATUS?.last_sync_at
+    ? (() => {
+        const d = new Date(GARMIN_STATUS.last_sync_at);
+        const minsAgo = Math.round((Date.now() - d) / 60000);
+        return minsAgo < 60 ? minsAgo + 'min ago' : Math.round(minsAgo/60) + 'hrs ago';
+      })()
+    : null;
+
+  if (connected) {
+    el.innerHTML = `
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+        <div style="width:40px;height:40px;background:#1565c0;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;">⌚</div>
+        <div style="flex:1;">
+          <div style="font-weight:600;font-size:14px;color:#64b5f6;">Garmin Connected</div>
+          <div style="font-size:11px;color:var(--text-dim);">${lastSync ? 'Last synced ' + lastSync : 'Never synced — run python3 sync.py'}</div>
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--text-dim);margin-bottom:10px;padding:10px;background:var(--surface2);border-radius:8px;">
+        ⚠️ <b>Garmin Developer API pending approval</b> (applied 8 Mar 2026). Until approved, use the manual sync script:<br>
+        <code style="font-size:10px;color:var(--green);">python3 sync.py</code> from your project folder.
+      </div>
+      <button class="btn sec sml" style="color:var(--red);border-color:rgba(244,67,54,.3);" onclick="disconnectGarmin()">Disconnect Garmin</button>`;
+  } else {
+    el.innerHTML = `
+      <div style="text-align:center;padding:16px 0;">
+        <div style="font-size:32px;margin-bottom:8px;">⌚</div>
+        <div style="font-size:13px;color:var(--text);margin-bottom:4px;">Connect your Garmin account</div>
+        <div style="font-size:11px;color:var(--text-dim);line-height:1.5;margin-bottom:16px;max-width:300px;margin-left:auto;margin-right:auto;">
+          Auto-pulls HRV, sleep, stress and body battery daily.<br>
+          <b style="color:var(--orange);">⚠️ Garmin API approval pending</b> — enter credentials below to save them for when it's approved.
+        </div>
+        <div style="text-align:left;max-width:320px;margin:0 auto;">
+          <div style="margin-bottom:8px;"><label style="font-size:10px;color:var(--text-dim);">Garmin Email</label>
+            <input type="email" id="garmin-email" placeholder="your@email.com" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:8px 10px;box-sizing:border-box;">
+          </div>
+          <div style="margin-bottom:14px;"><label style="font-size:10px;color:var(--text-dim);">Garmin Password</label>
+            <input type="password" id="garmin-pass" placeholder="••••••••" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:8px 10px;box-sizing:border-box;">
+          </div>
+          <button class="btn" onclick="saveGarminCredentials()" style="width:100%;background:#1565c0;color:#fff;font-weight:700;">⌚ Save Garmin Credentials</button>
+        </div>
+      </div>`;
+  }
+}
+
+async function saveGarminCredentials() {
+  if (!supa || !currentUser) { showToast('Sign in first', true); return; }
+  const email = document.getElementById('garmin-email')?.value?.trim();
+  const pass  = document.getElementById('garmin-pass')?.value;
+  if (!email || !pass) { showToast('Enter both email and password', true); return; }
+
+  try {
+    const session = (await supa.auth.getSession()).data.session;
+    const resp = await fetch(SUPABASE_URL + '/functions/v1/garmin-sync', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + session.access_token,
+        'apikey': SUPABASE_ANON,
+      },
+      body: JSON.stringify({ action: 'save_credentials', email, password: pass }),
+    });
+    const result = await resp.json();
+    if (result.ok) {
+      showToast('✅ Garmin credentials saved — will auto-sync when API is approved');
+      await loadGarminStatus();
+      renderGarminConnection();
+    } else {
+      showToast('Failed: ' + (result.error || 'Unknown error'), true);
+    }
+  } catch(e) {
+    showToast('Error: ' + e.message, true);
+  }
+}
+
+async function disconnectGarmin() {
+  if (!confirm('Disconnect Garmin? Credentials will be removed.')) return;
+  try {
+    const session = (await supa.auth.getSession()).data.session;
+    await fetch(SUPABASE_URL + '/functions/v1/garmin-sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token, 'apikey': SUPABASE_ANON },
+      body: JSON.stringify({ action: 'disconnect' }),
+    });
+    GARMIN_STATUS = null;
+    renderGarminConnection();
+    showToast('Garmin disconnected');
+  } catch(e) {
+    showToast('Error: ' + e.message, true);
   }
 }
 

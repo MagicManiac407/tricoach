@@ -15,6 +15,14 @@ function showApp() {
     document.getElementById('user-avatar').textContent = profile.charAt(0).toUpperCase();
     document.getElementById('user-email-display').textContent = currentUser.email;
     loadShareStatus();
+    // Load Strava status and auto-sync in background
+    loadStravaStatus().then(() => {
+      renderStravaConnection();
+      // Auto-sync Strava to refresh activities on login
+      syncStravaActivities(false);
+    });
+    // Load Garmin status
+    loadGarminStatus().then(() => renderGarminConnection());
   }
   updateDashboard();
 }
@@ -365,6 +373,15 @@ function closeEditModal() {
 }
 
 document.addEventListener('DOMContentLoaded',()=>{
+  // Restore persisted Strava activities before auth/render (STRAVA_ACTS is now available)
+  try {
+    const local = JSON.parse(localStorage.getItem('tc26v4') || 'null');
+    if(local && local._stravaActs && Array.isArray(local._stravaActs) && local._stravaActs.length > 0) {
+      STRAVA_ACTS.acts = local._stravaActs;
+      if(local._stravaPbs) STRAVA_ACTS.pbs = local._stravaPbs;
+    }
+  } catch(e) {}
+
   document.getElementById('ci-date').value=localDateStr(new Date());
   checkBackupReminder();
   initAuth();
