@@ -1,0 +1,1178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TriCoach 2026</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<!-- AUTH SCREEN — shown when Supabase configured but not logged in -->
+<div id="auth-screen" style="display:none;position:fixed;inset:0;background:var(--bg);z-index:99999;display:none;align-items:center;justify-content:center;padding:20px;">
+  <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;padding:32px;width:min(400px,96vw);">
+    <div style="text-align:center;margin-bottom:24px;">
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:36px;color:var(--green);letter-spacing:.1em;">TRICOACH</div>
+      <div style="font-size:12px;color:var(--text-dim);">Your training, everywhere.</div>
+    </div>
+    <!-- Tabs -->
+    <div style="display:flex;border-bottom:1px solid var(--border);margin-bottom:20px;">
+      <button id="auth-tab-in" onclick="switchAuthTab('in')" style="flex:1;padding:10px;background:none;border:none;border-bottom:2px solid var(--green);color:var(--green);font-weight:600;cursor:pointer;font-size:13px;">Sign In</button>
+      <button id="auth-tab-up" onclick="switchAuthTab('up')" style="flex:1;padding:10px;background:none;border:none;border-bottom:2px solid transparent;color:var(--text-dim);cursor:pointer;font-size:13px;">Create Account</button>
+    </div>
+    <!-- Sign In form -->
+    <div id="auth-form-in">
+      <div style="margin-bottom:12px;">
+        <label style="font-size:10px;color:var(--text-dim);display:block;margin-bottom:4px;">EMAIL</label>
+        <input type="email" id="auth-email-in" placeholder="you@example.com" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px 14px;font-size:14px;box-sizing:border-box;">
+      </div>
+      <div style="margin-bottom:18px;">
+        <label style="font-size:10px;color:var(--text-dim);display:block;margin-bottom:4px;">PASSWORD</label>
+        <input type="password" id="auth-pass-in" placeholder="••••••••" onkeydown="if(event.key==='Enter')authSignIn(document.getElementById('auth-email-in').value,this.value)" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px 14px;font-size:14px;box-sizing:border-box;">
+      </div>
+      <button onclick="authSignIn(document.getElementById('auth-email-in').value,document.getElementById('auth-pass-in').value)" style="width:100%;padding:12px;background:var(--green);border:none;border-radius:8px;color:#000;font-weight:700;font-size:15px;cursor:pointer;font-family:'Bebas Neue',sans-serif;letter-spacing:.05em;">SIGN IN →</button>
+    </div>
+    <!-- Sign Up form -->
+    <div id="auth-form-up" style="display:none;">
+      <div style="margin-bottom:12px;">
+        <label style="font-size:10px;color:var(--text-dim);display:block;margin-bottom:4px;">YOUR NAME</label>
+        <input type="text" id="auth-name-up" placeholder="e.g. Travis" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px 14px;font-size:14px;box-sizing:border-box;">
+      </div>
+      <div style="margin-bottom:12px;">
+        <label style="font-size:10px;color:var(--text-dim);display:block;margin-bottom:4px;">EMAIL</label>
+        <input type="email" id="auth-email-up" placeholder="you@example.com" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px 14px;font-size:14px;box-sizing:border-box;">
+      </div>
+      <div style="margin-bottom:18px;">
+        <label style="font-size:10px;color:var(--text-dim);display:block;margin-bottom:4px;">PASSWORD</label>
+        <input type="password" id="auth-pass-up" placeholder="min 8 characters" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px 14px;font-size:14px;box-sizing:border-box;">
+      </div>
+      <button onclick="authSignUp(document.getElementById('auth-email-up').value,document.getElementById('auth-pass-up').value,document.getElementById('auth-name-up').value)" style="width:100%;padding:12px;background:var(--green);border:none;border-radius:8px;color:#000;font-weight:700;font-size:15px;cursor:pointer;font-family:'Bebas Neue',sans-serif;letter-spacing:.05em;">CREATE ACCOUNT →</button>
+    </div>
+    <div id="auth-msg" style="margin-top:14px;font-size:12px;text-align:center;min-height:20px;"></div>
+    <!-- Local-only fallback -->
+    <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border);text-align:center;">
+      <button onclick="showApp()" style="background:none;border:none;color:var(--text-dim);font-size:11px;cursor:pointer;text-decoration:underline;">Continue without account (local only)</button>
+    </div>
+  </div>
+</div>
+
+<!-- USER MENU — shown in top-right when logged in -->
+<div id="user-menu-btn" style="display:none;position:fixed;top:12px;right:12px;z-index:9000;">
+  <button onclick="toggleUserMenu()" style="background:var(--card);border:1px solid var(--border);border-radius:20px;padding:6px 14px 6px 10px;color:var(--text);font-size:12px;cursor:pointer;display:flex;align-items:center;gap:8px;">
+    <span style="width:22px;height:22px;background:var(--green);border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:11px;color:#000;font-weight:700;" id="user-avatar">?</span>
+    <span id="user-name-display">Account</span>
+    <span style="color:var(--text-dim);">▾</span>
+  </button>
+  <div id="user-dropdown" style="display:none;position:absolute;right:0;top:38px;background:var(--card);border:1px solid var(--border);border-radius:10px;min-width:200px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.5);">
+    <div id="user-email-display" style="padding:10px 14px;font-size:11px;color:var(--text-dim);border-bottom:1px solid var(--border);"></div>
+    <button onclick="nav('athletes');toggleUserMenu()" style="display:block;width:100%;text-align:left;padding:10px 14px;background:none;border:none;color:var(--text);font-size:13px;cursor:pointer;">👥 Athletes</button>
+    <button onclick="exportBackup();toggleUserMenu()" style="display:block;width:100%;text-align:left;padding:10px 14px;background:none;border:none;color:var(--text);font-size:13px;cursor:pointer;">⬇️ Export Backup</button>
+    <button onclick="importBackup();toggleUserMenu()" style="display:block;width:100%;text-align:left;padding:10px 14px;background:none;border:none;color:var(--text);font-size:13px;cursor:pointer;">⬆️ Import Backup</button>
+    <button onclick="authSignOut();toggleUserMenu()" style="display:block;width:100%;text-align:left;padding:10px 14px;background:none;border:none;color:var(--red);font-size:13px;cursor:pointer;border-top:1px solid var(--border);">Sign Out</button>
+  </div>
+</div>
+
+<div id="chart-tooltip"></div>
+<header>
+  <div style="display:flex;align-items:center;flex-shrink:0;">
+    <span class="logo">TRICOACH</span><span class="logo-sub">2026</span>
+  </div>
+  <nav>
+    <button class="active" onclick="nav('dashboard')">Dashboard</button>
+    <button onclick="nav('planner')">Planner</button>
+    <button onclick="nav('morning')">Morning Check</button>
+    <button onclick="nav('trends')">Trends & Charts</button>
+    <button onclick="nav('checkin')">Weekly Check-In</button>
+    <button onclick="nav('history')">History</button>
+    <button onclick="nav('pbs')">PBs</button>
+    <button onclick="nav('performance')">Performance</button>
+    <button onclick="nav('nutrition')">Nutrition</button>
+    <button onclick="nav('athletes')">👥 Athletes</button>
+    <button onclick="nav('rules')">Decision Rules</button>
+    <button onclick="exportBackup()" style="background:var(--green);color:#000;font-weight:700;margin-left:8px;">⬇️ Backup</button>
+    <button onclick="importBackup()" style="background:var(--card);border:1px solid var(--border);margin-left:4px;">⬆️ Restore</button>
+  </nav>
+</header>
+<!-- Backup banner -->
+<div id="save-banner" style="background:rgba(0,230,118,0.08);border:1px solid rgba(0,230,118,0.25);border-radius:8px;padding:10px 16px;margin:0 0 12px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+  <div style="font-size:12px;color:var(--green);">
+    <b>🔒 Your data is stored in this browser.</b> Export a backup periodically so you don't lose it. Updating the app file never touches your data.
+  </div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;">
+    <button class="btn" onclick="exportBackup()" style="background:var(--green);color:#000;font-weight:700;white-space:nowrap;">⬇️ Export Backup</button>
+    <button class="btn sec" onclick="importBackup()" style="white-space:nowrap;">⬆️ Import Backup</button>
+  </div>
+</div>
+<!-- Mobile bottom nav -->
+<div class="mob-nav">
+  <div class="mob-nav-inner">
+    <button class="mob-btn active" onclick="nav('dashboard')"><span class="mob-icon">📊</span>Home</button>
+    <button class="mob-btn" onclick="nav('planner')"><span class="mob-icon">📅</span>Planner</button>
+    <button class="mob-btn" onclick="nav('morning')"><span class="mob-icon">🌅</span>Morning</button>
+    <button class="mob-btn" onclick="nav('trends')"><span class="mob-icon">📈</span>Trends</button>
+    <button class="mob-btn" onclick="nav('checkin')"><span class="mob-icon">✅</span>Check-In</button>
+    <button class="mob-btn" onclick="nav('history')"><span class="mob-icon">📋</span>History</button>
+    <button class="mob-btn" onclick="nav('pbs')"><span class="mob-icon">🏅</span>PBs</button>
+    <button class="mob-btn" onclick="nav('rules')"><span class="mob-icon">📖</span>Rules</button>
+  </div>
+</div>
+
+<div class="container">
+
+<!-- ===== DASHBOARD ===== -->
+<div id="page-dashboard" class="page active">
+  <div class="pt">DASHBOARD</div>
+  <div class="ps">Your training command centre</div>
+  <div style="display:grid;grid-template-columns:1fr 200px;gap:14px;margin-bottom:16px;align-items:start;">
+    <div>
+      <div class="g4" style="margin-bottom:12px;">
+        <div class="metric" id="d-hrv"><div class="mlb">HRV Today</div><div class="mv" id="d-hrv-v">—</div><div class="ms" id="d-hrv-s">Log morning check</div></div>
+        <div class="metric g"><div class="mlb">Resting HR</div><div class="mv" id="d-rhr-v">—</div><div class="ms" id="d-rhr-s">Baseline ~50bpm</div></div>
+        <div class="metric o"><div class="mlb">Sleep Score</div><div class="mv" id="d-sleep-v">—</div><div class="ms" id="d-sleep-s">Target 88+</div></div>
+        <div class="metric p"><div class="mlb">Garmin Stress</div><div class="mv" id="d-stress-v">—</div><div class="ms">Yesterday's score</div></div>
+      </div>
+      <!-- Planner Strava week totals -->
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;" id="d-strava-totals">
+        <div style="background:var(--surface2);border-radius:7px;padding:8px 10px;text-align:center;">
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;color:var(--green);" id="d-run-km">—</div>
+          <div style="font-size:9px;color:var(--text-dim);">Run km</div>
+          <div style="font-size:9px;color:var(--text-dim);" id="d-run-time"></div>
+        </div>
+        <div style="background:var(--surface2);border-radius:7px;padding:8px 10px;text-align:center;">
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;color:var(--blue);" id="d-swim-km">—</div>
+          <div style="font-size:9px;color:var(--text-dim);">Swim m</div>
+          <div style="font-size:9px;color:var(--text-dim);" id="d-swim-time"></div>
+        </div>
+        <div style="background:var(--surface2);border-radius:7px;padding:8px 10px;text-align:center;">
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;color:var(--orange);" id="d-bike-km">—</div>
+          <div style="font-size:9px;color:var(--text-dim);">Bike km</div>
+          <div style="font-size:9px;color:var(--text-dim);" id="d-bike-time"></div>
+        </div>
+        <div style="background:var(--surface2);border-radius:7px;padding:8px 10px;text-align:center;">
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;" id="d-total-hrs">—</div>
+          <div style="font-size:9px;color:var(--text-dim);">Total hrs</div>
+          <div style="font-size:9px;color:var(--text-dim);" id="d-sessions-count"></div>
+        </div>
+      </div>
+    </div>
+    <!-- Circular Readiness Score -->
+    <div class="card" style="margin:0;padding:16px;text-align:center;cursor:pointer;" onclick="nav('morning')" title="Tap to log morning check">
+      <div style="font-size:11px;font-weight:600;color:var(--text-dim);letter-spacing:1px;margin-bottom:8px;">READINESS</div>
+      <div style="position:relative;width:140px;height:140px;margin:0 auto;">
+        <svg width="140" height="140" viewBox="0 0 140 140">
+          <circle cx="70" cy="70" r="58" fill="none" stroke="var(--surface2)" stroke-width="10"/>
+          <circle cx="70" cy="70" r="58" fill="none" stroke="var(--border)" stroke-width="10"
+            stroke-dasharray="364.4" stroke-dashoffset="0" transform="rotate(-90 70 70)"/>
+          <circle cx="70" cy="70" r="58" fill="none" id="readiness-arc"
+            stroke="#00e676" stroke-width="10" stroke-linecap="round"
+            stroke-dasharray="364.4" stroke-dashoffset="364.4"
+            transform="rotate(-90 70 70)" style="transition:stroke-dashoffset 0.8s ease,stroke 0.5s;"/>
+        </svg>
+        <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;">
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:38px;line-height:1;" id="readiness-score">—</div>
+          <div style="font-size:9px;color:var(--text-dim);letter-spacing:1px;">/100</div>
+        </div>
+      </div>
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:2px;margin-top:8px;" id="readiness-label">LOG CHECK</div>
+      <div style="font-size:10px;color:var(--text-dim);margin-top:4px;line-height:1.4;" id="readiness-detail">Complete morning check →</div>
+    </div>
+  </div>
+  <div class="g2" style="margin-bottom:16px;">
+    <div class="card" style="margin:0;">
+      <div class="sl">This Week — <span id="d-week-lbl" style="color:var(--text-mid);"></span></div>
+      <div id="d-sync-status" style="font-size:11px;padding:6px 10px;border-radius:6px;margin-bottom:8px;background:var(--surface2);border:1px solid var(--border);">⚪ Garmin not connected — go to <strong>Athletes → Connect Garmin</strong></div>
+      <div id="d-week-snap" style="margin-bottom:12px;"></div>
+      <div class="tot-bar" style="margin-top:0;" id="d-totals-bar">
+        <div class="ti"><div class="tv sw" id="dt-swim">0</div><div class="tl">Swims</div></div>
+        <div class="ti"><div class="tv bk" id="dt-bike">0</div><div class="tl">Bikes</div></div>
+        <div class="ti"><div class="tv rn" id="dt-run">0</div><div class="tl">Runs</div></div>
+        <div class="ti"><div class="tv hd" id="dt-hard">0</div><div class="tl">Hard</div></div>
+        <div class="ti"><div class="tv" id="dt-runkm">—</div><div class="tl">Run km</div></div>
+        <div class="ti"><div class="tv" id="dt-swimm">—</div><div class="tl">Swim m</div></div>
+        <div class="ti"><div class="tv" id="dt-bikeh">—</div><div class="tl">Bike hrs</div></div>
+        <div class="ti"><div class="tv" id="dt-total">—</div><div class="tl">Total hrs</div></div>
+      </div>
+      <button class="btn sml sec" style="margin-top:12px;width:100%;" onclick="nav('planner')">Open Planner →</button>
+    </div>
+    <div class="card" style="margin:0;">
+      <div class="sl">Season Goals</div>
+      <div class="goal-row">
+        <div style="font-size:18px;">🏊</div>
+        <div style="flex:1;"><div style="font-size:12px;font-weight:600;">1900m Swim &lt;1:40/100m</div><div style="font-size:10px;color:var(--text-dim);">CSS ~1:36–1:38 | OW ~1:44–1:48</div><div class="prog-wrap"><div class="prog-bar" style="width:72%;background:var(--blue);"></div></div></div>
+        <div style="text-align:right;"><div style="font-size:10px;color:var(--text-dim);">~1:38</div><div style="font-family:'Bebas Neue',sans-serif;font-size:16px;color:var(--blue);">&lt;1:40</div></div>
+      </div>
+      <div class="goal-row">
+        <div style="font-size:18px;">🚴</div>
+        <div style="flex:1;"><div style="font-size:12px;font-weight:600;">FTP 300W</div><div style="font-size:10px;color:var(--text-dim);">Current ~230W (+30% needed)</div><div class="prog-wrap"><div class="prog-bar" style="width:33%;background:var(--orange);"></div></div></div>
+        <div style="text-align:right;"><div style="font-size:10px;color:var(--text-dim);">~230W</div><div style="font-family:'Bebas Neue',sans-serif;font-size:16px;color:var(--orange);">300W</div></div>
+      </div>
+      <div class="goal-row">
+        <div style="font-size:18px;">🏃</div>
+        <div style="flex:1;"><div style="font-size:12px;font-weight:600;">Run Threshold 4:10/km</div><div style="font-size:10px;color:var(--text-dim);">Current 181bpm @ 4:31/km (Garmin est.)</div><div class="prog-wrap"><div class="prog-bar" style="width:30%;background:var(--green);"></div></div></div>
+        <div style="text-align:right;"><div style="font-size:10px;color:var(--text-dim);">4:31/km</div><div style="font-family:'Bebas Neue',sans-serif;font-size:16px;color:var(--green);">4:10</div></div>
+      </div>
+      <div class="goal-row" style="border:none;">
+        <div style="font-size:18px;">🏅</div>
+        <div style="flex:1;"><div style="font-size:12px;font-weight:600;">Sub-4:30 Half Ironman</div><div style="font-size:10px;color:var(--text-dim);">Est. today ~4:35–4:45</div><div class="prog-wrap"><div class="prog-bar" style="width:50%;background:var(--purple);"></div></div></div>
+        <div style="text-align:right;"><div style="font-size:10px;color:var(--text-dim);">~4:40</div><div style="font-family:'Bebas Neue',sans-serif;font-size:16px;color:var(--purple);">4:30</div></div>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="sl">Training Zones</div>
+    <div class="g3" style="gap:10px;">
+      <div class="csm">
+        <div style="font-size:10px;font-weight:600;margin-bottom:8px;color:var(--blue);">🏃 Run (LTHR 181bpm)</div>
+        <div class="bm-row"><div class="bm-signal"><span class="zone-dot z1"></span>Z1 Recovery</div><div style="font-size:10px;color:var(--text-dim);">&lt;145bpm · &gt;6:00/km</div></div>
+        <div class="bm-row"><div class="bm-signal"><span class="zone-dot z2"></span>Z2 Aerobic</div><div style="font-size:10px;color:var(--text-dim);">145–162bpm · 5:00–5:45/km</div></div>
+        <div class="bm-row"><div class="bm-signal"><span class="zone-dot z3"></span>Z3 Tempo</div><div style="font-size:10px;color:var(--text-dim);">163–172bpm · 4:40–5:00/km</div></div>
+        <div class="bm-row"><div class="bm-signal"><span class="zone-dot z4"></span>Z4 Threshold</div><div style="font-size:10px;color:var(--text-dim);">173–184bpm · 4:20–4:40/km</div></div>
+        <div class="bm-row" style="border:none;"><div class="bm-signal"><span class="zone-dot z5"></span>Z5 VO2 Max</div><div style="font-size:10px;color:var(--text-dim);">&gt;184bpm · &lt;4:20/km</div></div>
+      </div>
+      <div class="csm">
+        <div style="font-size:10px;font-weight:600;margin-bottom:8px;color:var(--orange);">🚴 Bike (FTP ~230W)</div>
+        <div class="bm-row"><div class="bm-signal"><span class="zone-dot z1"></span>Z1 Recovery</div><div style="font-size:10px;color:var(--text-dim);">&lt;138W · &lt;120bpm</div></div>
+        <div class="bm-row"><div class="bm-signal"><span class="zone-dot z2"></span>Z2 Aerobic</div><div style="font-size:10px;color:var(--text-dim);">138–172W · 120–145bpm</div></div>
+        <div class="bm-row"><div class="bm-signal"><span class="zone-dot z3"></span>Z3 Tempo</div><div style="font-size:10px;color:var(--text-dim);">173–207W · 146–162bpm</div></div>
+        <div class="bm-row"><div class="bm-signal"><span class="zone-dot z4"></span>Z4 Sweet Spot</div><div style="font-size:10px;color:var(--text-dim);">208–241W · 163–175bpm</div></div>
+        <div class="bm-row" style="border:none;"><div class="bm-signal"><span class="zone-dot z5"></span>Z5 VO2 Max</div><div style="font-size:10px;color:var(--text-dim);">&gt;242W · &gt;175bpm</div></div>
+      </div>
+      <div class="csm">
+        <div style="font-size:10px;font-weight:600;margin-bottom:8px;color:var(--cyan);">🏊 Swim (CSS ~1:37/100m)</div>
+        <div class="bm-row"><div class="bm-signal"><span class="zone-dot z1"></span>Z1 Recovery</div><div style="font-size:10px;color:var(--text-dim);">&gt;2:05/100m</div></div>
+        <div class="bm-row"><div class="bm-signal"><span class="zone-dot z2"></span>Z2 Aerobic</div><div style="font-size:10px;color:var(--text-dim);">1:52–2:05/100m</div></div>
+        <div class="bm-row"><div class="bm-signal"><span class="zone-dot z3"></span>Z3 Tempo</div><div style="font-size:10px;color:var(--text-dim);">1:44–1:52/100m</div></div>
+        <div class="bm-row"><div class="bm-signal"><span class="zone-dot z4"></span>Z4 CSS/Threshold</div><div style="font-size:10px;color:var(--text-dim);">1:36–1:44/100m</div></div>
+        <div class="bm-row" style="border:none;"><div class="bm-signal"><span class="zone-dot z5"></span>Z5 Sprint</div><div style="font-size:10px;color:var(--text-dim);">&lt;1:36/100m</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== PLANNER ===== -->
+<div id="page-planner" class="page">
+  <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px;">
+    <div><div class="pt">WEEKLY PLANNER</div><div class="ps">Plan Sunday. Execute all week. Free-text everything.</div></div>
+    <div style="display:flex;gap:6px;align-items:center;margin-top:6px;">
+      <button class="btn sec sml" onclick="prevWeek()">← Prev</button>
+      <button class="btn sec sml" onclick="thisWeek()">This Week</button>
+      <button class="btn sec sml" onclick="nextWeek()">Next →</button>
+    </div>
+  </div>
+  <div class="week-nav-bar">
+    <div class="week-lbl" id="week-label">Loading...<span id="week-label-sub"></span></div>
+    <button class="btn sml" onclick="savePlan()">Save Plan</button>
+    <button class="btn sec sml" onclick="copyLastWeek()">Copy Last Week</button>
+  </div>
+  <div class="card" style="padding:14px 18px;margin-bottom:14px;">
+    <div class="sl" style="margin-bottom:6px;">Week Focus & Notes</div>
+    <textarea id="week-focus" placeholder="e.g. Block 1 Week 2 — keep long run HR under 162, test new bike position Saturday, aim for 3 clean Z2 sessions..." style="min-height:48px;" oninput="autoSaveFocus()"></textarea>
+  </div>
+  <div id="stack-warn" class="stack-warn"><span>⚠</span><span id="stack-warn-txt"></span></div>
+  <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap;">
+    <button class="btn sec sml" onclick="stravaImportWeek(currentWeekKey)">📥 Import this week from Strava</button>
+    <button class="btn sec sml" onclick="clearStravaImports(currentWeekKey)" style="color:var(--red);">🗑 Clear Strava (this week)</button>
+    <button class="btn sec sml" onclick="resyncAllStrava()" style="color:var(--orange);">🔄 Re-sync ALL weeks</button>
+    <button class="btn sec sml" onclick="confirmClearAllStrava()" style="color:var(--red);border-color:rgba(244,67,54,.4);font-weight:700;">🗑 Clear ALL Strava (all weeks)</button>
+    <span style="font-size:10px;color:var(--text-dim);">Import fills "Completed" only. Clear removes Strava lines. Re-sync rebuilds all weeks.</span>
+  </div>
+  <div style="display:flex;gap:8px;align-items:center;margin-bottom:14px;flex-wrap:wrap;background:var(--surface2);border-radius:8px;padding:10px 12px;">
+    <span style="font-size:10px;color:var(--text-dim);font-weight:600;">LIVE SYNC</span>
+    <button class="btn sml" id="srv-strava-btn" onclick="serverSync('strava')" style="font-size:11px;background:var(--orange);">🔄 Sync Strava now</button>
+    <button class="btn sml" id="srv-garmin-btn" onclick="serverSync('garmin')" style="font-size:11px;background:#1565c0;">🔄 Sync Garmin now</button>
+    <button class="btn sec sml" id="srv-both-btn" onclick="serverSync('both')" style="font-size:11px;">🔄 Sync Both</button>
+    <span id="srv-status" style="font-size:10px;color:var(--text-dim);">Requires sync server running — see below</span>
+  </div>
+  <div id="planner-days"></div>
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-top:18px;">
+    <div class="sl" style="margin:0;">Weekly Totals</div>
+    <button class="btn sec sml" onclick="refreshPlannerFromStrava()" style="font-size:11px;">🔄 Refresh from Strava</button>
+  </div>
+  <div class="tot-bar" id="planner-totals">
+    <div class="ti"><div class="tv sw" id="tot-swim">0</div><div class="tl">Swims</div></div>
+    <div class="ti"><div class="tv bk" id="tot-bike">0</div><div class="tl">Bikes</div></div>
+    <div class="ti"><div class="tv rn" id="tot-run">0</div><div class="tl">Runs</div></div>
+    <div class="ti"><div class="tv hd" id="tot-hard">0</div><div class="tl">Hard</div></div>
+    <div class="ti"><div class="tv" id="tot-sessions">0</div><div class="tl">Sessions</div></div>
+    <div class="ti"><div class="tv" id="tot-z2" style="color:var(--text-mid);">0</div><div class="tl">Z2</div></div>
+    <div class="ti"><div class="tv" id="tot-rest" style="color:var(--text-dim);">0</div><div class="tl">Rest Days</div></div>
+    <div class="ti"><div class="tv" id="tot-ratio" style="color:var(--text-mid);">—</div><div class="tl">Easy:Hard</div></div>
+  </div>
+  <div class="card" style="margin-top:12px;padding:16px 18px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:6px;">
+      <div class="sl" style="margin:0;">Week Totals</div>
+      <span style="font-size:10px;color:var(--text-dim);">Auto-detected from Strava imports · edit to override</span>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:10px;" id="auto-totals-display">
+      <div style="background:var(--surface2);border-radius:7px;padding:10px;text-align:center;">
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:26px;color:var(--green);" id="auto-run-km">—</div>
+        <div style="font-size:10px;color:var(--text-dim);">Run km</div>
+        <div style="font-size:9px;color:var(--text-dim);" id="auto-run-time"></div>
+      </div>
+      <div style="background:var(--surface2);border-radius:7px;padding:10px;text-align:center;">
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:26px;color:var(--blue);" id="auto-swim-km">—</div>
+        <div style="font-size:10px;color:var(--text-dim);">Swim km</div>
+        <div style="font-size:9px;color:var(--text-dim);" id="auto-swim-time"></div>
+      </div>
+      <div style="background:var(--surface2);border-radius:7px;padding:10px;text-align:center;">
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:26px;color:var(--orange);" id="auto-bike-km">—</div>
+        <div style="font-size:10px;color:var(--text-dim);">Bike km</div>
+        <div style="font-size:9px;color:var(--text-dim);" id="auto-bike-time"></div>
+      </div>
+      <div style="background:var(--surface2);border-radius:7px;padding:10px;text-align:center;">
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:26px;" id="auto-total-time">—</div>
+        <div style="font-size:10px;color:var(--text-dim);">Total hrs</div>
+        <div style="font-size:9px;color:var(--text-dim);" id="auto-sessions-count"></div>
+      </div>
+    </div>
+    <!-- Effort breakdown row -->
+    <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;" id="effort-breakdown-row">
+      <div style="background:rgba(244,67,54,.12);border:1px solid rgba(244,67,54,.3);border-radius:6px;padding:5px 10px;font-size:11px;display:flex;align-items:center;gap:6px;">
+        <span style="width:8px;height:8px;border-radius:50%;background:#f44336;display:inline-block;"></span>
+        <span style="color:var(--text-dim);">Hard</span> <span style="font-family:'Bebas Neue',sans-serif;font-size:14px;color:#f44336;" id="auto-hard-count">—</span>
+        <span style="color:var(--text-dim);font-size:9px;" id="auto-hard-time"></span>
+      </div>
+      <div style="background:rgba(255,152,0,.1);border:1px solid rgba(255,152,0,.25);border-radius:6px;padding:5px 10px;font-size:11px;display:flex;align-items:center;gap:6px;">
+        <span style="width:8px;height:8px;border-radius:50%;background:#ff9800;display:inline-block;"></span>
+        <span style="color:var(--text-dim);">Z3</span> <span style="font-family:'Bebas Neue',sans-serif;font-size:14px;color:#ff9800;" id="auto-z3-count">—</span>
+        <span style="color:var(--text-dim);font-size:9px;" id="auto-z3-time"></span>
+      </div>
+      <div style="background:rgba(0,188,212,.1);border:1px solid rgba(0,188,212,.25);border-radius:6px;padding:5px 10px;font-size:11px;display:flex;align-items:center;gap:6px;">
+        <span style="width:8px;height:8px;border-radius:50%;background:var(--cyan);display:inline-block;"></span>
+        <span style="color:var(--text-dim);">Z2</span> <span style="font-family:'Bebas Neue',sans-serif;font-size:14px;color:var(--cyan);" id="auto-z2-count">—</span>
+        <span style="color:var(--text-dim);font-size:9px;" id="auto-z2-time"></span>
+      </div>
+      <div style="background:rgba(90,112,128,.1);border:1px solid rgba(90,112,128,.2);border-radius:6px;padding:5px 10px;font-size:11px;display:flex;align-items:center;gap:6px;">
+        <span style="width:8px;height:8px;border-radius:50%;background:var(--text-dim);display:inline-block;"></span>
+        <span style="color:var(--text-dim);">WU/CD</span> <span style="font-family:'Bebas Neue',sans-serif;font-size:14px;color:var(--text-dim);" id="auto-wu-count">—</span>
+      </div>
+      <!-- Color legend -->
+      <div style="margin-left:auto;display:flex;align-items:center;gap:10px;background:var(--surface2);border-radius:6px;padding:5px 10px;">
+        <span style="font-size:9px;color:var(--text-dim);letter-spacing:1px;text-transform:uppercase;">Legend</span>
+        <span style="font-size:9px;color:#f44336;">■ Hard/Z4/Z5/Interval</span>
+        <span style="font-size:9px;color:#ff9800;">■ Moderate/Z3</span>
+        <span style="font-size:9px;color:var(--cyan);">■ Easy/Z2</span>
+        <span style="font-size:9px;color:var(--text-dim);">■ WU/CD</span>
+      </div>
+    </div>
+    <div class="g4" style="gap:10px;">
+      <div class="fg" style="margin:0;"><label>Run km</label><input type="number" id="man-run-km" placeholder="auto" step=".1" oninput="savePlanManuals()"></div>
+      <div class="fg" style="margin:0;"><label>Swim km</label><input type="number" id="man-swim-m" placeholder="auto" step=".1" oninput="savePlanManuals()"></div>
+      <div class="fg" style="margin:0;"><label>Bike km</label><input type="number" id="man-bike-hrs" placeholder="auto" step="1" oninput="savePlanManuals()"></div>
+      <div class="fg" style="margin:0;"><label>Total hrs (override)</label><input type="number" id="man-total-hrs" placeholder="auto" step=".5" oninput="savePlanManuals()"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MORNING CHECK ===== -->
+<div id="page-morning" class="page">
+  <div class="pt">MORNING CHECK</div>
+  <div class="ps">Before coffee. Before training. 2–3 minutes.</div>
+  <div style="display:flex;gap:10px;margin-bottom:14px;align-items:center;flex-wrap:wrap;">
+    <button class="btn" id="mrn-garmin-btn" onclick="doGarminSyncNow()" style="background:var(--blue);color:#fff;font-weight:700;">🔄 Sync Garmin Now</button>
+    <span id="mrn-garmin-status" style="font-size:12px;color:var(--text-dim);">Auto-fills HRV, sleep, RHR and stress below</span>
+  </div>
+  <div class="g2">
+    <div>
+      <div class="card">
+        <div class="sl">Garmin / Device Metrics</div>
+        <div class="g2">
+          <div class="fg"><label>HRV — Overnight (from Garmin)</label><input type="number" id="m-hrv" placeholder="e.g. 84" oninput="calcStatus();debouncedMorningSave()"><div style="font-size:10px;color:var(--text-dim);margin-top:3px;">7-day avg: <span id="m-baseline" style="color:var(--blue);">calculating...</span></div></div>
+          <div class="fg"><label>HRV — 7 Day Average (Garmin)</label><input type="number" id="m-hrv7" oninput="debouncedMorningSave()" placeholder="e.g. 82"><div style="font-size:10px;color:var(--text-dim);margin-top:3px;">Enter the 7-day avg shown in Garmin Connect</div></div>
+          <div class="fg"><label>Resting HR (bpm)</label><input type="number" id="m-rhr" placeholder="e.g. 50" oninput="calcStatus();debouncedMorningSave()"></div>
+          <div class="fg"><label>Sleep Score (Garmin, 0–100)</label><input type="number" id="m-sleepscore" placeholder="e.g. 78" min="0" max="100" oninput="calcStatus();debouncedMorningSave()"></div>
+          <div class="fg"><label>Sleep Hours</label><input type="number" id="m-sleep" placeholder="e.g. 8.5" step=".5" oninput="calcStatus();debouncedMorningSave()"></div>
+          <div class="fg"><label>Garmin Stress Score (yesterday, 0–100)</label><input type="number" id="m-gstress" oninput="debouncedMorningSave()" placeholder="e.g. 33" min="0" max="100"><div style="font-size:10px;color:var(--text-dim);margin-top:3px;">Low=calm, High=stressed. Found in Garmin Connect body battery/stress.</div></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="sl">Nutrition (Yesterday)</div>
+        <div class="g2">
+          <div class="fg"><label>Calories Eaten</label><input type="number" id="m-cal-in" oninput="debouncedMorningSave()" placeholder="e.g. 4000" step="50"></div>
+          <div class="fg"><label>Calories Burnt (Garmin)</label><input type="number" id="m-cal-out" oninput="debouncedMorningSave()" placeholder="e.g. 3800" step="50"></div>
+          <div class="fg"><label>Protein (g)</label><input type="number" id="m-protein" oninput="debouncedMorningSave()" placeholder="e.g. 170" step="5"></div>
+          <div class="fg"><label>Carbs (g)</label><input type="number" id="m-carbs" oninput="debouncedMorningSave()" placeholder="e.g. 400" step="10"></div>
+        </div>
+        <div class="fg"><label>Fuelled Properly Yesterday?</label>
+          <div style="display:flex;gap:8px;">
+            <button class="sb" style="flex:1;font-size:12px;padding:7px;" onclick="setScore('fuel',2,this)">✅ Yes</button>
+            <button class="sb" style="flex:1;font-size:12px;padding:7px;" onclick="setScore('fuel',1,this)">⚠️ Partial</button>
+            <button class="sb" style="flex:1;font-size:12px;padding:7px;" onclick="setScore('fuel',0,this)">❌ No</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="card">
+        <div class="sl">Subjective Scores</div>
+        <div class="fg"><label>Leg Heaviness / Muscle Soreness</label>
+          <div class="score-row"><button class="sb" onclick="setScore('legs',1,this)">1</button><button class="sb" onclick="setScore('legs',2,this)">2</button><button class="sb" onclick="setScore('legs',3,this)">3</button><button class="sb" onclick="setScore('legs',4,this)">4</button><button class="sb" onclick="setScore('legs',5,this)">5</button></div>
+          <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--text-dim);margin-top:3px;"><span>Very sore</span><span>Heavy</span><span>Average</span><span>Fresh</span><span>Great</span></div>
+        </div>
+        <div class="fg"><label>Stress Level (subjective)</label>
+          <div class="score-row"><button class="sb" onclick="setScore('stress',1,this)">1</button><button class="sb" onclick="setScore('stress',2,this)">2</button><button class="sb" onclick="setScore('stress',3,this)">3</button><button class="sb" onclick="setScore('stress',4,this)">4</button><button class="sb" onclick="setScore('stress',5,this)">5</button></div>
+          <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--text-dim);margin-top:3px;"><span>Very stressed</span><span>High</span><span>Moderate</span><span>Low</span><span>Calm</span></div>
+        </div>
+        <div class="fg"><label>Overall Readiness</label>
+          <div class="score-row"><button class="sb" onclick="setScore('readiness',1,this)">1</button><button class="sb" onclick="setScore('readiness',2,this)">2</button><button class="sb" onclick="setScore('readiness',3,this)">3</button><button class="sb" onclick="setScore('readiness',4,this)">4</button><button class="sb" onclick="setScore('readiness',5,this)">5</button></div>
+          <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--text-dim);margin-top:3px;"><span>Wrecked</span><span>Tired</span><span>Average</span><span>Good</span><span>Ready</span></div>
+        </div>
+        <hr>
+        <div class="sl" style="margin-bottom:10px;">Recovery Actions (Yesterday)</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;" id="recovery-checks">
+          <div class="check-box" id="cb-massage" onclick="toggleCheck('massage')"><span class="cb-icon">🔫</span><span>Massage Gun</span></div>
+          <div class="check-box" id="cb-foam" onclick="toggleCheck('foam')"><span class="cb-icon">🧻</span><span>Foam Roll</span></div>
+          <div class="check-box" id="cb-stretch" onclick="toggleCheck('stretch')"><span class="cb-icon">🧘</span><span>Stretched</span></div>
+          <div class="check-box" id="cb-ice" onclick="toggleCheck('ice')"><span class="cb-icon">🧊</span><span>Ice Bath</span></div>
+          <div class="check-box" id="cb-compression" onclick="toggleCheck('compression')"><span class="cb-icon">🦵</span><span>Compression</span></div>
+          <div class="check-box" id="cb-nap" onclick="toggleCheck('nap')"><span class="cb-icon">💤</span><span>Nap</span></div>
+          <div class="check-box" id="cb-none" onclick="toggleCheck('none')" style="border-color:rgba(244,67,54,.3);"><span class="cb-icon">❌</span><span>None</span></div>
+        </div>
+        <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border);">
+          <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px;">💊 Supplements Yesterday</div>
+          <div style="display:flex;gap:8px;">
+            <div class="check-box" id="cb-supp-yes" onclick="setSupplement(true)" style="flex:1;">
+              <span class="cb-icon">✅</span><span>Took supplements</span>
+            </div>
+            <div class="check-box" id="cb-supp-no" onclick="setSupplement(false)" style="flex:1;border-color:rgba(244,67,54,.25);">
+              <span class="cb-icon">❌</span><span>Skipped</span>
+            </div>
+          </div>
+          <div id="supp-note-wrap" style="display:none;margin-top:8px;">
+            <input type="text" id="supp-note" placeholder="Which supplements? e.g. Magnesium, Vit D, Creatine">
+          </div>
+        </div>
+        <div class="fg" style="margin-top:14px;"><label>Notes</label><textarea id="m-note" oninput="debouncedMorningSave()" placeholder="Anything unusual? Sick, sore, stressful day ahead?"></textarea></div>
+        <button class="btn" style="width:100%;margin-top:4px;" onclick="saveMorning()">Save Morning Check</button>
+      <div id="morning-autosave" style="text-align:center;font-size:10px;color:var(--text-dim);margin-top:6px;">Auto-saves as you type</div>
+      </div>
+      <div class="card">
+        <div class="sl">Today's Training Status</div>
+        <div id="status-result" style="min-height:160px;display:flex;align-items:center;justify-content:center;">
+          <div style="text-align:center;color:var(--text-dim);font-size:12px;">Enter metrics to see status</div>
+        </div>
+        <hr>
+        <div style="font-size:11px;color:var(--text-dim);line-height:1.8;">
+          <div style="margin-bottom:4px;"><span class="badge g">GREEN</span> HRV normal · RHR normal · sleep score 75+</div>
+          <div style="margin-bottom:4px;"><span class="badge a">AMBER</span> HRV 5–10pts low · RHR 3–5bpm high · sleep &lt;75</div>
+          <div><span class="badge r">RED</span> HRV 10pts+ low · RHR 5bpm+ high · sleep &lt;60 · 3+ amber days</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== TRENDS & CHARTS ===== -->
+<div id="page-trends" class="page">
+  <div class="pt">TRENDS & CHARTS</div>
+  <div class="ps">Select any metrics to compare. All lines normalised to 0–100 so shapes are comparable.</div>
+
+  <!-- Preset correlations -->
+  <div class="card" style="margin-bottom:14px;">
+    <div class="sl" style="margin-bottom:10px;">Quick Presets</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;">
+      <button class="preset-btn" onclick="applyPreset(['hrv','sleepScore'])">HRV vs Sleep Score</button>
+      <button class="preset-btn" onclick="applyPreset(['calIn','readiness'])">Calories vs Readiness</button>
+      <button class="preset-btn" onclick="applyPreset(['calOut','hrv'])">Calories Burnt vs HRV</button>
+      <button class="preset-btn" onclick="applyPreset(['sleepScore','sessionQuality'])">Sleep Score vs Session Quality</button>
+      <button class="preset-btn" onclick="applyPreset(['trainingLoad','hrv'])">Training Volume vs HRV</button>
+      <button class="preset-btn" onclick="applyPreset(['gstress','readiness'])">Garmin Stress vs Readiness</button>
+      <button class="preset-btn" onclick="applyPreset(['legs','sessionQuality'])">Leg Freshness vs Session Quality</button>
+      <button class="preset-btn" onclick="applyPreset(['supplements','hrv'])">Supplements vs HRV</button>
+      <button class="preset-btn" onclick="applyPreset(['noRecovery','readiness'])">No Recovery vs Readiness</button>
+      <button class="preset-btn" onclick="applyPreset(['noRecovery','hrv','sleepScore'])">Recovery Compliance</button>
+      <button class="preset-btn" onclick="applyPreset(['hrv','rhr','sleepScore','calIn','readiness'])">Full Recovery Overview</button>
+    </div>
+  </div>
+
+  <!-- Metric selector -->
+  <div class="card" style="margin-bottom:14px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <div class="sl" style="margin:0;">Select Metrics to Compare</div>
+      <div style="display:flex;gap:6px;">
+        <button class="btn sec sml" id="toggle-daily" onclick="setChartMode('daily')">Daily</button>
+        <button class="btn sml" id="toggle-weekly" onclick="setChartMode('weekly')">Weekly</button>
+        <button class="btn sec sml" onclick="clearMetrics()">Clear</button>
+      </div>
+    </div>
+    <div id="metric-pills" style="display:flex;flex-wrap:wrap;gap:4px;"></div>
+  </div>
+
+  <!-- Chart -->
+  <div class="card" style="margin-bottom:14px;">
+    <div id="chart-legend" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;"></div>
+    <div class="chart-wrap" style="height:320px;">
+      <canvas id="trend-canvas"></canvas>
+    </div>
+    <div id="chart-empty" style="text-align:center;color:var(--text-dim);font-size:12px;padding:20px;display:none;">Select at least one metric above to see the chart</div>
+  </div>
+
+  <!-- Insights -->
+  <div class="card">
+    <div class="sl" style="margin-bottom:10px;">Auto Insights</div>
+    <div id="trend-insights"><div style="color:var(--text-dim);font-size:12px;">Select metrics and build up data to see auto-generated insights here.</div></div>
+  </div>
+</div>
+
+<!-- ===== WEEKLY CHECK-IN ===== -->
+<div id="page-checkin" class="page">
+  <div class="pt">WEEKLY CHECK-IN</div>
+  <div class="ps">Every Sunday evening. 5 minutes. This drives next week's load decision.</div>
+
+  <!-- Auto-fill banner -->
+  <div style="background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+    <div style="font-size:12px;color:var(--text-dim);">Auto-fills training data, HRV trend, sleep trend and Z2 pace from your logged week.</div>
+    <button class="btn" onclick="autoFillCI()" style="white-space:nowrap;">⚡ Auto-Fill This Week</button>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+
+    <!-- LEFT COL -->
+    <div style="display:flex;flex-direction:column;gap:16px;">
+
+      <!-- WEEK INFO -->
+      <div class="card">
+        <div class="sl">Week Info</div>
+        <div class="g2" style="margin-bottom:12px;">
+          <div class="fg"><label>Week ending</label><input type="date" id="ci-date"></div>
+          <div class="fg"><label>Block / Week</label><input type="text" id="ci-block" placeholder="e.g. Block 2 / Week 3"></div>
+        </div>
+
+        <!-- Training load summary — auto-filled -->
+        <div style="background:var(--surface2);border-radius:8px;padding:12px;margin-bottom:12px;" id="ci-week-summary">
+          <div style="font-size:10px;color:var(--text-dim);letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;">Training Load</div>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;text-align:center;">
+            <div><div style="font-family:'Bebas Neue',sans-serif;font-size:22px;color:var(--green);" id="ci-run-km">—</div><div style="font-size:9px;color:var(--text-dim);">Run km</div></div>
+            <div><div style="font-family:'Bebas Neue',sans-serif;font-size:22px;color:var(--blue);" id="ci-swim-m">—</div><div style="font-size:9px;color:var(--text-dim);">Swim m</div></div>
+            <div><div style="font-family:'Bebas Neue',sans-serif;font-size:22px;color:var(--orange);" id="ci-bike-km">—</div><div style="font-size:9px;color:var(--text-dim);">Bike km</div></div>
+            <div><div style="font-family:'Bebas Neue',sans-serif;font-size:22px;color:var(--text);" id="ci-total-hrs">—</div><div style="font-size:9px;color:var(--text-dim);">Total hrs</div></div>
+          </div>
+          <div style="margin-top:8px;font-size:10px;color:var(--text-dim);text-align:center;" id="ci-sessions-detail"></div>
+        </div>
+
+        <!-- HRV / Sleep auto-computed -->
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px;">
+          <div style="background:var(--surface2);border-radius:8px;padding:10px;text-align:center;">
+            <div style="font-size:9px;color:var(--text-dim);letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;">HRV Avg</div>
+            <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;" id="ci-hrv-display">—</div>
+            <div style="font-size:9px;" id="ci-hrv-trend"></div>
+          </div>
+          <div style="background:var(--surface2);border-radius:8px;padding:10px;text-align:center;">
+            <div style="font-size:9px;color:var(--text-dim);letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;">Sleep Avg</div>
+            <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;" id="ci-sleep-display">—</div>
+            <div style="font-size:9px;" id="ci-sleep-trend"></div>
+          </div>
+          <div style="background:var(--surface2);border-radius:8px;padding:10px;text-align:center;">
+            <div style="font-size:9px;color:var(--text-dim);letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;">Z2 Pace</div>
+            <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;" id="ci-z2pace-display">—</div>
+            <div style="font-size:9px;" id="ci-z2pace-trend"></div>
+          </div>
+        </div>
+
+        <!-- Hidden inputs for saving -->
+        <input type="hidden" id="ci-hrv">
+        <input type="hidden" id="ci-hours">
+      </div>
+
+      <!-- THE QUESTIONS -->
+      <div class="card">
+        <div class="sl">The Questions</div>
+
+        <div class="fg" style="padding-bottom:12px;border-bottom:1px solid var(--border);">
+          <label style="font-size:12px;color:var(--text);margin-bottom:7px;">1. Hard sessions completed at quality (4–5)?</label>
+          <select id="q1" onchange="toggleFailedNote()"><option value="">Select...</option><option value="3">✅ All 3 (3pts)</option><option value="2">⚠️ 2 of 3 (2pts)</option><option value="0">❌ 1 or fewer (0pts)</option></select>
+        </div>
+        <div id="failed-wrap" style="display:none;padding:12px 0;border-bottom:1px solid var(--border);">
+          <label style="font-size:12px;color:var(--red);margin-bottom:7px;">⚠ What caused the missed/failed session(s)?</label>
+          <textarea id="ci-failed" placeholder="e.g. Thursday bike — HR was 172 in warm-up, should have rested." style="min-height:52px;"></textarea>
+        </div>
+
+        <div class="fg" style="padding:12px 0;border-bottom:1px solid var(--border);">
+          <label style="font-size:12px;color:var(--text);margin-bottom:7px;">2. Z2 sessions actually stayed in zone?</label>
+          <select id="q2"><option value="">Select...</option><option value="2">✅ Yes, stayed in Z2 (2pts)</option><option value="1">⚠️ Mostly (1pt)</option><option value="0">❌ Kept drifting (0pts)</option></select>
+        </div>
+
+        <div class="fg" style="padding:12px 0;border-bottom:1px solid var(--border);">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px;">
+            <label style="font-size:12px;color:var(--text);margin:0;">3. Z2 pace vs last week?</label>
+            <span style="font-size:10px;color:var(--text-dim);font-style:italic;" id="ci-z2-autotext"></span>
+          </div>
+          <select id="q3"><option value="">Select...</option><option value="improving">📈 Improved</option><option value="holding">➡️ Held steady</option><option value="declining">📉 Worse</option></select>
+        </div>
+
+        <div class="fg" style="padding:12px 0;border-bottom:1px solid var(--border);">
+          <label style="font-size:12px;color:var(--text);margin-bottom:7px;">4. How did you feel going into hard sessions?</label>
+          <select id="q4"><option value="">Select...</option><option value="2">💪 Fresh (2pts)</option><option value="1">😐 Tired but okay (1pt)</option><option value="0">😓 Fatigued (0pts)</option><option value="0">💀 Cooked (0pts)</option></select>
+        </div>
+
+        <div class="fg" style="padding:12px 0;border-bottom:1px solid var(--border);">
+          <label style="font-size:12px;color:var(--text);margin-bottom:7px;">5. Pushed through sessions you should have modified?</label>
+          <select id="q5"><option value="">Select...</option><option value="no">No — listened to my body</option><option value="yes">Yes — should have backed off</option></select>
+        </div>
+
+        <div class="fg" style="padding:12px 0;border-bottom:1px solid var(--border);">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px;">
+            <label style="font-size:12px;color:var(--text);margin:0;">6. HRV trend this week?</label>
+            <span style="font-size:10px;font-style:italic;" id="ci-hrv-autotext"></span>
+          </div>
+          <select id="q6"><option value="">Select...</option><option value="2">📈 Trending up (2pts)</option><option value="1">➡️ Stable (1pt)</option><option value="0">📉 Trending down (0pts)</option></select>
+        </div>
+
+        <div class="fg" style="padding:12px 0;border-bottom:1px solid var(--border);">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px;">
+            <label style="font-size:12px;color:var(--text);margin:0;">7. Sleep quality this week?</label>
+            <span style="font-size:10px;font-style:italic;" id="ci-sleep-autotext"></span>
+          </div>
+          <select id="q7"><option value="">Select...</option><option value="good">✅ Consistent 8.5–9hrs / score 80+ (2pts)</option><option value="ok">⚠️ Hit and miss (1pt)</option><option value="bad">❌ Consistently poor (0pts)</option></select>
+        </div>
+
+        <div class="fg" style="padding:12px 0;border-bottom:1px solid var(--border);">
+          <label style="font-size:12px;color:var(--text);margin-bottom:7px;">8. Motivation for next week?</label>
+          <select id="q8"><option value="">Select...</option><option value="1">🔥 Keen (1pt)</option><option value="0">😐 Neutral (0pts)</option><option value="0">😑 Flat (0pts)</option><option value="-1">😩 Dreading (-1pt)</option></select>
+        </div>
+
+        <div class="fg" style="padding:12px 0;border-bottom:1px solid var(--border);">
+          <label style="font-size:12px;color:var(--text);margin-bottom:7px;">9. Nutrition this week?</label>
+          <div class="score-row" id="ci-nut-btns">
+            <button class="sb" onclick="setCIScore('nutrition',1,this)">1</button><button class="sb" onclick="setCIScore('nutrition',2,this)">2</button><button class="sb" onclick="setCIScore('nutrition',3,this)">3</button><button class="sb" onclick="setCIScore('nutrition',4,this)">4</button><button class="sb" onclick="setCIScore('nutrition',5,this)">5</button>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--text-dim);margin-top:3px;"><span>Poor</span><span>Mixed</span><span>Nailed it</span></div>
+        </div>
+
+        <div class="fg" style="padding:12px 0;border-bottom:1px solid var(--border);">
+          <label style="font-size:12px;color:var(--text);margin-bottom:7px;">10. Recovery protocols completed this week?</label>
+          <div class="score-row" id="ci-rec-btns">
+            <button class="sb" onclick="setCIScore('recovery_protocol',1,this)">1</button><button class="sb" onclick="setCIScore('recovery_protocol',2,this)">2</button><button class="sb" onclick="setCIScore('recovery_protocol',3,this)">3</button><button class="sb" onclick="setCIScore('recovery_protocol',4,this)">4</button><button class="sb" onclick="setCIScore('recovery_protocol',5,this)">5</button>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--text-dim);margin-top:3px;"><span>None at all</span><span>Some</span><span>Perfect</span></div>
+          <div style="font-size:10px;color:var(--text-dim);margin-top:4px;">Ice baths, massage, stretching, foam rolling, breathwork</div>
+        </div>
+
+        <div class="fg" style="padding-top:12px;">
+          <label style="font-size:12px;color:var(--text);margin-bottom:7px;">11. Life stress / external load this week?</label>
+          <div class="score-row" id="ci-stress-btns">
+            <button class="sb" onclick="setCIScore('lifestress',1,this)">1</button><button class="sb" onclick="setCIScore('lifestress',2,this)">2</button><button class="sb" onclick="setCIScore('lifestress',3,this)">3</button><button class="sb" onclick="setCIScore('lifestress',4,this)">4</button><button class="sb" onclick="setCIScore('lifestress',5,this)">5</button>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--text-dim);margin-top:3px;"><span>Very high</span><span>Moderate</span><span>Low/calm</span></div>
+          <div style="font-size:10px;color:var(--text-dim);margin-top:5px;">High stress + low training score = life problem, not training structure problem.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT COL -->
+    <div style="display:flex;flex-direction:column;gap:16px;">
+
+      <!-- NEXT WEEK INTENTION -->
+      <div class="card">
+        <div class="sl">Next Week Intention</div>
+        <textarea id="ci-intention" placeholder="One sentence — what are you adjusting or protecting next week? e.g. Keep Z2 HR under 155, protect Thursday rest day, nail swim technique." style="min-height:80px;"></textarea>
+      </div>
+
+      <!-- WEEKLY RECAP NOTES -->
+      <div class="card">
+        <div class="sl">Weekly Recap Notes</div>
+        <div style="font-size:10px;color:var(--text-dim);margin-bottom:8px;">How did the week feel overall? Wins, lowlights, anything to remember for next block.</div>
+        <textarea id="ci-recap" placeholder="e.g. Legs felt great Monday–Wednesday. Thursday run was a grind after the big bike day. Swim pace dropping off — need to revisit technique. Race-day nerves building. Ate well all week except Friday night." style="min-height:120px;"></textarea>
+      </div>
+
+      <!-- SCORE RESULT -->
+      <div class="card" id="ci-result" style="display:none;">
+        <div class="sl">Your Score</div>
+        <div id="ci-score-big" style="font-family:'Bebas Neue',sans-serif;font-size:72px;letter-spacing:4px;text-align:center;line-height:1;padding:12px 0 4px;"></div>
+        <div style="text-align:center;font-family:'DM Mono',monospace;font-size:10px;color:var(--text-dim);letter-spacing:2px;margin-bottom:16px;">OUT OF 10</div>
+        <div id="ci-rec"></div>
+      </div>
+
+      <div style="display:flex;gap:8px;">
+        <button class="btn sec" onclick="calcCI()" style="flex:1;">Calculate Score</button>
+        <button class="btn" onclick="saveCI()" style="flex:1;">Save Check-In</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== HISTORY ===== -->
+<div id="page-history" class="page">
+  <div class="pt">HISTORY</div>
+  <div class="ps">Your complete training log</div>
+  <div style="display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap;align-items:center;">
+    <button class="btn" id="ht-sessions" onclick="switchHist('sessions')">Sessions</button>
+    <button class="btn sec" id="ht-checkins" onclick="switchHist('checkins')">Check-Ins</button>
+    <button class="btn sec" id="ht-morning" onclick="switchHist('morning')">Morning Log</button>
+    <div style="margin-left:auto;display:flex;gap:6px;">
+      <button class="btn sec sml" onclick="histResync()" style="color:var(--orange);font-size:11px;">🔄 Re-sync from Strava</button>
+      <button class="btn sec sml" onclick="renderHistory()" style="font-size:11px;">↺ Refresh view</button>
+    </div>
+  </div>
+  <div class="card" id="hv-sessions">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+      <div class="sl" style="margin:0;">Session Log</div>
+      <span style="font-size:10px;color:var(--text-dim);">Pulled from planner completed entries · re-sync if missing sessions</span>
+    </div>
+    <div id="hc-sessions"></div>
+  </div>
+  <div class="card" id="hv-checkins" style="display:none;"><div class="sl">Weekly Check-Ins</div><div id="hc-checkins"></div></div>
+  <div class="card" id="hv-morning" style="display:none;"><div class="sl">Morning Log</div><div id="hc-morning"></div></div>
+  <div style="text-align:right;margin-top:10px;"><button class="btn danger sml" onclick="confirmClear()">Clear All Data</button></div>
+</div>
+
+<!-- ===== PBs ===== -->
+<div id="page-pbs" class="page">
+  <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:18px;">
+    <div><div class="pt">PBs & BEST EFFORTS</div><div class="ps">Update whenever you set a new mark</div></div>
+    <button class="btn sml" onclick="openPBModal()" style="margin-top:6px;">✏️ Edit All PBs</button>
+  </div>
+  <div class="g3">
+    <div class="card">
+      <div class="sl" style="color:var(--blue);">🏊 Swimming</div>
+      <div id="pb-swim-list"></div>
+    </div>
+    <div class="card">
+      <div class="sl" style="color:var(--orange);">🚴 Cycling</div>
+      <div id="pb-bike-list"></div>
+    </div>
+    <div class="card">
+      <div class="sl" style="color:var(--green);">🏃 Running</div>
+      <div id="pb-run-list"></div>
+    </div>
+  </div>
+  <div class="g2">
+    <div class="card">
+      <div class="sl" style="color:var(--purple);">🏅 Triathlon / Race</div>
+      <div id="pb-tri-list"></div>
+    </div>
+    <div class="card">
+      <div class="sl">📊 Physiology</div>
+      <div id="pb-phys-list"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== PERFORMANCE ANALYSIS ===== -->
+<div id="page-performance" class="page">
+  <div class="pt">PERFORMANCE</div>
+  <div class="ps">346 Strava activities · Feb 2021 – Mar 2026 · 217 runs · 89 rides · 40 swims</div>
+  <div style="display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap;">
+    <button class="btn" id="pt-run" onclick="switchPT('run')">🏃 Run Analysis</button>
+    <button class="btn sec" id="pt-bike" onclick="switchPT('bike')">🚴 Bike Analysis</button>
+    <button class="btn sec" id="pt-swim" onclick="switchPT('swim')">🏊 Swim Analysis</button>
+    <button class="btn sec" id="pt-volume" onclick="switchPT('volume')">📊 Weekly Volume</button>
+    <button class="btn sec" id="pt-autopb" onclick="switchPT('autopb')">🏅 Auto PBs</button>
+  </div>
+
+  <!-- RUN -->
+  <div id="pv-run">
+    <div class="card" style="padding:14px 18px;margin-bottom:12px;">
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
+        <div><label>Effort Filter</label>
+          <select id="rf-effort" onchange="renderRunCharts()">
+            <option value="easy">Easy Z2</option>
+            <option value="moderate">Moderate Z3</option>
+            <option value="hard">Hard Z4+</option>
+            <option value="all">All efforts</option>
+          </select>
+        </div>
+        <div><label>Min Distance (km)</label><input type="number" id="rf-dist" value="5" min="1" step="1" style="width:72px;" onchange="renderRunCharts()"></div>
+        <div><label>Date Range</label>
+          <select id="rf-range" onchange="renderRunCharts()">
+            <option value="90">Last 90 days</option>
+            <option value="180">Last 6 months</option>
+            <option value="365">Last 12 months</option>
+            <option value="all">All time</option>
+          </select>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;padding-bottom:2px;">
+          <input type="checkbox" id="rf-noiv" checked onchange="renderRunCharts()" style="width:auto;">
+          <label style="margin:0;white-space:nowrap;font-size:11px;">Exclude intervals</label>
+        </div>
+      </div>
+    </div>
+    <div id="run-stats" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px;"></div>
+    <div class="card" style="margin-bottom:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+        <div class="sl" style="margin:0;">Pace Trend</div>
+        <div style="font-size:10px;color:var(--text-dim);">Thick line = 6-session rolling avg · dots = individual runs · lower = faster</div>
+      </div>
+      <div style="display:flex;gap:12px;margin-bottom:8px;font-size:10px;">
+        <span style="color:#2196f3;">● Easy</span>
+        <span style="color:#ff9800;">● Moderate</span>
+        <span style="color:#f44336;">● Hard</span>
+      </div>
+      <canvas id="c-run-pace" height="240" style="width:100%;display:block;"></canvas>
+    </div>
+    <div class="card" style="margin-bottom:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+        <div class="sl" style="margin:0;">Heart Rate Trend</div>
+        <div style="font-size:10px;color:var(--text-dim);">Thick line = rolling avg · downward trend = cardiac adaptation at same effort</div>
+      </div>
+      <canvas id="c-run-hr" height="240" style="width:100%;display:block;"></canvas>
+    </div>
+    <div class="g2" style="margin-bottom:12px;">
+      <div class="card" style="margin:0;">
+        <div class="sl">Aerobic Efficiency (Speed÷HR×1000)</div>
+        <div style="font-size:10px;color:var(--text-dim);margin-bottom:8px;">Upward trend = base building working.</div>
+        <canvas id="c-ae-trend" height="200" style="width:100%;display:block;"></canvas>
+      </div>
+      <div class="card" style="margin:0;">
+        <div class="sl">Pace vs HR Scatter</div>
+        <div style="font-size:10px;color:var(--text-dim);margin-bottom:8px;">Grey=older · cyan=recent · bottom-right = best fitness.</div>
+        <canvas id="c-ae-scatter" height="220" style="width:100%;display:block;"></canvas>
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:12px;">
+      <div class="sl">Run Session Log — Most Recent First</div>
+      <div id="run-table"></div>
+    </div>
+    <div class="card">
+      <div class="sl">Interval Sessions</div>
+      <div id="interval-table"></div>
+    </div>
+  </div>
+
+  <!-- BIKE -->
+  <div id="pv-bike" style="display:none;">
+    <div class="card" style="padding:14px 18px;margin-bottom:12px;">
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
+        <div><label>Ride Type</label>
+          <select id="bf-type" onchange="renderBikeCharts()">
+            <option value="rouvy">Rouvy / Indoor only</option>
+            <option value="outdoor">Outdoor only</option>
+            <option value="all">All rides</option>
+          </select>
+        </div>
+        <div><label>Min Duration (min)</label><input type="number" id="bf-dur" value="40" min="10" step="5" style="width:72px;" onchange="renderBikeCharts()"></div>
+        <div><label>Date Range</label>
+          <select id="bf-range" onchange="renderBikeCharts()">
+            <option value="90">Last 90 days</option>
+            <option value="180">Last 6 months</option>
+            <option value="all">All time</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div id="bike-stats" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px;"></div>
+    <div class="card" style="margin-bottom:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+        <div class="sl" style="margin:0;">Power Trend (NP / Avg Watts)</div>
+        <div style="font-size:10px;color:var(--text-dim);">Thick line = 6-session rolling avg · red dashed = FTP ~230W</div>
+      </div>
+      <canvas id="c-bike-np" height="240" style="width:100%;display:block;"></canvas>
+    </div>
+    <div class="card" style="margin-bottom:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+        <div class="sl" style="margin:0;">Heart Rate Trend</div>
+        <div style="font-size:10px;color:var(--text-dim);">Downward trend at same power = cardiac adaptation / aerobic improvement</div>
+      </div>
+      <canvas id="c-bike-hr" height="240" style="width:100%;display:block;"></canvas>
+    </div>
+    <div class="g2" style="margin-bottom:12px;">
+      <div class="card" style="margin:0;">
+        <div class="sl">Power:HR Efficiency (W ÷ HR)</div>
+        <div style="font-size:10px;color:var(--text-dim);margin-bottom:8px;">More watts per heartbeat = improving. Upward = good.</div>
+        <canvas id="c-bike-eff" height="200" style="width:100%;display:block;"></canvas>
+      </div>
+      <div class="card" style="margin:0;">
+        <div class="sl">Ride Duration Distribution</div>
+        <div style="font-size:10px;color:var(--text-dim);margin-bottom:8px;">Session length over time. Longer rides = volume building.</div>
+        <canvas id="c-bike-dur" height="200" style="width:100%;display:block;"></canvas>
+      </div>
+    </div>
+    <div class="card"><div class="sl">Ride Log</div><div id="bike-table"></div></div>
+  </div>
+
+  <!-- SWIM -->
+  <div id="pv-swim" style="display:none;">
+    <div class="card" style="padding:14px 18px;margin-bottom:12px;">
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
+        <div><label>Date Range</label>
+          <select id="swf-range" onchange="renderSwimCharts()">
+            <option value="180">Last 6 months</option>
+            <option value="365">Last 12 months</option>
+            <option value="all" selected>All time</option>
+          </select>
+        </div>
+        <div><label>Min Distance (m)</label><input type="number" id="swf-dist" value="500" min="100" step="100" style="width:80px;" onchange="renderSwimCharts()"></div>
+      </div>
+    </div>
+    <div style="background:var(--orange-dim);border:1px solid rgba(255,152,0,.3);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:11px;color:var(--orange);">
+      ⚠ Strava swim pace = session average including rest. Your 4x500m on Feb 27 showed 1:49/100m session avg — actual rep pace ~1:44/100m per your log. CSS target: 1:44/100m.
+    </div>
+    <div id="swim-stats" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px;"></div>
+    <div class="card" style="margin-bottom:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+        <div class="sl" style="margin:0;">Pace Trend (min/100m)</div>
+        <div style="font-size:10px;color:var(--text-dim);">Thick line = rolling avg · lower = faster · green dashed = CSS ~1:44</div>
+      </div>
+      <canvas id="c-swim-pace" height="240" style="width:100%;display:block;"></canvas>
+    </div>
+    <div class="card" style="margin-bottom:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+        <div class="sl" style="margin:0;">Heart Rate Trend</div>
+        <div style="font-size:10px;color:var(--text-dim);">Downward trend at same pace = aerobic adaptation in the water</div>
+      </div>
+      <canvas id="c-swim-hr" height="240" style="width:100%;display:block;"></canvas>
+    </div>
+    <div class="g2" style="margin-bottom:12px;">
+      <div class="card" style="margin:0;">
+        <div class="sl">Distance Per Session (metres)</div>
+        <div style="font-size:10px;color:var(--text-dim);margin-bottom:8px;">Volume trend — are sessions getting longer?</div>
+        <canvas id="c-swim-dist" height="200" style="width:100%;display:block;"></canvas>
+      </div>
+      <div class="card" style="margin:0;">
+        <div class="sl">Weekly Swim Volume (metres)</div>
+        <canvas id="c-swim-vol" height="200" style="width:100%;display:block;"></canvas>
+      </div>
+    </div>
+    <div class="card"><div class="sl">Swim Session Log</div><div id="swim-table"></div></div>
+  </div>
+
+  <!-- VOLUME -->
+  <div id="pv-volume" style="display:none;">
+    <div class="card" style="padding:14px 18px;margin-bottom:12px;">
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
+        <div><label>Weeks</label>
+          <select id="vf-weeks" onchange="renderVolumeCharts()">
+            <option value="12">Last 12 weeks</option>
+            <option value="24">Last 24 weeks</option>
+            <option value="52">Last 52 weeks</option>
+          </select>
+        </div>
+        <div><label>Metric</label>
+          <select id="vf-metric" onchange="renderVolumeCharts()">
+            <option value="hours">Hours</option>
+            <option value="sessions">Session count</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:12px;">
+      <div class="sl">Weekly Volume by Sport</div>
+      <canvas id="c-volume" height="280" style="width:100%;display:block;"></canvas>
+      <div id="vol-legend" style="display:flex;gap:16px;margin-top:10px;flex-wrap:wrap;"></div>
+    </div>
+    <div class="card"><div class="sl">Period Summary</div><div id="vol-summary"></div></div>
+  </div>
+
+  <!-- AUTO PBs -->
+  <div id="pv-autopb" style="display:none;">
+    <div style="background:var(--blue-glow);border:1px solid rgba(33,150,243,.2);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:11px;color:var(--text-mid);">
+      💡 Auto-detected from 346 Strava activities. Interval sessions excluded from continuous PBs and listed separately.
+    </div>
+    <div class="g3" style="margin-bottom:14px;">
+      <div class="card"><div class="sl" style="color:var(--green);">🏃 Run — Continuous</div><div id="apb-run"></div></div>
+      <div class="card"><div class="sl" style="color:var(--orange);">🚴 Bike</div><div id="apb-bike"></div></div>
+      <div class="card"><div class="sl" style="color:var(--blue);">🏊 Swim</div><div id="apb-swim"></div></div>
+    </div>
+    <div class="card"><div class="sl">🏃 Best Interval Session Paces</div><div id="apb-intervals"></div></div>
+  </div>
+</div>
+
+<!-- ===== DECISION RULES ===== -->
+<div id="page-nutrition" class="page">
+  <div class="pt">NUTRITION</div>
+  <div class="ps">Track daily food intake — syncs to your morning check-in automatically.</div>
+
+  <!-- Date nav -->
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap;">
+    <button class="btn sec sml" onclick="nutChangeDay(-1)">◀ Prev</button>
+    <input type="date" id="nut-date" onchange="renderNutrition()" style="background:var(--card);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 12px;font-size:13px;">
+    <button class="btn sec sml" onclick="nutChangeDay(1)">Next ▶</button>
+    <button class="btn sec sml" onclick="document.getElementById('nut-date').value=localDateStr(new Date());renderNutrition();">Today</button>
+    <span id="nut-sync-note" style="font-size:11px;color:var(--green);"></span>
+  </div>
+
+  <!-- Daily totals bar -->
+  <div class="card" id="nut-totals-card" style="margin-bottom:14px;padding:14px 18px;">
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;text-align:center;">
+      <div><div style="font-family:'Bebas Neue',sans-serif;font-size:28px;color:var(--green);" id="nt-cal">0</div><div style="font-size:10px;color:var(--text-dim);">CALORIES</div><div style="font-size:9px;color:var(--text-dim);" id="nt-cal-goal"></div></div>
+      <div><div style="font-family:'Bebas Neue',sans-serif;font-size:28px;color:#64b5f6;" id="nt-pro">0g</div><div style="font-size:10px;color:var(--text-dim);">PROTEIN</div></div>
+      <div><div style="font-family:'Bebas Neue',sans-serif;font-size:28px;color:#ffb74d;" id="nt-carb">0g</div><div style="font-size:10px;color:var(--text-dim);">CARBS</div></div>
+      <div><div style="font-family:'Bebas Neue',sans-serif;font-size:28px;color:#f48fb1;" id="nt-fat">0g</div><div style="font-size:10px;color:var(--text-dim);">FAT</div></div>
+    </div>
+    <!-- Calorie progress bar -->
+    <div style="margin-top:10px;">
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-dim);margin-bottom:4px;">
+        <span>Calorie target</span><span id="nt-cal-pct"></span>
+      </div>
+      <div style="background:var(--bg);border-radius:4px;height:6px;overflow:hidden;">
+        <div id="nt-cal-bar" style="height:100%;background:var(--green);border-radius:4px;transition:width .3s;width:0%;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Goals setting (collapsible) -->
+  <details style="margin-bottom:14px;">
+    <summary style="cursor:pointer;font-size:11px;color:var(--text-dim);padding:8px;background:var(--card);border-radius:8px;list-style:none;">⚙️ Daily Targets (click to set)</summary>
+    <div class="card" style="margin-top:6px;padding:14px 18px;">
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;">
+        <div><label style="font-size:10px;color:var(--text-dim);">Calorie Target</label><input type="number" id="nut-goal-cal" placeholder="e.g. 2800" oninput="saveNutGoals()" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 10px;"></div>
+        <div><label style="font-size:10px;color:var(--text-dim);">Protein Target (g)</label><input type="number" id="nut-goal-pro" placeholder="e.g. 160" oninput="saveNutGoals()" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 10px;"></div>
+        <div><label style="font-size:10px;color:var(--text-dim);">Carbs Target (g)</label><input type="number" id="nut-goal-carb" placeholder="e.g. 300" oninput="saveNutGoals()" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 10px;"></div>
+        <div><label style="font-size:10px;color:var(--text-dim);">Fat Target (g)</label><input type="number" id="nut-goal-fat" placeholder="e.g. 80" oninput="saveNutGoals()" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 10px;"></div>
+        <div><label style="font-size:10px;color:var(--text-dim);">Cal Burned (exercise)</label><input type="number" id="nut-goal-burned" placeholder="e.g. 600" oninput="saveNutGoals()" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 10px;"></div>
+      </div>
+    </div>
+  </details>
+
+  <!-- Meals -->
+  <div id="nut-meals"></div>
+
+  <!-- Meal Templates -->
+  <div class="card" style="margin-top:16px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+      <div class="sl">Meal Templates</div>
+      <button class="btn sec sml" onclick="openSaveTemplateModal()">+ Save Current Day as Template</button>
+    </div>
+    <div id="nut-templates"><div style="font-size:11px;color:var(--text-dim);">No templates yet — log a full day then save it as a template for quick reuse.</div></div>
+  </div>
+
+  <!-- Food library -->
+  <div class="card" style="margin-top:16px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+      <div class="sl">My Food Library</div>
+      <button class="btn sec sml" onclick="openAddFoodModal(null,null)">+ Add Custom Food</button>
+    </div>
+    <input type="text" id="nut-lib-search" placeholder="Search your saved foods..." oninput="renderFoodLibrary()" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:7px 12px;font-size:13px;margin-bottom:10px;box-sizing:border-box;">
+    <div id="nut-library"></div>
+  </div>
+</div>
+
+<!-- ATHLETES PAGE -->
+<div id="page-athletes" class="page">
+  <div class="pt">ATHLETES</div>
+  <div class="ps">Training partners sharing their data with you.</div>
+
+  <!-- Your sharing toggle -->
+  <div class="card" style="margin-bottom:14px;padding:16px 20px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+      <div>
+        <div class="sl">Share Your Data</div>
+        <div style="font-size:11px;color:var(--text-dim);margin-top:4px;">Let other athletes see your readiness, training load and recent sessions.</div>
+      </div>
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+        <div style="position:relative;width:44px;height:24px;">
+          <input type="checkbox" id="share-toggle" onchange="toggleSharing(this.checked)" style="opacity:0;width:0;height:0;position:absolute;">
+          <span id="share-track" style="position:absolute;inset:0;background:var(--border);border-radius:12px;transition:.3s;"></span>
+          <span id="share-thumb" style="position:absolute;left:2px;top:2px;width:20px;height:20px;background:#fff;border-radius:50%;transition:.3s;"></span>
+        </div>
+        <span style="font-size:12px;" id="share-label">Off</span>
+      </label>
+    </div>
+    <div id="share-status" style="font-size:11px;color:var(--text-dim);margin-top:10px;"></div>
+  </div>
+
+  <!-- Garmin Connection -->
+  <div class="card" style="margin-bottom:14px;padding:16px 20px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+      <div class="sl" style="margin:0;">⌚ Garmin Connection</div>
+    </div>
+    <div id="garmin-connection-card">
+      <div style="text-align:center;padding:16px 0;">
+        <div style="font-size:32px;margin-bottom:8px;">⌚</div>
+        <div style="font-size:13px;color:var(--text);margin-bottom:4px;">Connect your Garmin account</div>
+        <div style="font-size:11px;color:var(--text-dim);line-height:1.5;margin-bottom:16px;">
+          Auto-sync HRV, sleep, resting HR and stress data. No Python script required.
+        </div>
+        <button class="btn" onclick="showGarminConnectModal()" style="background:var(--blue);color:#fff;font-weight:700;padding:10px 24px;">
+          ⌚ Connect Garmin
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Athletes list -->
+  <div id="athletes-list">
+    <div style="font-size:12px;color:var(--text-dim);text-align:center;padding:30px;">
+      <div style="font-size:24px;margin-bottom:8px;">👥</div>
+      <div id="athletes-placeholder">Sign in with Supabase to see athletes sharing their data.</div>
+    </div>
+  </div>
+</div>
+
+<div id="page-rules" class="page">
+  <div class="pt">DECISION RULES</div>
+  <div class="ps">Your self-coaching framework. Reference every Sunday after check-in.</div>
+  <div class="card">
+    <div class="sl">Load Adjustment</div>
+    <div class="dbox g"><div class="dbox-t">🟢 Score 8–10 — Increase Load</div><ul><li>Add 10–15min to one Z2 session (rotate which one each week)</li><li>Keep hard session targets identical — never change volume AND intensity same week</li><li>If Z2 pace improved AND score 8+, tighten one hard target by 5sec/km or 5W</li></ul></div>
+    <div class="dbox a"><div class="dbox-t">🟡 Score 5–7 — Hold Load</div><ul><li>Failed 1 hard session but Z2 fine → keep load, review session placement</li><li>Z2 drifting above zone → fix zone discipline before any increase</li><li>HRV trending down but sessions okay → cut one Z2 session by 20min</li><li>Motivation flat but body okay → assess life stress first, not training load</li></ul></div>
+    <div class="dbox r"><div class="dbox-t">🔴 Score 0–4 — Reduce Load</div><ul><li>Cut ALL Z2 sessions by 30% duration</li><li>Drop to 2 hard sessions — remove lowest quality one</li><li>Add one full rest day — no optional swim, actual rest</li><li>Two consecutive weeks below 5 = mandatory full deload (Z1/Z2 only, 50% volume)</li></ul></div>
+  </div>
+  <div class="card">
+    <div class="sl">Hard Session Stacking Rules</div>
+    <table class="tbl"><thead><tr><th>Rule</th><th>Why</th></tr></thead><tbody>
+      <tr><td style="color:var(--red);">Never two hard sessions on consecutive days</td><td style="color:var(--text-dim);">Recovery takes 36–48hrs minimum</td></tr>
+      <tr><td style="color:var(--red);">Never 285W+ within 48hrs of another hard session</td><td style="color:var(--text-dim);">285W = ~124% FTP — VO2 max, very high cost</td></tr>
+      <tr><td style="color:var(--orange);">Max 3 hard sessions per week in Blocks 1–2</td><td style="color:var(--text-dim);">More creates cumulative debt faster than recovery</td></tr>
+      <tr><td style="color:var(--green);">Hard session always followed by Z1/Z2 day</td><td style="color:var(--text-dim);">Adaptation happens in recovery, not the session</td></tr>
+    </tbody></table>
+  </div>
+  <div class="card">
+    <div class="sl">Block Progression</div>
+    <table class="tbl"><thead><tr><th>Block</th><th>Weeks</th><th>Volume</th><th>Focus</th><th>Hard Sessions</th></tr></thead><tbody>
+      <tr><td style="color:var(--green);font-weight:600;">Block 1</td><td>1–3</td><td>10–12hrs</td><td>Reset & rebuild aerobic base</td><td>3 × 1 per discipline</td></tr>
+      <tr><td style="color:var(--text-dim);">Deload</td><td>4</td><td>7–8hrs</td><td>Active recovery</td><td>1 easy quality</td></tr>
+      <tr><td style="color:var(--blue);font-weight:600;">Block 2</td><td>5–7</td><td>12–13hrs</td><td>Build FTP, extend long run</td><td>3 × harder</td></tr>
+      <tr><td style="color:var(--text-dim);">Deload</td><td>8</td><td>8–9hrs</td><td>Active recovery</td><td>1 easy quality</td></tr>
+      <tr><td style="color:var(--orange);font-weight:600;">Block 3</td><td>9–11</td><td>13–15hrs</td><td>Race-specific sharpening</td><td>3–4 race pace</td></tr>
+      <tr><td style="color:var(--text-dim);">Deload</td><td>12</td><td>7–8hrs</td><td>Pre-race taper</td><td>2 race pace only</td></tr>
+    </tbody></table>
+  </div>
+  <div class="card">
+    <div class="sl">Hard Session Benchmarks</div>
+    <div class="g3" style="gap:10px;">
+      <div class="csm"><div style="font-size:10px;font-weight:600;margin-bottom:8px;">🏃 Run Intervals (3km @ 4:20)</div>
+        <div class="bm-row"><div class="bm-signal">All reps ±5sec, HR 173–181</div><div class="bm-good">✓ Productive</div></div>
+        <div class="bm-row"><div class="bm-signal">Final rep drifts 6–10sec</div><div class="bm-warn">⚠ Near ceiling</div></div>
+        <div class="bm-row"><div class="bm-signal">Final 2 reps drift 10sec+ or HR &gt;185</div><div class="bm-bad">✗ Stop</div></div>
+        <div class="bm-row" style="border:none;"><div class="bm-signal">Can't hold 4:20 from rep 1</div><div class="bm-bad">🚨 Under-recovered</div></div>
+      </div>
+      <div class="csm"><div style="font-size:10px;font-weight:600;margin-bottom:8px;">🚴 Bike Sweet Spot (225–238W)</div>
+        <div class="bm-row"><div class="bm-signal">Power ±5W, HR 163–175</div><div class="bm-good">✓ Productive</div></div>
+        <div class="bm-row"><div class="bm-signal">Power drifts -10W in final interval</div><div class="bm-warn">⚠ Near ceiling</div></div>
+        <div class="bm-row"><div class="bm-signal">Power drops &gt;15W or HR &gt;183</div><div class="bm-bad">✗ Stop interval</div></div>
+        <div class="bm-row" style="border:none;"><div class="bm-signal">HR 170+ in warm-up</div><div class="bm-bad">🚨 Reschedule today</div></div>
+      </div>
+      <div class="csm"><div style="font-size:10px;font-weight:600;margin-bottom:8px;">🏊 Swim Speed (100m @ 1:44–1:48)</div>
+        <div class="bm-row"><div class="bm-signal">Consistent pace, controlled stroke</div><div class="bm-good">✓ Productive</div></div>
+        <div class="bm-row"><div class="bm-signal">Final 2 reps slip to 1:52+</div><div class="bm-warn">⚠ Near ceiling</div></div>
+        <div class="bm-row" style="border:none;"><div class="bm-signal">Inconsistent from rep 3 onwards</div><div class="bm-bad">✗ Finish, don't extend</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div><!-- /container -->
+
+<!-- PB MODAL -->
+<div class="modal-overlay" id="pb-modal">
+  <div class="modal">
+    <div class="modal-t">EDIT PBs & BEST EFFORTS</div>
+    <div style="font-size:11px;color:var(--text-dim);margin-bottom:16px;">Add as many entries as you like. Format: Name | Value (e.g. "500m Pool | 1:43")</div>
+    <div id="pb-edit-swim"><div class="sl" style="color:var(--blue);margin-bottom:8px;">🏊 Swimming</div></div>
+    <div id="pb-edit-bike"><div class="sl" style="color:var(--orange);margin-bottom:8px;">🚴 Cycling</div></div>
+    <div id="pb-edit-run"><div class="sl" style="color:var(--green);margin-bottom:8px;">🏃 Running</div></div>
+    <div id="pb-edit-tri"><div class="sl" style="color:var(--purple);margin-bottom:8px;">🏅 Triathlon</div></div>
+    <div id="pb-edit-phys"><div class="sl" style="margin-bottom:8px;">📊 Physiology</div></div>
+    <div style="display:flex;gap:8px;margin-top:16px;">
+      <button class="btn sec" style="flex:1;" onclick="closePBModal()">Cancel</button>
+      <button class="btn" style="flex:1;" onclick="savePBs()">Save All</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/config.js"></script>
+<script src="js/core.js"></script>
+<script src="js/morning.js"></script>
+<script src="js/planner.js"></script>
+<script src="js/trends.js"></script>
+<script src="js/dashboard.js"></script>
+<script src="js/performance.js"></script>
+<script src="js/strava.js"></script>
+<script src="js/nutrition.js"></script>
+<script src="js/init.js"></script>
+</body>
+</html>
