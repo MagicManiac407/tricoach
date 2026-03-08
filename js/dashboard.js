@@ -75,9 +75,17 @@ function renderHistory(){
   Object.keys(D.plans).sort().reverse().forEach(wk=>{
     DAYS.forEach((day,di)=>{
       const d=D.plans[wk]?.[di];
-      if(d&&(d.completed||d.plan))allS.push({wk,day,di,d});
+      if(d&&(d.completed||d.plan)){
+        // Calculate actual date for this day (week key is Monday, di=0 is Monday)
+        const [wY,wM,wD]=wk.split('-').map(Number);
+        const actualDate=new Date(wY,wM-1,wD+di);
+        const dateStr=actualDate.getFullYear()+'-'+String(actualDate.getMonth()+1).padStart(2,'0')+'-'+String(actualDate.getDate()).padStart(2,'0');
+        allS.push({wk,day,di,d,dateStr});
+      }
     });
   });
+  // Sort by actual date descending
+  allS.sort((a,b)=>b.dateStr.localeCompare(a.dateStr));
   const sc=document.getElementById('hc-sessions');
   sc.innerHTML=allS.length===0?'<div style="color:var(--text-dim);font-size:12px;padding:16px 0;text-align:center;">No sessions yet — import from Strava or log in planner</div>':`<div class="tbl-scroll"><table class="tbl"><thead><tr><th>Date</th><th>Day</th><th>Sports</th><th>Load Tags</th><th>Session Detail</th></tr></thead><tbody>${allS.slice(0,200).map(s=>{
   const comp = s.d.completed || s.d.plan || '';
@@ -129,7 +137,7 @@ function renderHistory(){
   }).filter(Boolean);
   const stats = statLines.join('<br>') || comp.split('\n').find(l=>l.trim()&&!l.startsWith('---'))?.slice(0,60) || '—';
   return`<tr>
-    <td style="color:var(--text-dim);font-size:10px;white-space:nowrap;">${s.wk}</td>
+    <td style="color:var(--text-dim);font-size:10px;white-space:nowrap;">${s.dateStr}</td>
     <td style="font-size:11px;font-weight:600;white-space:nowrap;">${s.day.slice(0,3)}</td>
     <td style="white-space:nowrap;">${sports||'<span style="color:var(--text-dim);">—</span>'}</td>
     <td style="white-space:nowrap;min-width:80px;"><div style="display:flex;flex-wrap:wrap;gap:3px;">${loadTags||'<span style="color:var(--text-dim);font-size:10px;">—</span>'}</div></td>
