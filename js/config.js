@@ -4,11 +4,11 @@
 //                                    → Settings → API Keys (Publishable key)
 // ===================================================================
 const SUPABASE_URL  = 'https://vhdzkmjfivfuverqhxip.supabase.co';
-const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZoZHprbWpmaXZmdXZlcnFoeGlwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI4MTUyOTEsImV4cCI6MjA4ODM5MTI5MX0.b5Vc4waPmO88VO0EBjPmMI0Dycnb6VjFvtG7g-JrsRo';
+const SUPABASE_ANON = 'sb_publishable_A14st8S-OPSBBOZ8SzQshQ_D56nk0nz';
 
 // ── Supabase client (null if not configured yet) ─────────────────
 const supa = (SUPABASE_URL && SUPABASE_ANON)
-  ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON, { auth: { persistSession: true, detectSessionInUrl: false, flowType: 'implicit' } })
+  ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON)
   : null;
 
 let currentUser = null; // set after auth
@@ -199,82 +199,5 @@ function save(){
     clearTimeout(_saveDebounce);
     _saveDebounce = setTimeout(pushToSupabase, 2000);
   }
-}
-
-// ── Garmin Cloud Sync ─────────────────────────────────────────────
-const GARMIN_EDGE_FN = SUPABASE_URL + '/functions/v1/garmin-sync';
-
-// Cached garmin data (fetched from Supabase on load)
-let GARMIN_CLOUD = null;    // latest garmin_data row
-let GARMIN_STATUS = null;   // connection status from garmin_credentials
-
-async function garminEdgeCall(action, extra = {}) {
-  if(!supa || !currentUser) return { ok: false, error: 'Not signed in' };
-  const session = (await supa.auth.getSession()).data.session;
-  if(!session) return { ok: false, error: 'No session' };
-
-  try {
-    const resp = await fetch(GARMIN_EDGE_FN, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + session.access_token,
-        'apikey': SUPABASE_ANON,
-      },
-      body: JSON.stringify({ action, ...extra }),
-    });
-    return await resp.json();
-  } catch(e) {
-    return { ok: false, error: e.message };
-  }
-}
-
-async function loadGarminFromSupabase() {
-  if(!supa || !currentUser) return;
-  try {
-    // Fetch latest garmin data for current user (today or most recent)
-    const { data, error } = await supa
-      .from('garmin_data')
-      .select('date, data, synced_at')
-      .eq('user_id', currentUser.id)
-      .order('date', { ascending: false })
-      .limit(1)
-      .single();
-
-    if(data && !error) {
-      GARMIN_CLOUD = data;
-      // Cache in localStorage as fallback
-      localStorage.setItem('tc26_garmin', JSON.stringify(data));
-    } else {
-      // Try localStorage fallback
-      const cached = localStorage.getItem('tc26_garmin');
-      if(cached) GARMIN_CLOUD = JSON.parse(cached);
-    }
-  } catch(e) {
-    const cached = localStorage.getItem('tc26_garmin');
-    if(cached) GARMIN_CLOUD = JSON.parse(cached);
-  }
-}
-
-async function loadGarminStatus() {
-  if(!supa || !currentUser) return;
-  try {
-    const { data } = await supa
-      .from('garmin_credentials')
-      .select('email, connected_at, last_sync_at, sync_error')
-      .eq('id', currentUser.id)
-      .single();
-    GARMIN_STATUS = data || null;
-  } catch(e) {
-    GARMIN_STATUS = null;
-  }
-}
-
-function getGarminData() {
-  // Returns the latest garmin data object (from cloud or hardcoded fallback)
-  if(GARMIN_CLOUD && GARMIN_CLOUD.data) return GARMIN_CLOUD.data;
-  // Fallback to hardcoded GARMIN_TODAY if it exists and has data
-  if(typeof GARMIN_TODAY !== 'undefined' && GARMIN_TODAY && GARMIN_TODAY.hrv) return GARMIN_TODAY;
-  return null;
 }
 
