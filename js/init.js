@@ -228,9 +228,7 @@ function dismissBackupReminder() {
   document.getElementById('backup-reminder')?.remove();
 }
 
-// Override exportBackup to track last backup date
-const _origExportBackup = exportBackup;
-// Track backup date whenever exportBackup is called
+// exportBackup — tracks last backup date in localStorage
 function exportBackup(){
   save();
   const payload = {
