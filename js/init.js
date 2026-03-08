@@ -603,5 +603,14 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   refreshPlannerFromStrava();
   checkSyncServer();
   renderGarminConnection();
+  // Strava OAuth — handle callback if redirected back from Strava
+  await handleStravaCallback();
+  // Load Strava connection status and render
+  await loadStravaStatus();
+  renderStravaConnection();
+  // Auto-sync Strava activities silently on load if connected
+  if(STRAVA_STATUS && STRAVA_STATUS.strava_connected) {
+    syncStravaActivities(false);
+  }
   window.addEventListener('resize',()=>{if(document.getElementById('page-trends').classList.contains('active'))renderChart();});
 });
