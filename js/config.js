@@ -8,7 +8,7 @@ const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFz
 
 // ── Supabase client (null if not configured yet) ─────────────────
 const supa = (SUPABASE_URL && SUPABASE_ANON)
-  ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON)
+  ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON, { auth: { persistSession: true, detectSessionInUrl: false, flowType: 'implicit' } })
   : null;
 
 let currentUser = null; // set after auth
