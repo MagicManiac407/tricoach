@@ -600,7 +600,6 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   await loadGarminStatus();
   updateDashboard();
   applySyncData();
-  refreshPlannerFromStrava();
   checkSyncServer();
   renderGarminConnection();
   // Strava OAuth — handle callback if redirected back from Strava
@@ -609,8 +608,12 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   await loadStravaStatus();
   renderStravaConnection();
   // Auto-sync Strava activities silently on load if connected
+  // IMPORTANT: await the sync so STRAVA_ACTS is populated before refreshing planner/history
   if(STRAVA_STATUS && STRAVA_STATUS.strava_connected) {
-    syncStravaActivities(false);
+    await syncStravaActivities(false);
   }
+  // Refresh planner and history AFTER Strava data is loaded
+  refreshPlannerFromStrava();
+  if(typeof renderHistory === 'function') renderHistory();
   window.addEventListener('resize',()=>{if(document.getElementById('page-trends').classList.contains('active'))renderChart();});
 });
