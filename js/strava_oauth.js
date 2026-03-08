@@ -59,10 +59,15 @@ async function handleStravaCallback() {
   try {
     const result = await stravaEdgeCall('exchange_token', { code });
     if (result.ok) {
-      showToast('Strava connected!');
+      // Merge activities returned directly from exchange_token (no second call needed)
+      if (result.activities && result.activities.length > 0) {
+        mergeStravaActivities(result.activities);
+        refreshPlannerFromStrava();
+        updateDashboard();
+      }
       await loadStravaStatus();
       renderStravaConnection();
-      await syncStravaActivities();
+      showToast('Strava connected! ' + (result.count || 0) + ' activities imported.');
     } else {
       showToast('Strava connection failed: ' + (result.error || 'Unknown error'), true);
     }
