@@ -59,7 +59,7 @@ function nav(page){
   document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));
   document.querySelectorAll('.mob-btn').forEach(b=>b.classList.remove('active'));
   document.getElementById('page-'+page).classList.add('active');
-  const map={dashboard:0,planner:1,morning:2,trends:3,checkin:4,history:5,pbs:6,performance:7,nutrition:8,athletes:9,rules:10};
+  const map={dashboard:0,planner:1,morning:2,trends:3,checkin:4,history:5,pbs:6,performance:7,nutrition:8,athletes:9,rules:10,problueprintpage:11};
   const idx=map[page];
   document.querySelectorAll('nav button')[idx]?.classList.add('active');
   document.querySelectorAll('.mob-btn')[idx]?.classList.add('active');
@@ -74,6 +74,7 @@ function nav(page){
   if(page==='nutrition')renderNutrition();
   if(page==='athletes')renderAthletes();
   if(page==='checkin')document.getElementById('ci-date').value=localDateStr(new Date());
+  if(page==='problueprintpage')renderProBlueprint();
 }
 
 // ===== SCORE BUTTONS =====

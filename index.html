@@ -89,6 +89,7 @@
     <button onclick="nav('nutrition')">Nutrition</button>
     <button onclick="nav('athletes')">👥 Athletes</button>
     <button onclick="nav('rules')">Decision Rules</button>
+    <button onclick="nav('problueprintpage')">Pro Blueprint</button>
     <button onclick="exportBackup()" style="background:var(--green);color:#000;font-weight:700;margin-left:8px;">⬇️ Backup</button>
     <button onclick="importBackup()" style="background:var(--card);border:1px solid var(--border);margin-left:4px;">⬆️ Restore</button>
   </nav>
@@ -117,6 +118,7 @@
     <button class="mob-btn" onclick="nav('nutrition')"><span class="mob-icon">🥗</span>Nutrition</button>
     <button class="mob-btn" onclick="nav('athletes')"><span class="mob-icon">👥</span>Athletes</button>
     <button class="mob-btn" onclick="nav('rules')"><span class="mob-icon">📖</span>Rules</button>
+    <button class="mob-btn" onclick="nav('problueprintpage')"><span class="mob-icon">🏆</span>Pro Blueprint</button>
   </div>
 </div>
 
@@ -1133,6 +1135,8 @@
   </div>
 </div>
 
+<div id="page-problueprintpage" class="page"></div>
+
 <div id="page-rules" class="page">
   <div class="pt">DECISION RULES</div>
   <div class="ps">Your self-coaching framework. Reference every Sunday after check-in.</div>
@@ -1219,6 +1223,7 @@
 <script src="https://cdn.jsdelivr.net/npm/quagga@0.12.1/dist/quagga.min.js"></script>
 <script src="js/nutrition.js"></script>
 <script src="js/strava_oauth.js"></script>
+<script src="js/problueprintpage.js"></script>
 <script src="js/init.js"></script>
 </body>
 </html>
