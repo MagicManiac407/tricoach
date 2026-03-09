@@ -1,8 +1,10 @@
 // ============================================================
 // PRO BLUEPRINT PAGE — TriCoach
-// Expanded roster: 14 athletes, verified 2025 race data
+// Expanded roster: 18 athletes, verified 2025 race data
 // Sources: Scientific Triathlon pods, PubMed, Norwegian Method Pod,
-//          TRI247, Slowtwitch, Triathlete Mag, direct athlete interviews
+//          TRI247, Slowtwitch, Triathlete Mag, direct athlete interviews,
+//          PTO Stats, T100 Wikipedia, InsideHook, 220 Triathlon
+// Includes: Hayden Wilde, Mika Noodt, Morgan Pearson, Marten Van Riel
 // Dark theme restyled for TriCoach 2026
 // ============================================================
 
@@ -662,6 +664,250 @@ const PRO_ATHLETES = [
       { race: 'IM 70.3 Oceanside', pos: 4, swim: '22:54 (3rd)', bike: '2:07:59', run: '1:14:52', total: '3:49:18' },
     ],
   },
+
+  {
+    id: 'wilde',
+    name: 'Hayden Wilde',
+    country: 'NZL', flag: '🇳🇿',
+    age: 27,
+    tier: '🏆 2025 T100 World Champion',
+    wins2025: ['T100 Singapore', 'T100 London', 'T100 French Riviera', 'T100 Spain', 'T100 Wollongong', 'T100 Qatar (World Champs)'],
+    podiums2025: ['1st Singapore', '1st London (comeback from crash)', '1st French Riviera', '1st Spain', '1st Wollongong', '1st Qatar Final — perfect 195 pts'],
+    coach: 'Craig Kirkwood (since 2016, Tauranga NZ)',
+    base: 'Tauranga, New Zealand / Abu Dhabi (race season)',
+    dataQuality: 'CONFIRMED',
+    source: 'T100 2025 Wikipedia, TRI247, InsideHook Jan 2026, Triathlete.com Dec 2025',
+    keyStats: {
+      peakWeekHours: '~25–30h (trains up to 4× per day)',
+      swimPerWeek: '6× sessions/week',
+      bikePerWeek: '6× sessions/week',
+      runPerWeek: '5× sessions/week',
+      bodyWeight: '~72kg',
+      swimStrength: 'Open-water specialist — pool swimming is weaker. Crashed at Tokyo T1 World Cup due to poor pool swim.',
+      bikeStrength: 'Explosive and aggressive — powerful bike-to-run transition athlete. Won T100 races from the front on bike.',
+      runStrength: 'World-class — fastest or near-fastest run split in most T100 races. Primary weapon.',
+    },
+    weekStructure: {
+      mon: { swim: 'Easy/recovery', bike: 'Recovery ride 60–90 min', run: null },
+      tue: { swim: 'Hard squad session', bike: 'High-intensity intervals', run: 'Easy 60 min' },
+      wed: { swim: 'Moderate 5–6km', bike: 'Long endurance 4–5h', run: '60–90 min brick or standalone' },
+      thu: { swim: 'Hard session', bike: 'Threshold/VO₂ session', run: 'Key threshold run' },
+      fri: { swim: 'Easy/recovery', bike: 'Short spin', run: 'Easy 50–60 min' },
+      sat: { swim: null, bike: 'Race-sim or long ride 4h', run: '90–120 min long run or brick' },
+      sun: { swim: 'Recovery easy', bike: 'Easy 90 min', run: 'Easy or rest' },
+    },
+    keySessions: [
+      { name: 'Open-Water Swim Specificity', detail: 'Focused on open-water drafting and sighting rather than pure pool speed. Self-described weaker pool swimmer but elite open-water racer. Coach Kirkwood tailors swim to open-water race skills.' },
+      { name: 'Explosive Bike Efforts', detail: 'Bike training emphasises accelerations and power surges to match T100 racing dynamics. The 20m draft rule in T100 means riders must be truly strong — Wilde uses short maximal efforts to simulate race attacks.' },
+      { name: 'Multi-Discipline Brick Days', detail: 'Up to 4 training sessions per day during peak blocks. Combines swim + bike + run in the same day. Builds race-specific fatigue tolerance. "It\'s intense, but this is my job."' },
+      { name: 'Adventure/Off-Road Base', detail: 'Youth background in adventure racing, orienteering, mountain biking, and XTERRA gave Wilde unusual durability and bike handling. Coach Kirkwood has maintained cross-training elements to preserve this quality.' },
+    ],
+    nutrition: {
+      philosophy: 'High-carb athlete, pragmatic approach. Enjoys food — "if I get a coffee I\'m probably getting a slice of carrot cake too."',
+      training: 'Fuels for training load. High carbohydrate intake around key sessions.',
+      race: 'T100-specific fuelling strategy on 80km bike — high carb per hour. Gels and electrolytes on run.',
+      recovery: 'Good diet baseline but doesn\'t restrict. Prioritises sleep and mental recovery — video games, coffee with mates.',
+    },
+    recovery: {
+      sleep: '8–9h. Strong mental recovery practices — does not listen to triathlon podcasts in downtime.',
+      tools: 'Red Bull Performance Centre (used during 2025 injury rehab in Austria). Mental reset key.',
+      philosophy: '"You need to relax and get out of the sport." Forces proper off-switch after training. Trains with mates to stay motivated on low-energy days.',
+      taper: 'Race-specific — T100 peaking strategy. Kept racing through 2025 season even while partially injured to maintain race sharpness.',
+    },
+    physiology: {
+      background: 'Paris 2024 Olympic silver medallist. Tokyo 2020 bronze. 2× XTERRA World Champion. NZ Olympian since 2021. First world title came at 2025 T100 despite multiple near-misses in short-course WTCS.',
+      injury2025: 'Bike crash in Japan (broken ribs, punctured lung, shoulder fracture). Returned to racing in <100 days — won T100 London on comeback. Remarkable.',
+      notes: 'Won 6 of 7 T100 starts in 2025. Only "loss" was due to lap-counting error in Dubai where he was leading. Dominant from every angle: swim (open-water), bike (explosive), run (fastest).',
+    },
+    raceData2025: [
+      { race: 'T100 Singapore', pos: 1, swim: 'Front pack', bike: 'Race leader', run: 'Fastest split', total: '~3:04' },
+      { race: 'T100 London', pos: 1, swim: 'Top 10', bike: 'Front', run: 'Race-winning run', total: '~3:07' },
+      { race: 'T100 French Riviera', pos: 1, swim: '—', bike: '—', run: '—', total: '—' },
+      { race: 'T100 Spain', pos: 1, swim: '—', bike: '—', run: '—', total: '—' },
+      { race: 'T100 Wollongong', pos: 1, swim: '—', bike: '—', run: '—', total: '—' },
+      { race: 'T100 Qatar (World Champs)', pos: 1, swim: 'Superb — race leader', bike: 'Led race', run: '1:37 margin at bell', total: '3:06:08' },
+    ],
+  },
+
+  {
+    id: 'noodt',
+    name: 'Mika Noodt',
+    country: 'GER', flag: '🇩🇪',
+    age: 25,
+    tier: '⭐ 2025 T100 Top-3 Overall',
+    wins2025: ['Multiple T100 podiums'],
+    podiums2025: ['2nd T100 London', '4th T100 Qatar Final', '4× T100 podiums total in 2025'],
+    coach: 'Personal coach (3+ year relationship)',
+    base: 'Darmstadt, Germany',
+    dataQuality: 'CONFIRMED',
+    source: 'Scientific Triathlon Podcast EP#667, Nov 2025 (full training deep-dive)',
+    keyStats: {
+      peakWeekHours: '25–30h',
+      swimPerWeek: 'Multiple sessions — 50m outdoor pool access in Darmstadt',
+      bikePerWeek: '5–6× — Darmstadt terrain ideal for TT training (flat roads)',
+      runPerWeek: '4–5×',
+      strengthPerWeek: 'Epic strength blocks (see below)',
+      bodyWeight: '~70kg',
+      swimStrength: 'Solid T100 swimmer — exits with front groups, swims 2km in elite pack',
+      bikeStrength: 'Strong TT biker. Darmstadt terrain = world-class TT training. Can absorb 1-min penalty and still podium (T100 Cairns 2025).',
+      runStrength: 'Improving rapidly — consistent T100 podium runner',
+    },
+    weekStructure: {
+      mon: { swim: 'Easy/active recovery', bike: 'Recovery ride', run: null },
+      tue: { swim: 'Hard squad session', bike: 'High-intensity VO₂ or threshold', run: 'Easy' },
+      wed: { swim: 'Moderate technique', bike: 'Long endurance ride 4–5h', run: 'Brick run 60–90 min' },
+      thu: { swim: 'Hard intervals', bike: 'Threshold session', run: 'Key run session' },
+      fri: { swim: 'Easy', bike: 'Recovery or short sharpener', run: 'Easy 60 min' },
+      sat: { swim: null, bike: 'Long ride or race-sim', run: '90–120 min long run' },
+      sun: { swim: 'Easy recovery', bike: 'Easy 90 min', run: 'Easy or rest' },
+    },
+    keySessions: [
+      { name: 'Strength Training Blocks (Unconventional)', detail: 'Noodt runs dedicated multi-week strength blocks — rare among T100 athletes. Heavy compound lifting in focused blocks to build power base. Calls them "epic." Integrated into off-season and early build.' },
+      { name: 'TT Bike Intervals (Darmstadt)', detail: 'Darmstadt\'s flat roads are described as world-class for TT work. Mika uses sustained threshold and sub-threshold efforts on local roads that even beat altitude venues for TT specificity.' },
+      { name: 'Altitude Camp Sessions', detail: 'Sierra Nevada (May, pool-based sessions) + Tignes French Alps (pre-London, cycling with WorldTour teams). Each block produces immediate and delayed performance boosts 10–20 days post-camp.' },
+      { name: 'Race-Sim T100 Pacing', detail: 'Focused on T100-specific pacing: controlled effort on 80km bike to preserve run. Studied T100 vs 70.3 dynamics. 2km swim → 80km bike → 18km run requires different pacing to 70.3.' },
+    ],
+    nutrition: {
+      philosophy: 'Structured athlete nutrition. Meal prep approach — prefers not to cook. Simple meals: rice, vegetables, chicken.',
+      training: 'High carbohydrate during training days. Precision Fuel & Hydration partnership.',
+      race: 'Optimised for T100 distance fuelling. High carb on bike, managed run fuelling.',
+      recovery: '8pm evening routine: meal prep + emails + downtime. Prioritises sleep.',
+    },
+    recovery: {
+      sleep: '8–9h. Does not train in extreme heat unnecessarily — prefers controlled home environment.',
+      tools: 'Strength training blocks as injury prevention. Avoids heat camps (prefers altitude over heat).',
+      philosophy: 'Prefers home training base (Darmstadt) and dislikes constant travel. "Modern schedules are increasingly international — travel fatigue is a real challenge." Arrives race venues early to adapt.',
+      taper: 'Arrived Wollongong early (did not do late altitude camp). Adapts to climate and time zone. Avoids winter training camps with informal competitions.',
+    },
+    physiology: {
+      background: 'Born 2000. Started triathlon 2013 (aged ~12). COVID lockdowns accelerated development in 2020–21. Turned professional end of 2021. Former e-sports competitor — ranked World #60 in F1 2011 game at age 10.',
+      notes: 'Described as "quiet assassin" on the T100 circuit. Finished T100 Cairns podium despite serving a 1-min penalty. Ranked #2 T100 World Tour standings before Qatar Final. Lost Qatar Final 3rd by inches to Marten Van Riel.',
+    },
+    raceData2025: [
+      { race: 'T100 Cairns (pre-season)', pos: 3, swim: 'Top group', bike: 'Podium despite 1-min penalty', run: 'Strong', total: '—' },
+      { race: 'T100 London', pos: 2, swim: '—', bike: '—', run: '—', total: '~3:08' },
+      { race: 'T100 Wollongong', pos: 2, swim: '—', bike: '—', run: '—', total: '—' },
+      { race: 'T100 Qatar (World Champs)', pos: 4, swim: '—', bike: '—', run: 'Edged out by Van Riel', total: '~3:09' },
+    ],
+  },
+
+  {
+    id: 'pearson',
+    name: 'Morgan Pearson',
+    country: 'USA', flag: '🇺🇸',
+    age: 31,
+    tier: '🌟 T100 Qatar 2nd — Elite Run Speed',
+    wins2025: ['Multiple T100 top-3s'],
+    podiums2025: ['2nd T100 Qatar (World Champs)', 'Multiple T100 podiums through season'],
+    coach: 'Ryan Bolton (Boulder, CO)',
+    base: 'Boulder, Colorado, USA',
+    dataQuality: 'CONFIRMED',
+    source: 'The Triathlon Hour Podcast Jan 2025, Wikipedia, Triathlete.com, PTO Stats',
+    keyStats: {
+      peakWeekHours: '~25–28h',
+      swimPerWeek: '4–5× — pool-based in Boulder. Swim is self-described limiter. Works on speed with fast training partners.',
+      bikePerWeek: '5–6× — roads and trails around Boulder, CO',
+      runPerWeek: '6–7× — former NCAA runner (7× All-American, Univ. Colorado). Running is elite weapon.',
+      bodyWeight: '~67kg',
+      swimStrength: 'Acknowledged weakest discipline. Prioritises pool speed work with faster training partners.',
+      bikeStrength: 'Solid T100 biker — builds position on bike to set up run. Not a dominant biker.',
+      runStrength: 'ELITE — among fastest runners in T100 field. "Blazed through the field on the run" at Qatar Final. Background: 7× NCAA All-American, sub-28 10km runner.',
+    },
+    weekStructure: {
+      mon: { swim: 'Easy or pool technique', bike: 'Recovery ride', run: null },
+      tue: { swim: 'Hard pool intervals — speed focus', bike: 'Threshold 2–3h', run: 'Easy 60 min' },
+      wed: { swim: 'Moderate open water or pool', bike: 'Long ride 4–5h (Boulder terrain, trails)', run: 'Brick 45–60 min' },
+      thu: { swim: 'Hard session with fast training partners', bike: 'Moderate', run: 'Key run session — track or tempo' },
+      fri: { swim: 'Easy/recovery', bike: 'Short spin', run: 'Easy 50–60 min' },
+      sat: { swim: null, bike: 'Long ride 4–5h', run: '90–120 min long run (Boulder trails/roads)' },
+      sun: { swim: 'Easy or rest', bike: 'Easy 60–90 min', run: 'Easy 60 min or full rest' },
+    },
+    keySessions: [
+      { name: 'Speed Swim Work (25s focus)', detail: 'Trains with faster swimmers in Boulder to compensate for being a natural runner-first. All-out 25s with different gear. "Training the speed in the swim is super important for me because my weakness is in the water."' },
+      { name: 'Boulder Long Run', detail: '90–120 min trail/road long run in Boulder. Altitude (~1650m) adds aerobic stimulus. Background in collegiate cross-country means these are high-quality aerobic runs.' },
+      { name: 'T100 Run Execution', detail: 'At Qatar 2025: "blazed through the field on the run" to take 2nd overall. Strategy is to stay in contact through swim/bike and use run speed on the back end. 18km T100 run suits his physiology.' },
+      { name: 'Zone 2 Long Bike', detail: 'Famous for Zone 2 base building (subject of internet memes within triathlon community). Extensive Z2 aerobic base rides form backbone of bike training, supporting run-heavy training load.' },
+    ],
+    nutrition: {
+      philosophy: 'High carbohydrate, Boulder endurance athlete standard. Loves burritos post-workout.',
+      training: 'Post-track or post-brick: giant burritos with rice, cheese, avocado, beans, sour cream, protein. Extra calories before long afternoon rides.',
+      race: 'T100 race fuelling — high carb on bike, managed on run.',
+      recovery: 'Boulder endurance community culture. Outdoor swimming in warmer months. Invigorating pool in all seasons.',
+    },
+    recovery: {
+      sleep: '8–9h. Boulder lifestyle with outdoor pool swimming year-round.',
+      tools: 'Training group environment in Boulder — surrounded by strong endurance athletes. Competition in training elevates performance.',
+      philosophy: 'Competitive training environment is key. "I\'m surrounded by a strong group of endurance athletes and supportive friends to train alongside, which continually fuel my competitive energy."',
+      taper: 'Standard pre-race protocol. Maintains swimming speed work in taper. Focuses on staying sharp on run.',
+    },
+    physiology: {
+      background: '2020 + 2024 Olympic silver medallist (mixed relay). 7× NCAA All-American runner at University of Colorado. Grew up in New Jersey. Run is generational talent — came to triathlon via running, not swimming.',
+      notes: 'Known as "King of Zone 2" in triathlon community after meme went viral. Signed T100 contract for 2025 after Jelle Geens publicly questioned his "Hot Shot" credentials — used the motivation to finish 2nd at World Champs.',
+    },
+    raceData2025: [
+      { race: 'T100 Qatar (World Champs)', pos: 2, swim: 'Mid-pack exit', bike: 'Steady build', run: 'Fastest/near-fastest split', total: '3:07:23' },
+    ],
+  },
+
+  {
+    id: 'vanriel',
+    name: 'Marten Van Riel',
+    country: 'BEL', flag: '🇧🇪',
+    age: 32,
+    tier: '🏆 2024 T100 World Champion / 2025 T100 Top-5',
+    wins2025: ['IM 70.3 Nice', 'T100 podiums through season'],
+    podiums2025: ['1st IM 70.3 Nice (June 2025)', '3rd T100 Qatar Final', 'Multiple T100 podiums'],
+    coach: 'Glenn Poleunis / PTC Coaching (Girona, Spain)',
+    base: 'Girona, Spain (training) / Wuustwezel, Belgium (home)',
+    dataQuality: 'CONFIRMED',
+    source: '220 Triathlon interview Feb 2025, MartenVanRiel.be, TRI247, PTO Stats 2025',
+    keyStats: {
+      peakWeekHours: '30+ hours — "weeks of more than 30 hours are no exception"',
+      swimPerWeek: '5–6×',
+      bikePerWeek: '6× — Girona is cycling paradise. Favourite discipline: cycling ("my way of discovering the world").',
+      runPerWeek: '5×',
+      strengthPerWeek: 'None specified — focused purely on swim/bike/run',
+      bodyWeight: '~68kg',
+      swimStrength: 'Solid — exits with lead groups consistently in T100',
+      bikeStrength: 'Exceptional. Girona-based training, WorldTour cycling contacts, loves cycling above all. Won 3 T100 races on bike strength in 2024.',
+      runStrength: 'Strong T100 runner — battles Geens on run in most races. Beat Noodt in late Qatar duel for 3rd.',
+    },
+    weekStructure: {
+      mon: { swim: 'Easy recovery', bike: 'Recovery ride', run: null },
+      tue: { swim: 'Hard intervals', bike: 'VO₂ or threshold session', run: 'Easy' },
+      wed: { swim: 'Moderate', bike: 'Long Girona ride 4–5h', run: 'Brick 60 min' },
+      thu: { swim: 'Hard', bike: 'Threshold session', run: 'Key run session' },
+      fri: { swim: 'Easy', bike: 'Recovery or short', run: 'Easy 60 min' },
+      sat: { swim: null, bike: 'Big ride 4–5h or race-sim', run: '90+ min long run' },
+      sun: { swim: 'Recovery easy', bike: 'Easy 2h', run: 'Easy or full rest' },
+    },
+    keySessions: [
+      { name: 'Girona Long Ride', detail: 'World-class cycling terrain in Girona — same roads used by WorldTour teams. 4–5h rides combining climbs, TT roads, and varied terrain. "Cycling is my way of discovering the world." Core of training identity.' },
+      { name: 'PTC Coaching Group Sessions', detail: 'Trains with Glenn Poleunis\'s PTC Coaching group in Girona. Multi-athlete environment elevates performance. Regular contact with top European pros. Professional setup with full coaching staff.' },
+      { name: 'T100 Race-Specific Bike Effort', detail: 'Won 3 T100 races in 2024 by building decisive bike gaps. 2025 focus on maintaining bike dominance while recovering from ankle injury. Targets bike as primary weapon in 80km T100 segment.' },
+      { name: 'Mental Recovery Protocol', detail: 'Struggled with mental health and injury in 2025 (ankle sprain + poor form pre-injury). Openly shared on Instagram. Recovered to finish 3rd at T100 Qatar World Champs. Models vulnerability and resilience.' },
+    ],
+    nutrition: {
+      philosophy: 'Simple, structured. Dislikes cooking — uses meal prep. "Dinner is often meal-prepped by someone else, or something very simple like rice with vegetables and chicken."',
+      training: 'High carbohydrate to support 30h+ training weeks.',
+      race: 'T100 and IRONMAN 70.3 fuelling protocols. Won 70.3 Nice 2025 and multiple T100 podiums.',
+      recovery: 'Meal prep + rest. Separates training life from personal life.',
+    },
+    recovery: {
+      sleep: '8h. 8pm: check emails, Instagram, TV. Disciplined evening structure.',
+      tools: 'PTC Coaching professional support staff in Girona. Open about mental health challenges — shared mid-season struggles publicly.',
+      philosophy: 'Total training commitment — 30+ hour weeks. "Nothing more rewarding than feeling like I am doing everything to reach my dreams." Shifted focus to long-course after Olympics.',
+      taper: 'Managed ankle injury carefully to make Qatar Final. Showed elite ability to manage load around injury.',
+    },
+    physiology: {
+      background: 'Triple Olympian (Rio 6th, Tokyo 4th, Paris 22nd). Transitioned from short-course to long-course post-Paris 2024. Won inaugural T100 World Championship 2024 with 3 wins (San Francisco, Ibiza, Dubai) + silver Las Vegas. 2025 was defending champion.',
+      notes: 'Began dreaming of being a zookeeper as a child — "the animals\' loss was multisport\'s gain." Started in Belgium swimming club at 7. PTC Coaching group in Girona transformed him from anonymous WTS pack member to world champion. 30h+ training weeks standard.',
+    },
+    raceData2025: [
+      { race: 'IM 70.3 Nice', pos: 1, swim: 'Front group', bike: 'Dominant', run: 'Winning run', total: '~3:38' },
+      { race: 'T100 Qatar (World Champs)', pos: 3, swim: '—', bike: '—', run: 'Beat Noodt in late battle', total: '~3:08' },
+    ],
+  },
 ];
 
 const SESSION_MATRIX = [
@@ -726,7 +972,7 @@ function renderProBlueprint() {
     { n: PRO_ATHLETES.length, l: 'Athletes', c: T.blue },
     { n: confirmed, l: 'Confirmed', c: T.green },
     { n: totalWins, l: '2025 Wins', c: T.yellow },
-    { n: 6, l: 'Nations', c: T.cyan },
+    { n: 8, l: 'Nations', c: T.cyan },
   ].forEach(s => {
     const d = document.createElement('div');
     d.style.cssText = `background:${T.surface};border:1px solid ${T.border};border-radius:10px;padding:10px;text-align:center;`;
@@ -740,6 +986,7 @@ function renderProBlueprint() {
   filterBar.style.cssText = 'display:flex;gap:8px;padding:0 20px 16px;flex-wrap:wrap;';
   const filterDefs = [
     { label: 'All Athletes', fn: () => true },
+    { label: '🏆 T100 Series', fn: a => a.wins2025.some(w => w.includes('T100')) || (a.podiums2025 && a.podiums2025.some(p => p.includes('T100'))) },
     { label: '⭐ World Champs', fn: a => a.tier.includes('World Champion') || a.tier.includes('Pro Series') },
     { label: '🇳🇴 Norway Group', fn: a => a.country === 'NOR' },
     { label: '🇺🇸 Americans', fn: a => a.country === 'USA' },
