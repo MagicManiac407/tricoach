@@ -1,0 +1,8 @@
+{
+  "strava_client_id": "208609",
+  "strava_client_secret": "ad92daba6b4744a7057fa1937b1f441b7a50052e",
+  "strava_refresh_token": "9d7558cc16f7f55fe9a4cd85e539255ae4c7909e",
+  "garmin_email": "travisgale4479@gmail.com",
+  "garmin_password": "Matthew.07",
+  "output_file": "sync_data.json"
+}
