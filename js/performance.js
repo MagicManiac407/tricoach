@@ -98,16 +98,24 @@ function stravaImportWeek(weekKey) {
 
 // ===== PERFORMANCE =====
 function switchPT(tab) {
-  ['run','bike','swim','volume','autopb'].forEach(t => {
-    document.getElementById('pv-'+t).style.display = t===tab?'block':'none';
+  ['run','bike','swim','volume','autopb','predictor'].forEach(t => {
+    const pv = document.getElementById('pv-'+t);
+    if(pv) pv.style.display = t===tab?'block':'none';
     const btn = document.getElementById('pt-'+t);
-    if(btn) btn.className = t===tab?'btn':'btn sec';
+    if(!btn) return;
+    if(t==='predictor') {
+      btn.style.background = t===tab ? 'var(--green)' : 'transparent';
+      btn.style.color = t===tab ? '#000' : 'var(--green)';
+    } else {
+      btn.className = t===tab?'btn':'btn sec';
+    }
   });
-  if(tab==='run') renderRunCharts();
-  if(tab==='bike') renderBikeCharts();
-  if(tab==='swim') renderSwimCharts();
-  if(tab==='volume') renderVolumeCharts();
-  if(tab==='autopb') renderAutoPBs();
+  if(tab==='run')       renderRunCharts();
+  if(tab==='bike')      renderBikeCharts();
+  if(tab==='swim')      renderSwimCharts();
+  if(tab==='volume')    renderVolumeCharts();
+  if(tab==='autopb')    renderAutoPBs();
+  if(tab==='predictor') renderRacePredictor();
 }
 
 function renderPerformance() { renderRunCharts(); }
@@ -196,9 +204,8 @@ function fmtPace(p) { const m=Math.floor(p); return m+':'+(Math.round((p-m)*60))
 function fmtDate(d) { return new Date(d+'T00:00:00').toLocaleDateString('en-AU',{day:'numeric',month:'short'}); }
 
 // ===== TREND CHART HELPER =====
-// The core insight: rolling average line over noisy dots = visible trend
+// World-class interactive chart: gradient fill, rolling avg, effort dots, month labels, tooltips
 function drawTrendChart(id, pts, opts) {
-  // opts: {getValue, color, label, unit, yFmt, tipLines, refs, effortDots, rollingN, lowerIsBetter, H, emptyMsg}
   const c = setupCanvas(id); if(!c) return;
   const H = opts.H || 240;
   c.height = H;
@@ -209,22 +216,34 @@ function drawTrendChart(id, pts, opts) {
 
   const vals = filtered.map(a => opts.getValue(a));
   let yMin=Math.min(...vals), yMax=Math.max(...vals);
-  const pad=(yMax-yMin)*0.12||yMax*0.05||1;
+  const pad=(yMax-yMin)*0.15||yMax*0.06||1;
   yMin-=pad; yMax+=pad;
 
   const pL=58, pT=22, pR=20, pB=38;
   const W=c.width, cW=W-pL-pR, cH=H-pT-pB;
 
-  // Background
-  ctx.fillStyle='var(--surface2)'; ctx.fillRect(0,0,W,H);
+  // Background with subtle gradient
+  const bgGrad = ctx.createLinearGradient(0,0,0,H);
+  bgGrad.addColorStop(0,'rgba(20,29,42,1)'); bgGrad.addColorStop(1,'rgba(15,21,32,1)');
+  ctx.fillStyle=bgGrad; ctx.fillRect(0,0,W,H);
+
+  // Zone bands (if provided)
+  (opts.zones||[]).forEach(z => {
+    const y1=Math.max(pT, pT+cH*(1-(z.max-yMin)/(yMax-yMin||1)));
+    const y2=Math.min(pT+cH, pT+cH*(1-(z.min-yMin)/(yMax-yMin||1)));
+    if(y1<pT+cH && y2>pT) {
+      ctx.fillStyle=z.color||'rgba(255,255,255,0.03)';
+      ctx.fillRect(pL, y1, cW, y2-y1);
+    }
+  });
 
   // Y grid + labels
   for(let i=0;i<=5;i++) {
     const v=yMin+(yMax-yMin)*i/5;
     const y=pT+cH*(1-i/5);
-    ctx.strokeStyle='rgba(255,255,255,0.04)'; ctx.lineWidth=1;
+    ctx.strokeStyle='rgba(255,255,255,0.035)'; ctx.lineWidth=1;
     ctx.beginPath(); ctx.moveTo(pL,y); ctx.lineTo(pL+cW,y); ctx.stroke();
-    ctx.fillStyle='rgba(90,112,128,0.75)'; ctx.font='9px DM Mono,monospace';
+    ctx.fillStyle='rgba(90,112,128,0.8)'; ctx.font='9px DM Mono,monospace';
     ctx.textAlign='right';
     ctx.fillText(opts.yFmt?opts.yFmt(v):v.toFixed(1), pL-5, y+3);
   }
@@ -240,77 +259,89 @@ function drawTrendChart(id, pts, opts) {
     if(mo!==lastMo){
       lastMo=mo;
       const x=xOf(i);
-      ctx.strokeStyle='rgba(255,255,255,0.06)'; ctx.lineWidth=1; ctx.setLineDash([2,4]);
+      ctx.strokeStyle='rgba(255,255,255,0.05)'; ctx.lineWidth=1; ctx.setLineDash([2,5]);
       ctx.beginPath(); ctx.moveTo(x,pT); ctx.lineTo(x,pT+cH); ctx.stroke(); ctx.setLineDash([]);
       const d=new Date(a.d+'T12:00:00');
       const lbl=d.toLocaleDateString('en-AU',{month:'short',year:'2-digit'});
-      ctx.fillStyle='rgba(90,112,128,0.5)'; ctx.font='9px DM Mono,monospace';
-      ctx.textAlign='center'; ctx.fillText(lbl,x,H-6); ctx.textAlign='left';
+      ctx.fillStyle='rgba(90,112,128,0.45)'; ctx.font='9px DM Mono,monospace';
+      ctx.textAlign='center'; ctx.fillText(lbl,x,H-5); ctx.textAlign='left';
     }
   });
 
   // Reference lines
   (opts.refs||[]).forEach(ref=>{
     const y=yOf(ref.value);
-    if(y<pT||y>pT+cH) return;
+    if(y<pT-2||y>pT+cH+2) return;
     ctx.strokeStyle=ref.color||'rgba(255,255,255,0.25)'; ctx.lineWidth=1; ctx.setLineDash([5,3]);
     ctx.beginPath(); ctx.moveTo(pL,y); ctx.lineTo(pL+cW,y); ctx.stroke(); ctx.setLineDash([]);
     ctx.fillStyle=ref.color||'rgba(255,255,255,0.4)'; ctx.font='bold 9px DM Mono,monospace';
     ctx.fillText(ref.label,pL+6,y-4);
   });
 
-  // Area under rolling average (subtle fill)
+  // Rolling average
   const N=opts.rollingN||6;
   const rolling=filtered.map((_,i)=>{
     const s=Math.max(0,i-Math.floor(N/2)), e=Math.min(filtered.length-1,i+Math.floor(N/2));
     const sl=vals.slice(s,e+1); return sl.reduce((a,b)=>a+b,0)/sl.length;
   });
 
-  // Fill area under rolling line
-  const parseColor=c=>{const m=c.match(/\d+/g);return m?`rgba(${m[0]},${m[1]},${m[2]},0.08)`:'rgba(255,255,255,0.05)';};
-  ctx.fillStyle=parseColor(opts.color);
+  // Gradient fill under rolling line — the signature element
+  const col = opts.color;
+  let r=100,g=200,b=150;
+  if(col.startsWith('#')&&col.length===7){r=parseInt(col.slice(1,3),16);g=parseInt(col.slice(3,5),16);b=parseInt(col.slice(5,7),16);}
+  const fillGrad = ctx.createLinearGradient(0,pT,0,pT+cH);
+  fillGrad.addColorStop(0,`rgba(${r},${g},${b},0.18)`);
+  fillGrad.addColorStop(0.6,`rgba(${r},${g},${b},0.06)`);
+  fillGrad.addColorStop(1,`rgba(${r},${g},${b},0)`);
+  ctx.fillStyle=fillGrad;
   ctx.beginPath();
   rolling.forEach((v,i)=>{ i===0?ctx.moveTo(xOf(i),yOf(v)):ctx.lineTo(xOf(i),yOf(v)); });
   ctx.lineTo(xOf(filtered.length-1),pT+cH); ctx.lineTo(pL,pT+cH); ctx.closePath(); ctx.fill();
 
   // Rolling average line — the hero element
-  ctx.strokeStyle=opts.color; ctx.lineWidth=2.5; ctx.lineJoin='round'; ctx.lineCap='round'; ctx.setLineDash([]);
+  ctx.strokeStyle=col; ctx.lineWidth=2.5; ctx.lineJoin='round'; ctx.lineCap='round'; ctx.setLineDash([]);
+  ctx.shadowColor=`rgba(${r},${g},${b},0.4)`; ctx.shadowBlur=6;
   ctx.beginPath();
   rolling.forEach((v,i)=>{ i===0?ctx.moveTo(xOf(i),yOf(v)):ctx.lineTo(xOf(i),yOf(v)); });
   ctx.stroke();
+  ctx.shadowBlur=0;
 
-  // Regression trend line
+  // Trend regression overlay
   if(filtered.length>=5){
     const n=filtered.length;
     const sx=filtered.reduce((_,__,i)=>_+i,0), sy=vals.reduce((a,b)=>a+b,0);
     const sxy=vals.reduce((s,v,i)=>s+i*v,0), sx2=filtered.reduce((s,_,i)=>s+i*i,0);
     const slope=(n*sxy-sx*sy)/(n*sx2-sx*sx||1), intc=(sy-slope*sx)/n;
     const improving=opts.lowerIsBetter?(slope<0):(slope>0);
-    ctx.strokeStyle=improving?'rgba(0,230,118,0.3)':'rgba(244,67,54,0.3)';
+    ctx.strokeStyle=improving?'rgba(0,230,118,0.25)':'rgba(244,67,54,0.25)';
     ctx.lineWidth=1.5; ctx.setLineDash([8,5]);
     ctx.beginPath(); ctx.moveTo(xOf(0),yOf(intc)); ctx.lineTo(xOf(n-1),yOf(intc+slope*(n-1))); ctx.stroke(); ctx.setLineDash([]);
-    ctx.fillStyle=improving?'#00e676':'#f44336'; ctx.font='bold 10px sans-serif';
-    const arrow=improving?'↑ Improving':'↓ Declining';
-    ctx.fillText(arrow,pL+8,pT+14);
+    ctx.fillStyle=improving?'#00e676':'#f44336'; ctx.font='bold 10px DM Sans,sans-serif';
+    ctx.fillText(improving?'↑ Improving':'↓ Declining',pL+8,pT+14);
   }
 
-  // Individual session dots (behind rolling line visually but drawn last for tooltips)
+  // Individual session dots — effort-coded colors
   const ECOL={easy:'#2196f3',moderate:'#ff9800',hard:'#f44336',max:'#e040fb'};
   const ttPts=[];
   filtered.forEach((a,i)=>{
     const v=vals[i], x=xOf(i), y=yOf(v);
-    const base=opts.effortDots?(ECOL[a.ef]||opts.color):opts.color;
-    const isNew=i===filtered.length-1;
-    // Parse hex to rgba
-    let r=150,g=180,b=200;
-    if(base.startsWith('#')&&base.length===7){r=parseInt(base.slice(1,3),16);g=parseInt(base.slice(3,5),16);b=parseInt(base.slice(5,7),16);}
-    ctx.fillStyle=isNew?`rgba(${r},${g},${b},1)`:`rgba(${r},${g},${b},0.55)`;
-    ctx.beginPath(); ctx.arc(x,y,isNew?5:2.5,0,Math.PI*2); ctx.fill();
-    if(isNew){
-      ctx.strokeStyle='rgba(255,255,255,0.6)'; ctx.lineWidth=1.5;
-      ctx.beginPath(); ctx.arc(x,y,8,0,Math.PI*2); ctx.stroke();
+    const base=opts.effortDots?(ECOL[a.ef]||col):col;
+    const isLatest=i===filtered.length-1;
+    let dr=r,dg=g,db=b;
+    if(base.startsWith('#')&&base.length===7){dr=parseInt(base.slice(1,3),16);dg=parseInt(base.slice(3,5),16);db=parseInt(base.slice(5,7),16);}
+    const alpha=isLatest?1:0.5;
+    ctx.fillStyle=`rgba(${dr},${dg},${db},${alpha})`;
+    ctx.beginPath(); ctx.arc(x,y,isLatest?5:2.5,0,Math.PI*2); ctx.fill();
+    if(isLatest){
+      ctx.shadowColor=`rgba(${dr},${dg},${db},0.6)`; ctx.shadowBlur=8;
+      ctx.strokeStyle=`rgba(${dr},${dg},${db},0.7)`; ctx.lineWidth=1.5;
+      ctx.beginPath(); ctx.arc(x,y,9,0,Math.PI*2); ctx.stroke();
+      ctx.shadowBlur=0;
     }
-    ttPts.push({cx:x,cy:y,lines:opts.tipLines?opts.tipLines(a,v):[fmtDate(a.d),(v).toFixed(2)]});
+    ttPts.push({cx:x,cy:y,lines:opts.tipLines?opts.tipLines(a,v):[
+      `<span style="font-size:10px;color:#aabbcc;">${fmtDate(a.d)}</span>`,
+      `<b style="color:${col};">${opts.yFmt?opts.yFmt(v):v.toFixed(2)}</b>`
+    ]});
   });
   TT.register(c, ttPts);
 
@@ -333,8 +364,8 @@ function statCard(label,value,sub,color){
 function renderRunCharts() {
   const effort=(document.getElementById('rf-effort')||{value:'easy'}).value;
   const minDist=parseFloat((document.getElementById('rf-dist')||{value:5}).value||5);
-  const range=(document.getElementById('rf-range')||{value:'90'}).value;
-  const noIv=(document.getElementById('rf-noiv')||{checked:true}).checked;
+  const range=(document.getElementById('rf-range')||{value:'all'}).value;
+  const noIv=(document.getElementById('rf-noiv')||{checked:false}).checked;
 
   const acts=filterActs('Run',{effort,minDist,range,noInterval:noIv}).filter(a=>a.ae||a.p||a.hr);
   const allActs=filterActs('Run',{minDist:5,range}).filter(a=>a.p&&a.hr);
@@ -357,29 +388,42 @@ function renderRunCharts() {
       statCard('Latest',acts.length?fmtDate(acts[acts.length-1].d):'—',acts.length&&acts[acts.length-1].p?fmtPace(acts[acts.length-1].p)+'/km @'+(acts[acts.length-1].hr||'—')+'bpm':'','var(--text-mid)');
   }
 
-  // Pace trend
+  // Pace trend — with effort colour coding and HR zones
   drawTrendChart('c-run-pace', acts, {
     getValue:a=>a.p, color:'#00e676', label:'min/km', lowerIsBetter:true,
     effortDots:true, rollingN:6, H:240,
     yFmt:v=>fmtPace(Math.max(0,v)),
     emptyMsg:'No matching runs — try changing filters',
-    refs:[],
+    zones:[
+      {min:0, max:4.0, color:'rgba(244,67,54,0.04)'},   // fast zone
+      {min:5.5, max:7.0, color:'rgba(33,150,243,0.04)'} // easy zone
+    ],
+    refs:[
+      {value:4.43, label:'HM PB pace 4:43', color:'rgba(255,215,0,0.45)'},
+      {value:5.5,  label:'Easy Z2 ceiling', color:'rgba(33,150,243,0.3)'}
+    ],
     tipLines:(a,v)=>[
       `<span style="color:#aabbcc;font-size:10px;">${fmtDate(a.d)}</span>`,
-      `Pace: <b style="color:#00e676;">${fmtPace(v)}/km</b>`,
-      `HR: ${a.hr?a.hr.toFixed(0)+'bpm':'—'}  ·  ${a.dk?a.dk.toFixed(1)+'km':'—'}`,
-      `<span style="color:${a.ef==='easy'?'#2196f3':a.ef==='hard'?'#f44336':'#ff9800'};font-size:10px;">${a.ef} · ${a.n.length>30?a.n.slice(0,30)+'…':a.n}</span>`
+      `Pace: <b style="color:#00e676;">${fmtPace(v)}/km</b>  ·  ${a.dk?a.dk.toFixed(1)+'km':'—'}`,
+      `HR: ${a.hr?a.hr.toFixed(0)+'bpm':'—'}  ·  ${a.mm?a.mm.toFixed(0)+'min':'—'}`,
+      `AE: ${a.ae?a.ae.toFixed(2):'—'}  ·  <span style="color:${a.ef==='easy'?'#2196f3':a.ef==='hard'||a.ef==='max'?'#f44336':'#ff9800'};font-size:10px;">${a.ef||''} ${a.iv?'[INTERVAL]':''}</span>`
     ]
   });
 
-  // HR trend
+  // HR trend — with HR zone bands
   drawTrendChart('c-run-hr', acts.filter(a=>a.hr), {
     getValue:a=>a.hr, color:'#ef5350', label:'bpm', lowerIsBetter:true,
     effortDots:true, rollingN:6, H:240,
     yFmt:v=>Math.round(v)+'',
+    zones:[
+      {min:144, max:162, color:'rgba(33,150,243,0.06)'},   // Z2
+      {min:162, max:172, color:'rgba(255,152,0,0.05)'},    // Z3
+      {min:172, max:200, color:'rgba(244,67,54,0.05)'}     // Z4+
+    ],
     refs:[
-      {value:162,label:'Z2 ceiling 162bpm',color:'rgba(33,150,243,0.4)'},
-      {value:172,label:'Z3/Z4 172bpm',color:'rgba(255,152,0,0.4)'}
+      {value:162,label:'Z2 ceiling 162bpm',color:'rgba(33,150,243,0.5)'},
+      {value:172,label:'Z3/Z4 172bpm',color:'rgba(255,152,0,0.4)'},
+      {value:181,label:'LTHR 181bpm',color:'rgba(244,67,54,0.35)'}
     ],
     tipLines:(a,v)=>[
       `<span style="color:#aabbcc;font-size:10px;">${fmtDate(a.d)}</span>`,
@@ -514,7 +558,7 @@ function renderRunCharts() {
 function renderBikeCharts() {
   const rideType=(document.getElementById('bf-type')||{value:'rouvy'}).value;
   const minDur=parseFloat((document.getElementById('bf-dur')||{value:40}).value||40);
-  const range=(document.getElementById('bf-range')||{value:'90'}).value;
+  const range=(document.getElementById('bf-range')||{value:'all'}).value;
   const acts=filterActs('Bike',{rideType,minDur,range}).filter(a=>a.nw||a.w||a.hr);
 
   // Stats summary
@@ -533,17 +577,24 @@ function renderBikeCharts() {
       statCard('Sessions',acts.length,'in selected range','var(--text-mid)');
   }
 
-  // Power trend
+  // Power trend — FTP zone band
   drawTrendChart('c-bike-np', acts.filter(a=>a.nw||a.w), {
     getValue:a=>a.nw||a.w, color:'#ff9800', label:'Watts', lowerIsBetter:false,
     effortDots:false, rollingN:6, H:240,
     yFmt:v=>Math.round(v)+'W',
-    refs:[{value:230,label:'FTP ~230W',color:'rgba(244,67,54,0.5)'}],
+    zones:[
+      {min:207, max:230, color:'rgba(244,67,54,0.05)'},  // threshold zone (90-100% FTP)
+      {min:184, max:207, color:'rgba(255,152,0,0.04)'}   // sweetspot (80-90% FTP)
+    ],
+    refs:[
+      {value:230,label:'FTP ~230W',color:'rgba(244,67,54,0.55)'},
+      {value:207,label:'Sweetspot floor 207W',color:'rgba(255,152,0,0.35)'}
+    ],
     tipLines:(a,v)=>[
       `<span style="color:#aabbcc;font-size:10px;">${fmtDate(a.d)}</span>`,
       `NP: <b style="color:#ff9800;">${a.nw?a.nw+'W NP':'—'}</b>  Avg: ${a.w?a.w+'W':'—'}`,
-      `HR: ${a.hr?a.hr+'bpm':'—'}  ·  ${a.mm?a.mm.toFixed(0)+'min':'—'}`,
-      `<span style="font-size:10px;color:var(--text-dim);">${a.vr?'Rouvy':'Outdoor'} · ${a.n.length>28?a.n.slice(0,28)+'…':a.n}</span>`
+      `HR: ${a.hr?a.hr+'bpm':'—'}  ·  ${a.mm?a.mm.toFixed(0)+'min':'—'}  ·  ${a.dk?a.dk.toFixed(0)+'km':'—'}`,
+      `W:HR: ${a.be?a.be.toFixed(2):'—'}  ·  <span style="font-size:10px;color:var(--text-dim);">${a.vr?'🖥 Rouvy':'🌿 Outdoor'}</span>`
     ]
   });
 
@@ -1016,3 +1067,430 @@ function setSupplement(val) {
 }
 
 
+
+// ===================================================================
+// RACE PREDICTOR ENGINE — integrated into Performance tab
+// Updates automatically after every Strava sync
+// ===================================================================
+
+const RACE_DISTANCES = {
+  sprint:  {swim:0.75,  bike:20,   run:5,    t1:2.5, t2:1.5, label:'Sprint',         emoji:'⚡'},
+  olympic: {swim:1.5,   bike:40,   run:10,   t1:3,   t2:2,   label:'Olympic',        emoji:'🥇'},
+  '70.3':  {swim:1.9,   bike:90,   run:21.1, t1:4,   t2:2.5, label:'Half Iron 70.3', emoji:'🏅'},
+  ironman: {swim:3.8,   bike:180,  run:42.2, t1:6,   t2:4,   label:'Full Ironman',   emoji:'🔱'}
+};
+
+// Dual-component model (Banister 1991): CTL + ATL → TSB
+function buildDualComponentModel(acts, signalFn) {
+  if(!acts||!acts.length) return {ctl:0,atl:0,tsb:0,history:[]};
+  const CTL_K=1-Math.exp(-1/42), ATL_K=1-Math.exp(-1/7);
+  const sigMap={};
+  acts.forEach(a=>{ const s=signalFn(a); if(s>0){ sigMap[a.d]=(sigMap[a.d]||0)+s; } });
+  const today=new Date(); today.setHours(0,0,0,0);
+  const allDates=Object.keys(sigMap).sort();
+  if(!allDates.length) return {ctl:0,atl:0,tsb:0,history:[]};
+  let ctl=0, atl=0;
+  const history=[];
+  const d=new Date(allDates[0]+'T00:00:00');
+  while(d<=today){
+    const key=localDateStr(d), sig=sigMap[key]||0;
+    ctl=ctl+CTL_K*(sig-ctl); atl=atl+ATL_K*(sig-atl);
+    history.push({date:key,ctl,atl,tsb:ctl-atl,sig});
+    d.setDate(d.getDate()+1);
+  }
+  return {ctl,atl,tsb:ctl-atl,history};
+}
+
+function _getLTHR() {
+  const items=(D.pbs?.phys||[]).concat(D.pbs?.run||[]);
+  for(const i of items){ if(i.n&&i.n.toLowerCase().includes('lthr')){ const m=String(i.v||'').match(/(\d+)/); if(m)return parseInt(m[1]); } }
+  return 181;
+}
+
+function buildRunModel_pred() {
+  const lthr=_getLTHR();
+  const runs=filterActs('Run',{range:'all',minDist:2}).filter(a=>a.p&&a.hr&&a.p>0&&a.hr>0);
+  const model=buildDualComponentModel(runs,a=>{
+    const speed=1000/a.p, hrR=Math.min(a.hr/lthr,1.15), ae=speed/(a.hr*hrR);
+    const vol=Math.min(Math.sqrt((a.dk||5)/10),1.5);
+    let ef=a.iv?1.35:a.ef==='hard'||a.ef==='max'?1.2:a.ef==='easy'?0.9:1.0;
+    return ae*vol*ef;
+  });
+  let threshold=Math.max(3.5,7.5-model.ctl*12);
+  const hmPb=(D.pbs?.run||[]).find(p=>p.n&&p.n.includes('Half'));
+  if(hmPb&&hmPb.v){ const s=_parseTime(hmPb.v); if(s){ threshold=(s/60/21.1)*1.05; } }
+  return {...model,lthr,threshold,vdot:30+model.ctl*80,runs};
+}
+
+function buildBikeModel_pred() {
+  const lthr=_getLTHR();
+  const bikes=filterActs('Bike',{range:'all',minDur:15}).filter(a=>(a.nw||a.w||a.dk)&&a.hr&&a.hr>0);
+  const model=buildDualComponentModel(bikes,a=>{
+    const watts=a.nw||a.w; let eff;
+    if(watts&&watts>0){ const hrR=Math.min(a.hr/lthr,1.1); eff=(watts/a.hr/hrR)*(a.nw&&a.w&&a.nw>a.w?1+(a.nw-a.w)/a.w*0.3:1); }
+    else if(a.dk&&a.mm){ eff=(a.dk/a.mm*60)/(a.hr*1.5); }
+    else return 0;
+    return eff*Math.min(Math.sqrt((a.mm||30)/60/1.5),1.6)*(a.ef==='hard'||a.ef==='max'?1.2:a.ef==='easy'?0.85:1.0);
+  });
+  let ftp=80+model.ctl*520;
+  const ftpPb=(D.pbs?.phys||[]).concat(D.pbs?.bike||[]).find(p=>p.n&&p.n.toLowerCase().includes('ftp'));
+  if(ftpPb&&ftpPb.v){ const m=String(ftpPb.v).match(/(\d+)/); if(m) ftp=Math.max(ftp,parseInt(m[1])*0.85); }
+  // Rouvy power-speed model (log regression)
+  const rouvy=bikes.filter(a=>a.vr&&(a.nw||a.w)&&a.dk&&a.mm);
+  let speedModel={type:'default'};
+  if(rouvy.length>=3){
+    const pts=rouvy.map(a=>({pw:a.nw||a.w,spd:(a.dk/a.mm)*60})).filter(p=>p.pw>0&&p.spd>5);
+    if(pts.length>=3){
+      const lnX=pts.map(p=>Math.log(p.pw)),lnY=pts.map(p=>Math.log(p.spd)),n=pts.length;
+      const sx=lnX.reduce((a,b)=>a+b,0),sy=lnY.reduce((a,b)=>a+b,0);
+      const sxy=lnX.reduce((s,x,i)=>s+x*lnY[i],0),sx2=lnX.reduce((s,x)=>s+x*x,0);
+      const bv=(n*sxy-sx*sy)/(n*sx2-sx*sx),av=Math.exp((sy-bv*sx)/n);
+      speedModel={type:'rouvy',a:av,b:bv,sessions:pts.length};
+    }
+  }
+  return {...model,ftp,speedModel,bikes};
+}
+
+function buildSwimModel_pred() {
+  const swims=filterActs('Swim',{range:'all'}).filter(a=>a.sp&&a.sp>0&&(a.dk||0)*1000>=300);
+  const model=buildDualComponentModel(swims,a=>{
+    const q=2.167/a.sp, dist=Math.min(Math.sqrt((a.dk||0)*1000/1500),1.5);
+    return q*dist*(a.ef==='hard'||a.ef==='max'?1.2:a.ef==='easy'?0.9:1.0)*(a.hr&&a.hr>0?Math.min((1000/a.sp)/a.hr/0.06,1.2):1.0);
+  });
+  let css=Math.max(1.3,2.5-model.ctl*2.8);
+  const cssPb=(D.pbs?.swim||[]).concat(D.pbs?.phys||[]).find(p=>p.n&&p.n.toLowerCase().includes('css'));
+  if(cssPb&&cssPb.v){ const m=String(cssPb.v).match(/(\d+):(\d+)/); if(m) css=Math.min(css,(parseInt(m[1])+parseInt(m[2])/60)*1.02); }
+  const longSwims=swims.filter(a=>(a.dk||0)*1000>=1000&&a.sp);
+  if(longSwims.length){ const best=Math.min(...longSwims.map(a=>a.sp)); css=Math.min(css,best*1.02); }
+  return {...model,css,swims};
+}
+
+function _parseTime(s) {
+  s=String(s||'').trim();
+  let m=s.match(/^(\d+):(\d{2}):(\d{2})$/); if(m) return parseInt(m[1])*3600+parseInt(m[2])*60+parseInt(m[3]);
+  m=s.match(/^(\d+):(\d{2})$/); if(m) return parseInt(m[1])*60+parseInt(m[2]);
+  return null;
+}
+function _fmtHMS(mins) {
+  if(!mins||isNaN(mins)||mins<=0) return '—';
+  const h=Math.floor(mins/60),m=Math.floor(mins%60),s=Math.round((mins-Math.floor(mins))*60);
+  if(h>0) return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  return `${m}:${String(s).padStart(2,'0')}`;
+}
+function _fmtSwimP(v) { if(!v||isNaN(v))return '—'; return fmtPace(v)+'/100m'; }
+function _fmtRunP(v)  { if(!v||isNaN(v))return '—'; return fmtPace(v)+'/km'; }
+function _bikeSpd(power, speedModel) {
+  if(speedModel.type==='rouvy') return speedModel.a*Math.pow(power,speedModel.b);
+  return Math.pow(power/0.00257,1/3);
+}
+
+function _calcPrediction(dk, R, B, S) {
+  const distKey = Object.keys(RACE_DISTANCES).find(k=>RACE_DISTANCES[k]===dk)||'70.3';
+  const intPct  = {sprint:0.85,olympic:0.82,'70.3':0.75,ironman:0.70}[distKey]||0.75;
+  const fatMult = {sprint:1.08,olympic:1.10,'70.3':1.13,ironman:1.18}[distKey]||1.13;
+  const swimP   = S.css*1.06;
+  const swimMins= (dk.swim*1000/100)*swimP;
+  const raceW   = B.ftp*intPct;
+  const spd     = Math.max(22,Math.min(50,_bikeSpd(raceW,B.speedModel)));
+  const bikeMins= (dk.bike/spd)*60;
+  let runP = R.threshold*fatMult;
+  if(distKey==='ironman') runP*=Math.pow(42.2/21.1,0.06);
+  runP=Math.max(3.2,Math.min(9.0,runP));
+  const runMins = dk.run*runP;
+  const total   = swimMins+bikeMins+runMins+dk.t1+dk.t2;
+  const conf    = Math.min(R.runs.length/30,1)*0.35+Math.min(B.bikes.length/20,1)*0.40+Math.min(S.swims.length/10,1)*0.25;
+  return {swimMins,bikeMins,runMins,t1:dk.t1,t2:dk.t2,total,swimP,bikeSpd:spd,runP,raceW:Math.round(raceW),conf,distKey};
+}
+
+// FIX #2: Called on every Strava sync via mergeStravaActivities + when tab selected
+function renderRacePredictor() {
+  const container=document.getElementById('pv-predictor');
+  if(!container) return;
+  const acts=STRAVA_ACTS.acts||[];
+  if(acts.length<5){
+    container.innerHTML=`<div class="card" style="text-align:center;padding:48px 24px;">
+      <div style="font-size:48px;margin-bottom:16px;">📡</div>
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:3px;margin-bottom:8px;">NO TRAINING DATA YET</div>
+      <div style="font-size:12px;color:var(--text-dim);line-height:1.8;">Sync your Strava activities first.<br>The predictor needs at least 5 sessions.</div>
+    </div>`;
+    return;
+  }
+
+  const R=buildRunModel_pred(), B=buildBikeModel_pred(), S=buildSwimModel_pred();
+  const preds={};
+  Object.entries(RACE_DISTANCES).forEach(([k,d])=>{ preds[k]=_calcPrediction(d,R,B,S); });
+
+  // Save monthly snapshot for history
+  if(!D.racePredHistory) D.racePredHistory=[];
+  const today=localDateStr(new Date()),thisMonth=today.slice(0,7);
+  const snap={month:thisMonth,date:today,'70.3':preds['70.3']?{total:preds['70.3'].total,swim:preds['70.3'].swimMins,bike:preds['70.3'].bikeMins,run:preds['70.3'].runMins}:null};
+  const ei=D.racePredHistory.findIndex(h=>h.month===thisMonth);
+  if(ei>=0) D.racePredHistory[ei]=snap; else D.racePredHistory.push(snap);
+  D.racePredHistory.sort((a,b)=>a.month.localeCompare(b.month));
+  if(D.racePredHistory.length>24) D.racePredHistory=D.racePredHistory.slice(-24);
+  save();
+
+  const nR=R.runs.length, nB=B.bikes.length, nS=S.swims.length;
+
+  container.innerHTML=`
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
+      <div>
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:24px;letter-spacing:3px;color:var(--green);">🎯 RACE TIME PREDICTOR</div>
+        <div style="font-size:11px;color:var(--text-dim);">${acts.length} total activities · ${nR} runs · ${nB} bikes · ${nS} swims · auto-updates on every sync</div>
+      </div>
+      <div style="display:flex;gap:6px;">
+        <button class="btn sec sml" onclick="showPredHistory()">📈 Monthly History</button>
+        <button class="btn sec sml" onclick="showPredSignals()">🔬 Signal Debug</button>
+      </div>
+    </div>
+
+    <!-- Signal health cards -->
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px;">
+      ${[['🏃','Run',R,nR,`VDOT ~${Math.round(R.vdot)} · Threshold ${_fmtRunP(R.threshold)}`],
+         ['🚴','Bike',B,nB,`FTP ~${Math.round(B.ftp)}W`],
+         ['🏊','Swim',S,nS,`CSS ~${_fmtSwimP(S.css)}`]].map(([em,sp,m,n,det])=>{
+        const tsb=m.tsb, hl=tsb>10?{c:'#26c6da',l:'Fresh'}:tsb>-5?{c:'var(--green)',l:'Training'}:tsb>-20?{c:'var(--orange)',l:'Tired'}:{c:'var(--red)',l:'Fatigued'};
+        const pct=Math.min(Math.round(m.ctl*200),100);
+        return `<div style="background:var(--surface2);border-radius:8px;padding:12px;position:relative;overflow:hidden;border:1px solid var(--border);">
+          <div style="position:absolute;bottom:0;left:0;height:3px;width:${pct}%;background:${hl.c};border-radius:0 0 0 8px;transition:width .6s;"></div>
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
+            <span style="font-size:22px;">${em}</span>
+            <span style="font-size:9px;padding:2px 8px;border-radius:10px;background:${hl.c}22;color:${hl.c};font-weight:700;letter-spacing:1px;">${hl.l}</span>
+          </div>
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:2px;">${sp.toUpperCase()}</div>
+          <div style="font-size:9px;color:var(--text-dim);margin-top:2px;">${n} sessions · CTL ${(m.ctl*100).toFixed(1)}</div>
+          <div style="font-size:9px;color:var(--text-mid);margin-top:3px;">${det}</div>
+        </div>`;
+      }).join('')}
+    </div>
+
+    <!-- Distance selector tabs -->
+    <div class="card" style="padding:0;overflow:hidden;margin-bottom:12px;">
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);" id="pred-tab-row">
+        ${Object.entries(RACE_DISTANCES).map(([k,d],i)=>`
+          <button id="ptab-${k}" onclick="selectPredTab('${k}')"
+            style="padding:10px 6px;background:${i===2?'var(--surface2)':'none'};border:none;border-right:1px solid var(--border);
+            color:${i===2?'var(--green)':'var(--text-dim)'};cursor:pointer;font-family:'DM Sans',sans-serif;
+            font-size:11px;font-weight:${i===2?'700':'400'};transition:all .15s;">
+            <div style="font-size:18px;margin-bottom:2px;">${d.emoji}</div>
+            <div style="font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:1px;">${d.label.toUpperCase()}</div>
+            <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;color:var(--green);margin-top:3px;">${_fmtHMS(preds[k].total)}</div>
+          </button>`).join('')}
+      </div>
+      <div id="pred-detail" style="padding:20px;">
+        ${_renderDetail('70.3',preds['70.3'],RACE_DISTANCES['70.3'],R,B,S)}
+      </div>
+    </div>
+
+    <!-- CTL Trend -->
+    <div class="card" style="margin-bottom:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <div class="sl" style="margin:0;">FITNESS TREND — 26 WEEKS (CTL per sport)</div>
+        <div style="display:flex;gap:12px;font-size:10px;">
+          <span style="color:#00e676;">● Run</span><span style="color:#ff9800;">● Bike</span><span style="color:#2196f3;">● Swim</span>
+        </div>
+      </div>
+      <canvas id="c-pred-ctl" height="180" style="width:100%;display:block;"></canvas>
+    </div>
+
+    <!-- Improvement levers -->
+    <div class="card" style="margin-bottom:12px;">
+      <div class="sl">WHAT MOVES YOUR 70.3 TIME MOST</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;">
+        ${[['🏊','CSS –3s/100m','~'+Math.round(preds['70.3'].swimMins*0.03)+'min swim gain','Add weekly 1500m+ CSS pool sets','#2196f3'],
+           ['🚴','FTP +10W','~'+Math.round(preds['70.3'].bikeMins*0.04)+'min bike gain','2× threshold intervals/week (Norwegian method)','#ff9800'],
+           ['🏃','Threshold –5s/km','~'+Math.round(preds['70.3'].runMins*0.04)+'min run gain','Weekly tempo run at threshold pace','#00e676'],
+           ['😴','Race Taper (TSB+15)','2–4% total time','Reduce volume 10–14 days out from race','#ce93d8']].map(([em,title,gain,tip,col])=>`
+          <div style="background:var(--surface2);border-radius:8px;padding:10px 14px;border-left:3px solid ${col};">
+            <div style="font-size:12px;font-weight:600;margin-bottom:3px;">${em} ${title}</div>
+            <div style="font-size:13px;font-weight:700;color:${col};margin-bottom:4px;">${gain}</div>
+            <div style="font-size:10px;color:var(--text-dim);line-height:1.4;">${tip}</div>
+          </div>`).join('')}
+      </div>
+    </div>
+
+    <div id="pred-warnings">${_renderPredWarnings(nR,nB,nS,R,B,S)}</div>
+    <div id="pred-extra"></div>
+  `;
+
+  window._predState={preds,R,B,S};
+  setTimeout(()=>_renderCTLChart(R,B,S),80);
+}
+
+function _renderDetail(distKey,pred,dist,R,B,S) {
+  if(!pred) return '';
+  const conf=Math.round(pred.conf*100);
+  const rng=Math.max(3,Math.round((1-pred.conf)*12));
+  const splits=[
+    ['🏊','Swim',pred.swimMins,`${dist.swim*1000}m @ ${_fmtSwimP(pred.swimP)}`,'#2196f3'],
+    ['⟳','T1',pred.t1,'Transition','rgba(255,255,255,0.3)'],
+    ['🚴','Bike',pred.bikeMins,`${dist.bike}km @ ${pred.bikeSpd.toFixed(1)}km/h (${pred.raceW}W)`,'#ff9800'],
+    ['⟳','T2',pred.t2,'Transition','rgba(255,255,255,0.3)'],
+    ['🏃','Run',pred.runMins,`${dist.run}km @ ${_fmtRunP(pred.runP)}`,'#00e676']
+  ];
+  const total=pred.swimMins+pred.bikeMins+pred.runMins;
+  const [sp,bp,rp2]=[Math.round(pred.swimMins/total*100),Math.round(pred.bikeMins/total*100),0].map((v,i,a)=>i===2?100-a[0]-a[1]:v);
+  return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start;">
+    <div>
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:56px;color:var(--green);line-height:1;letter-spacing:2px;">${_fmtHMS(pred.total)}</div>
+      <div style="font-size:11px;color:var(--text-dim);margin-bottom:14px;">${dist.label} · ±${rng}% range: ${_fmtHMS(pred.total*(1-rng/100))} – ${_fmtHMS(pred.total*(1+rng/100))}</div>
+      ${splits.map(([em,lbl,t,sub,col])=>`
+        <div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border);">
+          <span style="font-size:15px;width:22px;text-align:center;">${em}</span>
+          <div style="flex:1;"><div style="font-size:12px;font-weight:600;">${lbl}</div><div style="font-size:10px;color:var(--text-dim);">${sub}</div></div>
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;color:${col};">${_fmtHMS(t)}</div>
+        </div>`).join('')}
+    </div>
+    <div>
+      <div style="margin-bottom:14px;">
+        <div style="font-size:10px;color:var(--text-dim);margin-bottom:5px;">Time distribution</div>
+        <div style="display:flex;height:20px;border-radius:4px;overflow:hidden;gap:1px;">
+          <div style="flex:${sp};background:#2196f3;display:flex;align-items:center;justify-content:center;font-size:9px;color:#fff;font-weight:700;">${sp}%</div>
+          <div style="flex:${bp};background:#ff9800;display:flex;align-items:center;justify-content:center;font-size:9px;color:#000;font-weight:700;">${bp}%</div>
+          <div style="flex:${rp2};background:#00e676;display:flex;align-items:center;justify-content:center;font-size:9px;color:#000;font-weight:700;">${rp2}%</div>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:4px;font-size:9px;color:var(--text-dim);"><span style="color:#2196f3;">■ Swim</span><span style="color:#ff9800;">■ Bike</span><span style="color:#00e676;">■ Run</span></div>
+      </div>
+      <div style="background:var(--surface2);border-radius:8px;padding:12px;margin-bottom:10px;">
+        <div style="font-size:10px;color:var(--text-dim);margin-bottom:6px;">Prediction confidence</div>
+        <div style="height:5px;background:var(--border);border-radius:3px;margin-bottom:6px;"><div style="height:100%;width:${conf}%;background:${conf>70?'var(--green)':conf>40?'var(--orange)':'var(--red)'};border-radius:3px;"></div></div>
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:28px;color:${conf>70?'var(--green)':conf>40?'var(--orange)':'var(--red)'};">${conf}%</div>
+        <div style="font-size:10px;color:var(--text-dim);">${conf>70?'High — solid data coverage':conf>40?'Medium — more sessions improve accuracy':'Low — needs more training history'}</div>
+      </div>
+      <div style="background:var(--surface2);border-radius:8px;padding:12px;font-size:11px;line-height:2;">
+        <div>FTP est: <b style="color:var(--orange);">${Math.round(B.ftp)}W</b></div>
+        <div>CSS est: <b style="color:#2196f3;">${_fmtSwimP(S.css)}</b></div>
+        <div>Run thr: <b style="color:var(--green);">${_fmtRunP(R.threshold)}</b></div>
+        <div>LTHR: <b>${R.lthr}bpm</b> · Form (TSB): <b style="color:${R.tsb>0?'var(--green)':'var(--orange)'}">${(R.tsb*100).toFixed(0)}</b></div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function selectPredTab(distKey) {
+  if(!window._predState) return;
+  const {preds,R,B,S}=window._predState;
+  Object.keys(RACE_DISTANCES).forEach(k=>{
+    const btn=document.getElementById('ptab-'+k); if(!btn) return;
+    btn.style.background=k===distKey?'var(--surface2)':'none';
+    btn.style.color=k===distKey?'var(--green)':'var(--text-dim)';
+    btn.style.fontWeight=k===distKey?'700':'400';
+  });
+  const panel=document.getElementById('pred-detail');
+  if(panel) panel.innerHTML=_renderDetail(distKey,preds[distKey],RACE_DISTANCES[distKey],R,B,S);
+}
+
+function _renderPredWarnings(nR,nB,nS,R,B,S) {
+  const warns=[];
+  if(nS<5) warns.push({lv:'warn',msg:`⚠ Only ${nS} swim sessions — swim prediction is estimated. Add pool sessions with auto-lap.`});
+  if(!B.bikes.some(a=>a.nw||a.w)) warns.push({lv:'info',msg:'ℹ No power data in bike activities — FTP estimated from W:HR. Rouvy sessions with power data improve this significantly.'});
+  if(R.lthr===181) warns.push({lv:'info',msg:'ℹ LTHR using default 181bpm. Update in PBs → Physiology for better HR zone calibration.'});
+  if(!R.runs.filter(a=>a.d>=daysAgo(21)).length) warns.push({lv:'warn',msg:'⚠ No runs in last 21 days — run fitness decay is factored in.'});
+  if(!warns.length) return '';
+  return '<div style="margin-top:8px;">'+warns.map(w=>`<div style="background:${w.lv==='warn'?'var(--orange-dim)':'var(--blue-glow)'};border:1px solid ${w.lv==='warn'?'rgba(255,152,0,.3)':'rgba(33,150,243,.2)'};border-radius:8px;padding:8px 12px;margin-bottom:6px;font-size:11px;color:${w.lv==='warn'?'var(--orange)':'var(--text-mid)'};">${w.msg}</div>`).join('')+'</div>';
+}
+
+function _renderCTLChart(R,B,S) {
+  const c=document.getElementById('c-pred-ctl'); if(!c) return;
+  const W=c.parentElement.clientWidth-32; c.width=W>100?W:300; c.height=180;
+  const H=180, ctx=c.getContext('2d'); ctx.clearRect(0,0,W,H);
+  const weeks=26, today=new Date(), labels=[], rCTL=[], bCTL=[], sCTL=[];
+  for(let i=weeks-1;i>=0;i--){
+    const d=new Date(today); d.setDate(d.getDate()-i*7);
+    const key=localDateStr(d); labels.push(key);
+    const rE=R.history.slice().reverse().find(h=>h.date<=key)||{ctl:0};
+    const bE=B.history.slice().reverse().find(h=>h.date<=key)||{ctl:0};
+    const sE=S.history.slice().reverse().find(h=>h.date<=key)||{ctl:0};
+    rCTL.push(rE.ctl*100); bCTL.push(bE.ctl*100); sCTL.push(sE.ctl*100);
+  }
+  const all=[...rCTL,...bCTL,...sCTL].filter(v=>v>0);
+  if(!all.length){const ctx2=c.getContext('2d');ctx2.fillStyle='var(--surface2)';ctx2.fillRect(0,0,W,H);return;}
+  const yMax=Math.max(...all)*1.2||1, pL=44, pT=16, pR=16, pB=24;
+  const cW=W-pL-pR, cH=H-pT-pB;
+  ctx.fillStyle='var(--surface2)'; ctx.fillRect(0,0,W,H);
+  for(let i=0;i<=3;i++){const y=pT+cH*(1-i/3);ctx.strokeStyle='rgba(255,255,255,0.04)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(pL,y);ctx.lineTo(pL+cW,y);ctx.stroke();ctx.fillStyle='rgba(90,112,128,0.7)';ctx.font='9px DM Mono,monospace';ctx.textAlign='right';ctx.fillText((yMax*i/3).toFixed(0),pL-3,y+3);}
+  ctx.textAlign='left';
+  const xOf=i=>pL+cW*(i/Math.max(labels.length-1,1));
+  const yOf=v=>pT+cH*(1-v/yMax);
+  [{d:rCTL,c:'#00e676',l:'Run'},{d:bCTL,c:'#ff9800',l:'Bike'},{d:sCTL,c:'#2196f3',l:'Swim'}].forEach(sp=>{
+    if(!sp.d.some(v=>v>0)) return;
+    // Gradient fill
+    const [sr,sg,sb]=sp.c.startsWith('#')?[parseInt(sp.c.slice(1,3),16),parseInt(sp.c.slice(3,5),16),parseInt(sp.c.slice(5,7),16)]:[100,200,100];
+    const grad=ctx.createLinearGradient(0,pT,0,pT+cH);
+    grad.addColorStop(0,`rgba(${sr},${sg},${sb},0.1)`); grad.addColorStop(1,`rgba(${sr},${sg},${sb},0)`);
+    ctx.fillStyle=grad;
+    ctx.beginPath(); ctx.moveTo(xOf(0),yOf(sp.d[0]));
+    sp.d.forEach((v,i)=>ctx.lineTo(xOf(i),yOf(v)));
+    ctx.lineTo(xOf(sp.d.length-1),pT+cH); ctx.lineTo(pL,pT+cH); ctx.closePath(); ctx.fill();
+    // Line
+    ctx.strokeStyle=sp.c; ctx.lineWidth=2; ctx.setLineDash([]);
+    ctx.beginPath(); sp.d.forEach((v,i)=>i===0?ctx.moveTo(xOf(i),yOf(v)):ctx.lineTo(xOf(i),yOf(v))); ctx.stroke();
+    // Latest dot
+    const lv=sp.d[sp.d.length-1];
+    ctx.fillStyle=sp.c; ctx.beginPath(); ctx.arc(xOf(sp.d.length-1),yOf(lv),4,0,Math.PI*2); ctx.fill();
+  });
+  labels.forEach((l,i)=>{
+    if(i%4===0){const d2=new Date(l+'T00:00:00');ctx.fillStyle='rgba(90,112,128,0.5)';ctx.font='9px DM Mono,monospace';ctx.textAlign='center';ctx.fillText(d2.toLocaleDateString('en-AU',{day:'numeric',month:'short'}),xOf(i),H-4);}
+  });
+}
+
+function showPredHistory() {
+  const extra=document.getElementById('pred-extra'); if(!extra) return;
+  const hist=(D.racePredHistory||[]).filter(h=>h['70.3']);
+  if(hist.length<2){
+    extra.innerHTML='<div class="card" style="margin-top:10px;"><div style="font-size:12px;color:var(--text-dim);padding:20px;text-align:center;">History builds month by month. Check back after your next training month.</div></div>';
+    return;
+  }
+  extra.innerHTML=`<div class="card" style="margin-top:10px;">
+    <div class="sl">70.3 PREDICTED TIME — MONTHLY HISTORY</div>
+    <canvas id="c-pred-hist" height="160" style="width:100%;display:block;margin:10px 0;"></canvas>
+    <div style="overflow-x:auto;"><table class="tbl"><thead><tr><th>Month</th><th>Predicted Total</th><th>Swim</th><th>Bike</th><th>Run</th><th>Change</th></tr></thead><tbody>
+      ${hist.slice().reverse().map((h,i,a)=>{
+        const p=a[i+1], diff=p?h['70.3'].total-p['70.3'].total:null;
+        return `<tr><td>${h.month}</td><td style="font-family:'Bebas Neue',sans-serif;font-size:18px;color:var(--green);">${_fmtHMS(h['70.3'].total)}</td><td>${_fmtHMS(h['70.3'].swim)}</td><td>${_fmtHMS(h['70.3'].bike)}</td><td>${_fmtHMS(h['70.3'].run)}</td><td>${diff!==null?`<span style="color:${diff<0?'var(--green)':'var(--red)'};">${diff<0?'↑':'↓'} ${_fmtHMS(Math.abs(diff))}</span>`:'—'}</td></tr>`;
+      }).join('')}
+    </tbody></table></div>
+  </div>`;
+  setTimeout(()=>{
+    const c=document.getElementById('c-pred-hist'); if(!c) return;
+    const W=c.parentElement.clientWidth-32; c.width=W>100?W:300; c.height=160;
+    const H=160, ctx=c.getContext('2d'); ctx.clearRect(0,0,W,H);
+    const vals=hist.map(h=>h['70.3'].total);
+    const yMin=Math.min(...vals)*0.97, yMax=Math.max(...vals)*1.03;
+    const pL=52, pT=12, pR=12, pB=24, cW=W-pL-pR, cH=H-pT-pB;
+    ctx.fillStyle='var(--surface2)'; ctx.fillRect(0,0,W,H);
+    for(let i=0;i<=3;i++){const v=yMin+(yMax-yMin)*i/3,y=pT+cH*(1-i/3);ctx.strokeStyle='rgba(255,255,255,0.04)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(pL,y);ctx.lineTo(pL+cW,y);ctx.stroke();ctx.fillStyle='rgba(90,112,128,0.7)';ctx.font='9px monospace';ctx.textAlign='right';ctx.fillText(_fmtHMS(v),pL-3,y+3);}
+    ctx.textAlign='left';
+    const xOf=i=>pL+cW*(i/Math.max(vals.length-1,1));
+    const yOf=v=>pT+cH*(1-(v-yMin)/(yMax-yMin||1));
+    const grad=ctx.createLinearGradient(0,pT,0,pT+cH);
+    grad.addColorStop(0,'rgba(0,230,118,0.15)'); grad.addColorStop(1,'rgba(0,230,118,0)');
+    ctx.fillStyle=grad;
+    ctx.beginPath(); ctx.moveTo(xOf(0),yOf(vals[0])); vals.forEach((v,i)=>ctx.lineTo(xOf(i),yOf(v)));
+    ctx.lineTo(xOf(vals.length-1),pT+cH); ctx.lineTo(pL,pT+cH); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle='#00e676'; ctx.lineWidth=2.5; ctx.setLineDash([]);
+    ctx.beginPath(); vals.forEach((v,i)=>i===0?ctx.moveTo(xOf(i),yOf(v)):ctx.lineTo(xOf(i),yOf(v))); ctx.stroke();
+    const ttPts=[];
+    vals.forEach((v,i)=>{ctx.fillStyle='#00e676';ctx.beginPath();ctx.arc(xOf(i),yOf(v),4,0,Math.PI*2);ctx.fill();ttPts.push({cx:xOf(i),cy:yOf(v),lines:[hist[i].month,`70.3: ${_fmtHMS(v)}`]});});
+    TT.register(c,ttPts);
+    hist.forEach((h,i)=>{ctx.fillStyle='rgba(90,112,128,0.6)';ctx.font='9px monospace';ctx.textAlign='center';ctx.fillText(h.month.slice(5),xOf(i),H-4);});
+  },60);
+}
+
+function showPredSignals() {
+  const extra=document.getElementById('pred-extra'); if(!extra||!window._predState) return;
+  const {R,B,S}=window._predState;
+  extra.innerHTML=`<div class="card" style="margin-top:10px;">
+    <div class="sl">FITNESS SIGNAL METHODOLOGY</div>
+    <div style="font-size:11px;line-height:2;color:var(--text-dim);">
+      <b style="color:var(--text);">🏃 Run signal:</b> Aerobic Efficiency (speed÷HR÷LTHR) × volume weight × effort multiplier.
+      CTL <b style="color:var(--green);">${(R.ctl*100).toFixed(2)}</b> → VDOT ~${Math.round(R.vdot)} → Threshold pace ${_fmtRunP(R.threshold)}<br>
+      <b style="color:var(--text);">🚴 Bike signal:</b> W:HR efficiency (Allen & Coggan) × duration × effort.
+      CTL <b style="color:var(--orange);">${(B.ctl*100).toFixed(2)}</b> → FTP ~${Math.round(B.ftp)}W · Speed model: ${B.speedModel.type==='rouvy'?`✅ Rouvy calibrated (${B.speedModel.sessions} sessions)`:'⚠ Physics default (add Rouvy power data)'}<br>
+      <b style="color:var(--text);">🏊 Swim signal:</b> Pace quality (Wakayoshi CSS proxy) × session length.
+      CTL <b style="color:#2196f3;">${(S.ctl*100).toFixed(2)}</b> → CSS ~${_fmtSwimP(S.css)}<br>
+      <b style="color:var(--text);">Form (TSB):</b> Run ${(R.tsb*100).toFixed(1)} · Bike ${(B.tsb*100).toFixed(1)} · Swim ${(S.tsb*100).toFixed(1)}<br>
+      <span style="color:var(--text-dim);font-size:10px;">References: Banister 1991, Allen & Coggan, Wakayoshi 1992, Riegel 1981, Friel Triathlete's Training Bible</span>
+    </div>
+  </div>`;
+}

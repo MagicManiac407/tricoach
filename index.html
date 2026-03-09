@@ -758,11 +758,12 @@
   <div class="pt">PERFORMANCE</div>
   <div class="ps">346 Strava activities · Feb 2021 – Mar 2026 · 217 runs · 89 rides · 40 swims</div>
   <div style="display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap;">
-    <button class="btn" id="pt-run" onclick="switchPT('run')">🏃 Run Analysis</button>
-    <button class="btn sec" id="pt-bike" onclick="switchPT('bike')">🚴 Bike Analysis</button>
-    <button class="btn sec" id="pt-swim" onclick="switchPT('swim')">🏊 Swim Analysis</button>
-    <button class="btn sec" id="pt-volume" onclick="switchPT('volume')">📊 Weekly Volume</button>
+    <button class="btn" id="pt-run" onclick="switchPT('run')">🏃 Run</button>
+    <button class="btn sec" id="pt-bike" onclick="switchPT('bike')">🚴 Bike</button>
+    <button class="btn sec" id="pt-swim" onclick="switchPT('swim')">🏊 Swim</button>
+    <button class="btn sec" id="pt-volume" onclick="switchPT('volume')">📊 Volume</button>
     <button class="btn sec" id="pt-autopb" onclick="switchPT('autopb')">🏅 Auto PBs</button>
+    <button id="pt-predictor" onclick="switchPT('predictor')" style="background:transparent;border:1px solid var(--green);border-radius:7px;color:var(--green);cursor:pointer;font-family:'DM Sans',sans-serif;font-size:12px;font-weight:700;padding:9px 18px;transition:all .15s;letter-spacing:.5px;">🎯 Race Predictor</button>
   </div>
 
   <!-- RUN -->
@@ -771,23 +772,23 @@
       <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
         <div><label>Effort Filter</label>
           <select id="rf-effort" onchange="renderRunCharts()">
+            <option value="all" selected>All efforts</option>
             <option value="easy">Easy Z2</option>
             <option value="moderate">Moderate Z3</option>
             <option value="hard">Hard Z4+</option>
-            <option value="all">All efforts</option>
           </select>
         </div>
-        <div><label>Min Distance (km)</label><input type="number" id="rf-dist" value="5" min="1" step="1" style="width:72px;" onchange="renderRunCharts()"></div>
+        <div><label>Min Distance (km)</label><input type="number" id="rf-dist" value="3" min="1" step="1" style="width:72px;" onchange="renderRunCharts()"></div>
         <div><label>Date Range</label>
           <select id="rf-range" onchange="renderRunCharts()">
-            <option value="90">Last 90 days</option>
-            <option value="180">Last 6 months</option>
+            <option value="all" selected>All time ✓</option>
             <option value="365">Last 12 months</option>
-            <option value="all">All time</option>
+            <option value="180">Last 6 months</option>
+            <option value="90">Last 90 days</option>
           </select>
         </div>
         <div style="display:flex;align-items:center;gap:6px;padding-bottom:2px;">
-          <input type="checkbox" id="rf-noiv" checked onchange="renderRunCharts()" style="width:auto;">
+          <input type="checkbox" id="rf-noiv" onchange="renderRunCharts()" style="width:auto;">
           <label style="margin:0;white-space:nowrap;font-size:11px;">Exclude intervals</label>
         </div>
       </div>
@@ -795,8 +796,8 @@
     <div id="run-stats" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px;"></div>
     <div class="card" style="margin-bottom:12px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-        <div class="sl" style="margin:0;">Pace Trend</div>
-        <div style="font-size:10px;color:var(--text-dim);">Thick line = 6-session rolling avg · dots = individual runs · lower = faster</div>
+        <div class="sl" style="margin:0;">Pace Trend — All Time</div>
+        <div style="font-size:10px;color:var(--text-dim);">Line = 6-session rolling avg · dots = individual sessions coloured by effort · lower = faster · gold dashed = HM PB pace</div>
       </div>
       <div style="display:flex;gap:12px;margin-bottom:8px;font-size:10px;">
         <span style="color:#2196f3;">● Easy</span>
@@ -807,20 +808,20 @@
     </div>
     <div class="card" style="margin-bottom:12px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-        <div class="sl" style="margin:0;">Heart Rate Trend</div>
-        <div style="font-size:10px;color:var(--text-dim);">Thick line = rolling avg · downward trend = cardiac adaptation at same effort</div>
+        <div class="sl" style="margin:0;">Heart Rate — Zone Bands</div>
+        <div style="font-size:10px;color:var(--text-dim);">Blue=Z2 · Orange=Z3 · Red=Z4+ zones · Same effort, HR going down = cardiac adaptation ✓</div>
       </div>
       <canvas id="c-run-hr" height="240" style="width:100%;display:block;"></canvas>
     </div>
     <div class="g2" style="margin-bottom:12px;">
       <div class="card" style="margin:0;">
-        <div class="sl">Aerobic Efficiency (Speed÷HR×1000)</div>
-        <div style="font-size:10px;color:var(--text-dim);margin-bottom:8px;">Upward trend = base building working.</div>
+        <div class="sl">Aerobic Efficiency (Speed÷HR)</div>
+        <div style="font-size:10px;color:var(--text-dim);margin-bottom:8px;">↑ trending up = base building is working. The most reliable long-term fitness signal.</div>
         <canvas id="c-ae-trend" height="200" style="width:100%;display:block;"></canvas>
       </div>
       <div class="card" style="margin:0;">
-        <div class="sl">Pace vs HR Scatter</div>
-        <div style="font-size:10px;color:var(--text-dim);margin-bottom:8px;">Grey=older · cyan=recent · bottom-right = best fitness.</div>
+        <div class="sl">Pace vs HR Scatter — Fitness Map</div>
+        <div style="font-size:10px;color:var(--text-dim);margin-bottom:8px;">Grey=older sessions · Green=recent · Bottom-right corner = best aerobic fitness.</div>
         <canvas id="c-ae-scatter" height="220" style="width:100%;display:block;"></canvas>
       </div>
     </div>
@@ -840,17 +841,18 @@
       <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
         <div><label>Ride Type</label>
           <select id="bf-type" onchange="renderBikeCharts()">
+            <option value="all" selected>All rides</option>
             <option value="rouvy">Rouvy / Indoor only</option>
             <option value="outdoor">Outdoor only</option>
-            <option value="all">All rides</option>
           </select>
         </div>
-        <div><label>Min Duration (min)</label><input type="number" id="bf-dur" value="40" min="10" step="5" style="width:72px;" onchange="renderBikeCharts()"></div>
+        <div><label>Min Duration (min)</label><input type="number" id="bf-dur" value="20" min="10" step="5" style="width:72px;" onchange="renderBikeCharts()"></div>
         <div><label>Date Range</label>
           <select id="bf-range" onchange="renderBikeCharts()">
-            <option value="90">Last 90 days</option>
+            <option value="all" selected>All time ✓</option>
+            <option value="365">Last 12 months</option>
             <option value="180">Last 6 months</option>
-            <option value="all">All time</option>
+            <option value="90">Last 90 days</option>
           </select>
         </div>
       </div>
@@ -891,12 +893,12 @@
       <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
         <div><label>Date Range</label>
           <select id="swf-range" onchange="renderSwimCharts()">
-            <option value="180">Last 6 months</option>
+            <option value="all" selected>All time ✓</option>
             <option value="365">Last 12 months</option>
-            <option value="all" selected>All time</option>
+            <option value="180">Last 6 months</option>
           </select>
         </div>
-        <div><label>Min Distance (m)</label><input type="number" id="swf-dist" value="500" min="100" step="100" style="width:80px;" onchange="renderSwimCharts()"></div>
+        <div><label>Min Distance (m)</label><input type="number" id="swf-dist" value="300" min="100" step="100" style="width:80px;" onchange="renderSwimCharts()"></div>
       </div>
     </div>
     <div style="background:var(--orange-dim);border:1px solid rgba(255,152,0,.3);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:11px;color:var(--orange);">
@@ -970,6 +972,10 @@
     </div>
     <div class="card"><div class="sl">🏃 Best Interval Session Paces</div><div id="apb-intervals"></div></div>
   </div>
+
+  <!-- RACE PREDICTOR -->
+  <div id="pv-predictor" style="display:none;"></div>
+
 </div>
 
 <!-- ===== DECISION RULES ===== -->

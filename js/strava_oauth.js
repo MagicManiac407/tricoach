@@ -168,7 +168,14 @@ function mergeStravaActivities(newActs) {
   STRAVA_ACTS.acts = existing;
 
   // Auto-update PBs from genuinely new activities
-  if (genuinelyNew.length) autoUpdatePBsFromStrava(genuinelyNew);
+  if (genuinelyNew.length) {
+    autoUpdatePBsFromStrava(genuinelyNew);
+    // FIX #2: Auto-update race predictor after every sync
+    if(typeof renderRacePredictor === 'function') {
+      const predPanel = document.getElementById('pv-predictor');
+      if(predPanel && predPanel.style.display !== 'none') renderRacePredictor();
+    }
+  }
 }
 
 // Auto-detect and update PBs from new Strava activities
