@@ -3,6 +3,7 @@
 // Expanded roster: 14 athletes, verified 2025 race data
 // Sources: Scientific Triathlon pods, PubMed, Norwegian Method Pod,
 //          TRI247, Slowtwitch, Triathlete Mag, direct athlete interviews
+// Dark theme restyled for TriCoach 2026
 // ============================================================
 
 const PRO_ATHLETES = [
@@ -113,20 +114,20 @@ const PRO_ATHLETES = [
       philosophy: 'High-carb, intuitive eating. Moved away from calorie counting after initial tracking period. Very high energy expenditure demands very high intake.',
       training: 'Carb-fueled threshold sessions (Maurten hydrogel key). Lower carb on easy days. Carb periodisation matches training load.',
       race: '100g+ carbs/hour via hydrogel. 200mg+ caffeine. 180g/hr confirmed at IMWC Nice 2025. Carb loading race week. 8,500 kcal/day total expenditure at peak.',
-      recovery: 'Large post-session carb + protein meals. Caffeine matched to training intensity (more on hard weekends, less midweek). Sleep #1 priority.',
+      recovery: 'Large post-session carb + protein meals. Caffeine matched to training intensity. Sleep #1 priority.',
     },
     recovery: {
       sleep: '8–9h. Essential. Caffeine intake deliberately managed around training schedule.',
-      tools: 'Altitude camps (2×/season). Bergen harsh-weather training builds mental toughness. Heavy pre-swim band/press-up warm-up. Strength work for swim power (upper body).',
+      tools: 'Altitude camps (2×/season). Bergen harsh-weather training builds mental toughness. Heavy pre-swim band/press-up warm-up.',
       philosophy: 'Self-coaching via collaborative trio — open dialogue. Lactate guides every session intensity. Process-over-results orientation.',
-      taper: '10–14 days. Drops threshold volume, maintains easy frequency. Mental disconnection from social media pre-race. Caffeine periodisation helps pre-race sharpness.',
+      taper: '10–14 days. Drops threshold volume, maintains easy frequency. Caffeine periodisation helps pre-race sharpness.',
     },
     physiology: {
       vo2max: '101.1 mL/kg/min (PubMed confirmed)',
       energyExpenditure: '7,019–8,506 kcal/day',
       annualHours: '1,308–1,480h (2020–2022 confirmed)',
       intensityDistribution: 'Pyramidal — ~80–85% low, balance at lactate threshold',
-      notes: 'Olympic gold 2021. IM World Champ 2022. IM 70.3 Champ 2022. IRONMAN Pro Series Champion 2025. Won 3 major races in 2025 despite "average season" personal assessment.',
+      notes: 'Olympic gold 2021. IM World Champ 2022. IM 70.3 Champ 2022. IRONMAN Pro Series Champion 2025.',
     },
     raceData2025: [
       { race: 'IM 70.3 Aix-en-Provence', pos: 1, swim: 'Top group', bike: 'Built from 4th', run: '1:07:xx', total: '3:41:08' },
@@ -146,7 +147,7 @@ const PRO_ATHLETES = [
     coach: 'Self-coached (collaborative group: Blummenfelt, Iden, Stornes)',
     base: 'Bergen, Norway (+Pyrenees altitude pre-Nice)',
     dataQuality: 'CONFIRMED',
-    source: 'Slowtwitch Stornes profile Nov 2025; Slowtwitch forum Sep 2025 (Norwegian week structure); Triathlete.com nutrition Oct 2025',
+    source: 'Slowtwitch Stornes profile Nov 2025; Triathlete.com nutrition Oct 2025',
     keyStats: {
       peakWeekHours: '25–35h depending on phase',
       marathonAt_IMWC: '2:29:49 at IMWC Nice (3rd fastest iron-distance marathon ever)',
@@ -155,7 +156,6 @@ const PRO_ATHLETES = [
       swimPerWeek: '6× including open water. Even rest days: 4.5–5km easy.',
       bikePerWeek: '5–6×',
       runPerWeek: '5–6×',
-      selfCoachingSince: '2025 (previously externally coached). Coaches alongside Blummenfelt + Iden.',
     },
     weekStructure: {
       mon: { swim: 'Easy Z1 swim 4–5km (never fully off swim)', bike: null, run: 'Easy run 45–60 min' },
@@ -170,25 +170,25 @@ const PRO_ATHLETES = [
       { name: 'Norwegian Brick (Track Day)', detail: 'Bike to track, ride outer lane. 3×10min bike@LT2 → 3×2km run → 4×6min bike → 4×1km run → 3×4min bike → 3×1km VO₂. Seamless bike-run transitions on track.' },
       { name: 'Race-Course Bike Simulation', detail: 'Full race course at race pace with Blummenfelt and Iden. Done on Marbella course in final weeks of prep. Key confidence session before major race.' },
       { name: 'Rest Day Swim', detail: 'Even on rest days: 4.5–5km at easy pace. "In general, I feel swimming takes more energy than bike and run." Maintains swim feel year-round.' },
-      { name: 'Double Threshold (Norwegian Method)', detail: 'Same as Blummenfelt group. AM threshold swim + PM threshold bike or run. Lactate controlled at 2.5–3mmol throughout.' },
+      { name: 'Double Threshold (Norwegian Method)', detail: 'AM threshold swim + PM threshold bike or run. Lactate controlled at 2.5–3mmol throughout.' },
     ],
     nutrition: {
-      philosophy: 'Extremely aggressive high-carb. Gut-trained specifically over months to handle 180g/hr. Pre-race carb bolus strategy refined all season.',
+      philosophy: 'Extremely aggressive high-carb. Gut-trained specifically over months to handle 180g/hr.',
       training: 'Carb-fueled threshold days. Easy days lower carb. Maurten-style hydrogel approach.',
-      race: '200g+ carbs before swim. 80–100g in T1. 180g/hr on bike. Continued on run. All confirmed at IMWC Nice 2025 via Triathlete.com nutrition breakdown.',
-      recovery: 'Power naps during training blocks (mid-day sleep essential). Post-race weeks deliberately very light — first 2.5 weeks after Nice had no power naps due to media obligations.',
+      race: '200g+ carbs before swim. 80–100g in T1. 180g/hr on bike. Continued on run. All confirmed at IMWC Nice 2025.',
+      recovery: 'Power naps during training blocks (mid-day sleep essential).',
     },
     recovery: {
-      sleep: '9–10h target. After IMWC Nice win: 2.5 weeks sleep disrupted by media — openly cited as challenge heading into Marbella.',
-      tools: 'Altitude camp Pyrenees pre-Nice. Course recon rides on Marbella bike course. Aero testing (calf sleeves alone saved ~3min at IMWC — 30s in T1, ~3min saved on bike). Pinarello road frame for Nice (lighter than TT for climbing).',
-      philosophy: 'Self-coaching in collaborative trio. "I've learned to know my body way more — especially with recovery and making good decisions for myself." Full rest days still include an easy swim.',
-      taper: 'Significant volume drop. Keeps one longer bike (3–3.5h + 1h run). Tests different taper protocols each season. Key pre-race day: long bike + 1h run + 1h swim. Race day –1: short easy run + bike check.',
+      sleep: '9–10h target. After IMWC Nice win: 2.5 weeks sleep disrupted by media obligations.',
+      tools: 'Altitude camp Pyrenees pre-Nice. Course recon rides. Aero testing (calf sleeves alone saved ~3min at IMWC).',
+      philosophy: '"I\'ve learned to know my body way more — especially with recovery and making good decisions for myself."',
+      taper: 'Significant volume drop. Keeps one longer bike (3–3.5h + 1h run). Key pre-race day: long bike + 1h run + 1h swim.',
     },
     physiology: {
       marathon: '2:29:49 at IMWC Nice — 3rd fastest iron-distance marathon ever',
       swimLevel: 'Second-tier swimmer — exits with Blummenfelt group, typically 30–60s behind leaders',
-      raceIntelligence: 'Allowed Iden + Blummenfelt to surge with 15 miles to go at Nice. Held own pace, passed both in final miles. Elite-level pacing discipline.',
-      notes: '3× Olympian (Tokyo 11th). Long-course debut 2025. 3rd iron-distance start ever was IMWC win. Youngest of the trio. Arguably most complete athlete in 2025.',
+      raceIntelligence: 'Allowed Iden + Blummenfelt to surge with 15 miles to go at Nice. Held own pace, passed both in final miles.',
+      notes: '3× Olympian (Tokyo 11th). Long-course debut 2025. 3rd iron-distance start ever was IMWC win.',
     },
     raceData2025: [
       { race: 'IM 70.3 Aix-en-Provence', pos: 2, swim: 'Top group', bike: 'Lead group', run: '1:07:xx', total: '+0:32 to Blummenfelt' },
@@ -209,20 +209,19 @@ const PRO_ATHLETES = [
     coach: 'Self-coached (since 2023)',
     base: 'Windsor, Ontario, Canada',
     dataQuality: 'CONFIRMED',
-    source: 'lsanderstri.wordpress.com; TRI247 volume debate Feb 2025; Sanders YouTube 2025; multiple published Zwift workouts',
+    source: 'lsanderstri.wordpress.com; TRI247 volume debate Feb 2025; Sanders YouTube 2025',
     keyStats: {
       peakWeekHours: '17–20h (intensity-first philosophy, not volume)',
       bikeHoursPerWeek: '~15h/week on bike at peak',
       ftpWatts: '420W (confirmed multiple sources)',
       swimPerWeek: '3–4× (active improvement focus in 2025)',
       runPerWeek: '4–5×',
-      intensityDistribution: 'Higher than Norwegian group: more threshold/Z3 work, fewer pure Z1 hours',
-      selfCoachingSince: '2023 — moved from Ryan Bolton (5 yrs) → Dan Plews (brief) → self',
+      intensityDistribution: 'Higher than Norwegian group: more threshold/Z3 work',
     },
     weekStructure: {
       mon: { swim: 'Swim technique session', bike: 'Recovery ride or rest', run: null },
       tue: { swim: null, bike: 'Zwift threshold: 3×(12min @365W / 5min recovery / 2min @420W / 2min recovery)', run: 'Moderate run 60–75 min' },
-      wed: { swim: 'Swim focus 45–60 min', bike: 'Moderate fasted ride 90–120 min at easy-moderate (changed from hard day in self-coached era)', run: 'Moderate 14–15 miles at ~6:45/mile (deliberately not hard — reduced from previous Wed intensity)' },
+      wed: { swim: 'Swim focus 45–60 min', bike: 'Moderate fasted ride 90–120 min at easy-moderate', run: 'Moderate 14–15 miles at ~6:45/mile' },
       thu: { swim: null, bike: 'Hard Zwift: 8×(30s @500W + 1.5min @420W + 1.5min recovery)', run: 'Key threshold run session' },
       fri: { swim: 'Swim session', bike: 'Easy recovery', run: 'Easy 45–60 min' },
       sat: { swim: null, bike: 'Tucson Shootout (group ride) or long hard ride 3–4h', run: 'Brick run 30–45 min' },
@@ -230,26 +229,25 @@ const PRO_ATHLETES = [
     },
     keySessions: [
       { name: 'Zwift Super-Threshold Block', detail: '3×(12min @365W with 5min recovery into 2min @420W with 2min recovery). Sustained LT2 with VO₂ spike. Confirmed from his blog with actual power data.' },
-      { name: 'Tucson Shootout', detail: "America's fastest group ride, ~2–3h. 6+ consecutive weeks in winter 2025. All-out group effort — \"every week I've gotten stronger.\"" },
-      { name: '8×30s Anaerobic Spikes', detail: '8×(30s @500W + 1.5min @420W + 1.5min recovery). Anaerobic capacity + VO₂max combo. Confirmed from lsanderstri.wordpress.com blog with exact power data.' },
-      { name: 'Race-Specific Volume Bike', detail: "2025 philosophy: ride 4h at Z2 before expecting to race 4h at Z2. 'Can I ride 2h and expect to race 4h at that intensity? No.' Specificity of duration is key." },
+      { name: 'Tucson Shootout', detail: "America's fastest group ride, ~2–3h. 6+ consecutive weeks in winter 2025. All-out group effort." },
+      { name: '8×30s Anaerobic Spikes', detail: '8×(30s @500W + 1.5min @420W + 1.5min recovery). Confirmed from lsanderstri.wordpress.com blog with exact power data.' },
     ],
     nutrition: {
-      philosophy: 'Changed diet 2024 due to health scare — shifted to more whole food base, reduced processed food. High carb around sessions, adequate recovery nutrition.',
-      training: 'Fuels training sessions well. High carb before/during hard sessions. WHOOP guides intensity and recovery readiness.',
-      race: 'Carb loading race week. Standard pro gel/drink strategy on bike and run. Swim is his limiter so pre-race minimises anxiety around swim.',
-      recovery: '"Check your ego at the door" — key mantra. Post-session fueling. Tracks WHOOP data for strain/recovery balance.',
+      philosophy: 'Changed diet 2024 — shifted to more whole food base. High carb around sessions.',
+      training: 'Fuels training sessions well. WHOOP guides intensity and recovery readiness.',
+      race: 'Carb loading race week. Standard pro gel/drink strategy.',
+      recovery: '"Check your ego at the door" — key mantra. Tracks WHOOP data for strain/recovery balance.',
     },
     recovery: {
-      sleep: '8h+ target. Better sleep was noted improvement after self-coaching transition and reducing stress.',
-      tools: 'WHOOP band daily tracking. Zwift for controlled indoor efforts (avoids traffic/weather/social stress). Hard days are genuinely hard; easy days are genuinely easy.',
-      philosophy: 'Intensity > Volume. 17h high-quality beats 30h junk miles. Volume serves specificity: train the duration and intensity you will race. Quote: "The fine art of coaching lies in making adjustments and having confidence doing it."',
-      taper: '7–10 days. Volume drop 40–50%. Shorter intensity sessions kept in. Mental prep and race visualisation. At 36 — recovery window is treasured.',
+      sleep: '8h+ target.',
+      tools: 'WHOOP band daily tracking. Zwift for controlled indoor efforts.',
+      philosophy: 'Intensity > Volume. 17h high-quality beats 30h junk miles.',
+      taper: '7–10 days. Volume drop 40–50%. At 36 — recovery window is treasured.',
     },
     physiology: {
       ftp: '420W (confirmed)',
-      swimLimiter: 'Exited Oceanside swim 30th of field (26:00). Won race anyway. Swim is #1 ongoing development priority.',
-      notes: 'Self-coached since 2023. Multiple WR attempts. Iconic Canadian triathlete. 30+ IRONMAN 70.3 career wins. Intensity-pioneer: training ~17h/wk while others do 30h+ and winning.',
+      swimLimiter: 'Exited Oceanside swim 30th of field (26:00). Won race anyway.',
+      notes: 'Self-coached since 2023. 30+ IRONMAN 70.3 career wins. Training ~17h/wk while others do 30h+ and winning.',
     },
     raceData2025: [
       { race: 'IM 70.3 Oceanside', pos: 1, swim: '26:00 (30th!)', bike: '2:05:37 (2nd)', run: '1:11:28 (3rd)', total: '3:47:01' },
@@ -268,47 +266,45 @@ const PRO_ATHLETES = [
     coach: 'Self-coached (since 2023)',
     base: 'Tucson, Arizona',
     dataQuality: 'CONFIRMED',
-    source: 'TRI247 Long/Sanders volume debate Feb 2025; Triathlete.com Grand Reinvention 2023; TRI247 nutrition debrief T100 Singapore 2025',
+    source: 'TRI247 Long/Sanders volume debate Feb 2025; TRI247 nutrition debrief T100 Singapore 2025',
     keyStats: {
       peakWeekHours: '28–32h (self-described 2025)',
       annualHours2024: '~1,200h (23h/wk average)',
       bikeHoursPerWeek: '~15h/week at peak',
-      swimPerWeek: '4× (active improvement focus throughout 2025)',
+      swimPerWeek: '4×',
       runPerWeek: '5×',
-      swimChallenge: 'Exits water 3–6min behind field in most races. Entire race strategy = bike/run comeback.',
       racePhilosophy: '"Volume is the most important metric you can measure."',
     },
     weekStructure: {
       mon: { swim: 'Swim technique focus 45–60 min', bike: 'Rest or easy', run: null },
-      tue: { swim: null, bike: 'Threshold group ride (Shootout) or structured intervals', run: 'Moderate 60–80 min' },
-      wed: { swim: 'AM swim', bike: 'Moderate fasted ride 90–120 min (deliberately NOT hard — changed from previous hard Wednesday)', run: 'Moderate 14–15 miles at ~6:45/mile (moderate bridge day)' },
+      tue: { swim: null, bike: 'Threshold group ride or structured intervals', run: 'Moderate 60–80 min' },
+      wed: { swim: 'AM swim', bike: 'Moderate fasted ride 90–120 min', run: 'Moderate 14–15 miles at ~6:45/mile' },
       thu: { swim: null, bike: 'Hard ride', run: 'Key threshold run session' },
       fri: { swim: 'Swim session', bike: 'Recovery 60 min', run: 'Easy 45–60 min' },
       sat: { swim: null, bike: 'Tucson Shootout or peak volume long ride 4–5h', run: 'Brick run 30–45 min' },
       sun: { swim: null, bike: 'Long easy ride 3h', run: 'Long easy run 18–22 miles' },
     },
     keySessions: [
-      { name: 'Tucson Shootout', detail: "America's fastest group ride. 6+ consecutive weeks winter 2024–25. Getting stronger each week: 'This is now week six in a row and every week I've gotten stronger.'" },
-      { name: 'Peak Volume Week', detail: '"Peak week = hardest week in volume AND intensity combined." Often trains with Sanders in these blocks. Both describe it as brutally hard.' },
-      { name: 'Long Run 18–22 miles', detail: 'Cornerstone of run excellence. Easy pace, high volume. Long run at easy aerobic is how he builds the engine for sub-1:10 70.3 half-marathons.' },
-      { name: 'Swim Focus Block', detail: 'Early 2025: 3-week swim-focused build before St. George. Swim described as "active development" — making progress but against a very fast-moving target.' },
+      { name: 'Tucson Shootout', detail: "America's fastest group ride. 6+ consecutive weeks winter 2024–25. Getting stronger each week." },
+      { name: 'Long Run 18–22 miles', detail: 'Cornerstone of run excellence. Easy pace, high volume. Builds engine for sub-1:10 70.3 half-marathons.' },
+      { name: 'T100 Singapore Bike Fueling', detail: 'Confirmed: 310g carbs in 1h50min + 3.5L fluid + 200mg caffeine on bike. "This is wild."' },
     ],
     nutrition: {
-      philosophy: 'Fuel for performance. Very transparent on social media about race nutrition. High carb race day, pragmatic whole food base.',
-      training: 'Carb-fueled hard sessions. Pragmatic. Does not overthink nutrition outside race day.',
-      race: 'T100 Singapore 2025 confirmed: Double breakfast (3 eggs + lots of toast at 7am + toast at 10am). Pre-race: 90g carbs + energy drink. Bike: ASTOUNDING 310g carbs in 1h50min + 3.5L fluid + 200mg caffeine. Self-described: "This is wild."',
-      recovery: 'Family balance — son Leo is priority. Training adapts around family life. Rest when body needs it.',
+      philosophy: 'Fuel for performance. Very transparent on social media about race nutrition.',
+      training: 'Carb-fueled hard sessions. Does not overthink nutrition outside race day.',
+      race: 'T100 Singapore 2025: Double breakfast. Pre-race 90g carbs. Bike: 310g carbs/1h50min + 3.5L fluid + 200mg caffeine.',
+      recovery: 'Family balance. Training adapts around family life.',
     },
     recovery: {
-      sleep: '8h+ target. Self-coaching transition in 2023 improved sleep quality and mood consistency. "I have more energy in my day-to-day life."',
+      sleep: '8h+ target. Self-coaching improved sleep quality and mood consistency.',
       tools: 'Self-coaches based on feel + data. No rigid rules — body-listening approach.',
-      philosophy: '"Volume is how I build confidence." Contrasts with Sanders philosophy. Believes volume tolerance = performance. Reduced total hours by 10% vs coached era but significantly improved performance.',
-      taper: '7–10 days. Reduces to "just enough" to feel fresh. Mental prep via YouTube community. Doesn\'t overanalyse.',
+      philosophy: '"Volume is how I build confidence." Reduced total hours by 10% vs coached era but significantly improved.',
+      taper: '7–10 days. Reduces to "just enough" to feel fresh.',
     },
     physiology: {
-      swimLimiter: 'Exits water far behind field in essentially every race. 30th at Oceanside (26:00), 21st at Eagleman (27:49). Race wins despite massive swim deficit.',
-      bikeRun: 'World-class combination off the bike. Fastest bike (1:55:14) and fastest run (1:10:49) at Eagleman for course record.',
-      notes: '"The Big Unit" — 6ft 4in, ~97kg. Flat/fast courses suit his power. Eagleman course record 2025. PTO #3 biker ranking.',
+      swimLimiter: 'Exits water far behind field. 21st at Eagleman (27:49). Wins despite massive swim deficit.',
+      bikeRun: 'Fastest bike (1:55:14) and fastest run (1:10:49) at Eagleman for course record.',
+      notes: '"The Big Unit" — 6ft 4in, ~97kg. Flat/fast courses suit his power. PTO #3 biker ranking.',
     },
     raceData2025: [
       { race: 'IM 70.3 St. George (NA Champs)', pos: 2, swim: '—', bike: '—', run: '—', total: '—' },
@@ -328,7 +324,7 @@ const PRO_ATHLETES = [
     coach: 'Self-coached (collaborative trio with Blummenfelt + Stornes)',
     base: 'Bergen, Norway',
     dataQuality: 'CONFIRMED (method); specifics moderate',
-    source: 'Norwegian Method Podcast; Slowtwitch IMWC Nice race analysis 2025; Triathlete.com',
+    source: 'Norwegian Method Podcast; Slowtwitch IMWC Nice race analysis 2025',
     keyStats: {
       peakWeekHours: '28–35h (same Norwegian group)',
       trainingMethod: 'Norwegian Method — identical structure to Blummenfelt/Stornes group',
@@ -347,25 +343,24 @@ const PRO_ATHLETES = [
       sun: { swim: 'Easy 4km', bike: 'Long easy ride 3–4h', run: 'Long easy run 1:30–2h' },
     },
     keySessions: [
-      { name: 'Norwegian Double Threshold', detail: 'Identical to Blummenfelt group. AM threshold swim + PM threshold run or bike. Lactate-controlled 2.5–3mmol throughout. The Norwegian method foundation.' },
+      { name: 'Norwegian Double Threshold', detail: 'AM threshold swim + PM threshold run or bike. Lactate-controlled 2.5–3mmol throughout. The Norwegian method foundation.' },
       { name: 'Altitude Block', detail: 'Sierra Nevada + Pyrenees with Blummenfelt + Stornes. 3–4 week blocks. VO₂max ceiling elevation is the goal.' },
-      { name: 'IMWC Nice Bike Conservation', detail: 'Rarely put nose in wind on Nice bike. Accepted gaps forming and saved energy for run. Surged at mile 15 of marathon — Stornes held pace and eventually passed him. Classic delayed execution.' },
     ],
     nutrition: {
       philosophy: 'High-carb intuitive eating (same Norwegian trio philosophy). Gut-trained for high race intake.',
-      training: 'Maurten fueling on threshold days. Carb periodisation. Recovery nutrition careful given injury history.',
-      race: 'Same methodology as Blummenfelt — 100g+/hr on bike via hydrogel. Carb loading race week.',
-      recovery: 'Extra care with load management given injury history. Deliberately conservative in post-injury return phases.',
+      training: 'Maurten fueling on threshold days. Recovery nutrition careful given injury history.',
+      race: '100g+/hr on bike via hydrogel. Carb loading race week.',
+      recovery: 'Extra care with load management given injury history.',
     },
     recovery: {
       sleep: '9h+ target',
-      tools: 'Altitude camps. Collaborative self-coaching gives fine-grained load management ability.',
-      philosophy: 'Highly cautious 2022–2024 given repeated injuries. 2025 = fully committed return with careful monitoring.',
-      taper: 'Standard Norwegian 10–14 day taper. Drop threshold volume, maintain easy frequency.',
+      tools: 'Altitude camps. Collaborative self-coaching gives fine-grained load management.',
+      philosophy: 'Highly cautious 2022–2024 given repeated injuries. 2025 = fully committed return.',
+      taper: 'Standard Norwegian 10–14 day taper.',
     },
     physiology: {
       marathonCapacity: 'Sub-2:30 iron-distance capability when healthy',
-      notes: 'IM World Champ 2022. 70.3 World Champ 2019 + 2021. Multiple injury setbacks. Clear 2025 comeback — 2nd IMWC Nice. Exceptional long-course marathon speed when healthy and fresh.',
+      notes: 'IM World Champ 2022. 70.3 World Champ 2019 + 2021. Multiple injury setbacks. Clear 2025 comeback — 2nd IMWC Nice.',
     },
     raceData2025: [
       { race: 'IM 70.3 Oceanside', pos: 3, swim: '23:59', bike: '2:07:11', run: '1:13:34', total: '3:48:06' },
@@ -386,7 +381,7 @@ const PRO_ATHLETES = [
     dataQuality: 'CONFIRMED',
     source: 'Scientific Triathlon EP#448 — Kasper Pedersen (coach confirms exact peak week figures)',
     keyStats: {
-      confirmedPeakWeek: '25km swim + 466km bike + 131km run = 33h total (single confirmed week from coach)',
+      confirmedPeakWeek: '25km swim + 466km bike + 131km run = 33h total',
       normalBike: '350–400km/week',
       normalRun: '100–120km/week',
       normalSwim: '20–25km/week',
@@ -395,7 +390,7 @@ const PRO_ATHLETES = [
     },
     weekStructure: {
       mon: { swim: 'Recovery 3–4km', bike: 'Easy 2h', run: 'Easy 45–60 min' },
-      tue: { swim: '6–7km hard set', bike: 'Key interval session 4–5h (quality intervals included)', run: null },
+      tue: { swim: '6–7km hard set', bike: 'Key interval session 4–5h', run: null },
       wed: { swim: '5km moderate', bike: '6–7h long ride Z1-Z2 (~150–180km in Girona terrain)', run: 'Brick run 45 min off bike' },
       thu: { swim: '5km hard', bike: 'Threshold or VO₂ session 3–4h', run: 'Key run session 20–25km' },
       fri: { swim: 'Easy 4km', bike: 'Recovery 2h', run: 'Easy 10km' },
@@ -403,24 +398,23 @@ const PRO_ATHLETES = [
       sun: { swim: '4–5km easy', bike: 'Easy 3h', run: 'Long easy run 25–30km' },
     },
     keySessions: [
-      { name: 'Wednesday Monster Ride', detail: '6–7h long ride ~150–180km at Z1-Z2. Core of extreme volume week. Girona terrain includes significant climbing. Similar to Grand Tour cyclists\' base rides.' },
-      { name: 'Confirmed Peak Volume Block', detail: 'Coach confirmed: 466km bike + 131km run + 25km swim in one week = 33 total hours. Periodic peak volume blocks in deep base phase. Not every week.' },
-      { name: 'Back-to-Back Quality Days', detail: 'Tuesday hard bike + Thursday hard run. Two quality sessions separated by Wednesday volume day. High-stress / high-adapt cycle.' },
+      { name: 'Wednesday Monster Ride', detail: '6–7h long ride ~150–180km at Z1-Z2. Girona terrain includes significant climbing. Similar to Grand Tour cyclists base rides.' },
+      { name: 'Confirmed Peak Volume Block', detail: 'Coach confirmed: 466km bike + 131km run + 25km swim in one week = 33 total hours. Periodic peak volume blocks in deep base phase.' },
     ],
     nutrition: {
       philosophy: 'Must fuel extreme volume. Very high caloric intake. Carb-centric.',
-      training: 'Carries food on 6–7h rides — solid food (bananas, bars) + liquid carbs. Gels for intervals.',
-      race: 'High carb standard. T100 and IRONMAN-level fueling.',
-      recovery: 'Volume demands serious recovery nutrition. Large post-ride meals prioritised. Sleep is non-negotiable.',
+      training: 'Carries food on 6–7h rides — solid food (bananas, bars) + liquid carbs.',
+      race: 'High carb standard.',
+      recovery: 'Volume demands serious recovery nutrition. Sleep is non-negotiable.',
     },
     recovery: {
       sleep: '9–10h required (volume absorption demands it)',
-      tools: 'Girona base — world-class cycling roads, warm climate, cyclist community (trains near Pogacar, Evenepoel routes). Coach Kasper monitors load carefully.',
-      philosophy: 'Volume = adaptation for him. More similar to Grand Tour cyclist approach than traditional triathlete. Girona is optimal base for year-round volume.',
-      taper: '2 weeks. Massive volume drop from extreme high. Maintains moderate intensity on bike.',
+      tools: 'Girona base — world-class cycling roads, warm climate, cyclist community.',
+      philosophy: 'Volume = adaptation for him. More similar to Grand Tour cyclist approach than traditional triathlete.',
+      taper: '2 weeks. Massive volume drop from extreme high.',
     },
     physiology: {
-      notes: 'PTO world #2 ranked biker. Age 25 — arguably the youngest star in this field with the most upside. Dane training out of Girona Spain.',
+      notes: 'PTO world #2 ranked biker. Age 25 — arguably the youngest star with the most upside.',
     },
     raceData2025: [
       { race: 'IM 70.3 Cascais Portugal', pos: 1, swim: '—', bike: '—', run: '—', total: '—' },
@@ -438,14 +432,14 @@ const PRO_ATHLETES = [
     coach: 'Richard Laidlow (father, confirmed coach)',
     base: 'Pyrenees, France',
     dataQuality: 'CONFIRMED',
-    source: 'Scientific Triathlon EP#403 — Richard Laidlow (coach/father) describes weekly structure in detail',
+    source: 'Scientific Triathlon EP#403 — Richard Laidlow (coach/father)',
     keyStats: {
       ptoBikeRanking: 'World #1 biker (PTO ranking)',
       peakWeekHours: '~30h',
       swimPerWeek: '4×',
       bikePerWeek: '5–6× with Pyrenees climbing daily',
       runPerWeek: '5–6×',
-      pyreneesBenefits: 'Trains on Tour de France cols (Tourmalet, Aubisque, La Mongie) daily — creates exceptional sustained climbing power',
+      pyreneesBenefits: 'Trains on Tour de France cols (Tourmalet, Aubisque, La Mongie) daily',
     },
     weekStructure: {
       mon: { swim: 'Easy 3–4km', bike: 'Recovery spin 1.5h', run: null },
@@ -453,29 +447,28 @@ const PRO_ATHLETES = [
       wed: { swim: 'Moderate 5km', bike: 'Long ride 4.5–5h in Pyrenees (climbs daily)', run: 'Brick run 45min–1h off bike' },
       thu: { swim: 'Hard 5km AM', bike: 'Moderate 2.5–3h', run: 'Key run: threshold intervals 2×20min or long reps' },
       fri: { swim: 'Easy technique', bike: 'Easy recovery', run: 'Easy 45–60 min' },
-      sat: { swim: null, bike: '5h medium-hard (confirmed in EP403 structure)', run: 'Brick run 60 min' },
+      sat: { swim: null, bike: '5h medium-hard', run: 'Brick run 60 min' },
       sun: { swim: '4km easy', bike: 'Easy 2h', run: 'Long easy run 25–30km' },
     },
     keySessions: [
-      { name: 'Pyrenees Col Ride', detail: 'Daily climbing on Tour de France cols. 4–5h in mountains including sustained 20–40min col ascents at threshold power. Creates exceptional bike power + endurance unique to his base.' },
+      { name: 'Pyrenees Col Ride', detail: '4–5h in mountains including sustained 20–40min col ascents at threshold power. Creates exceptional bike power + endurance unique to his base.' },
       { name: 'Father-Coach Daily Check-In', detail: 'Father watches every session data in real-time. Daily adjustments. More granular monitoring than most athletes have access to.' },
-      { name: 'Swim-Bike Block', detail: 'Hard AM swim directly into bike session — simulates race transition fatigue. Confirmed in EP403 structure.' },
     ],
     nutrition: {
-      philosophy: 'Fuels big Pyrenees volume. High carb with French whole food culture. Father as coach includes nutrition monitoring.',
-      training: 'Carries solid food on 5h+ Pyrenees rides — bananas, bars, sports drink. Gels for intensity blocks.',
-      race: 'Very high bike intake required given his race-pace efforts. Typically attacks bike aggressively.',
+      philosophy: 'Fuels big Pyrenees volume. High carb with French whole food culture.',
+      training: 'Carries solid food on 5h+ Pyrenees rides — bananas, bars, sports drink.',
+      race: 'Very high bike intake required given his race-pace efforts.',
       recovery: 'Father coaches = granular recovery monitoring. Daily load discussion.',
     },
     recovery: {
       sleep: '9h',
-      tools: 'Altitude Pyrenees base. Family coaching = personalised recovery management. Father can see exact training file and adjust.',
+      tools: 'Altitude Pyrenees base. Family coaching = personalised recovery management.',
       philosophy: 'Quality-focused coaching in tight family unit. Every session has purpose.',
       taper: '10–14 days. Maintains some bike intensity but drops overall volume significantly.',
     },
     physiology: {
-      bikeRanking: 'PTO World #1 biker — likely most powerful sustained cyclist in field',
-      notes: 'Won IMWC 2023 at age 23. Kona 2024: overcooked bike, walked parts of run. Nice 2025: Similar pattern — led/pushed bike, 5th overall. Run execution still developing for iron distance.',
+      bikeRanking: 'PTO World #1 biker',
+      notes: 'Won IMWC 2023 at age 23. Kona 2024: overcooked bike, walked parts of run. Nice 2025: Led bike, 5th overall. Run execution still developing.',
     },
     raceData2025: [
       { race: 'IMWC Nice (full)', pos: 5, swim: '—', bike: 'Attacked front group', run: '~2:38', total: '8:03:55' },
@@ -492,10 +485,10 @@ const PRO_ATHLETES = [
     podiums2025: ['2nd IM 70.3 Oceanside'],
     coach: 'Professional (unpublished)',
     base: 'Nice, France (year-round)',
-    dataQuality: 'MODERATE — race data confirmed; training structure inferred',
-    source: 'PTO stats 2025; Triathlete IMWC Nice coverage; general media',
+    dataQuality: 'MODERATE',
+    source: 'PTO stats 2025; Triathlete IMWC Nice coverage',
     keyStats: {
-      niceBase: 'Lives and trains year-round on IMWC Nice course. Enormous course knowledge advantage.',
+      niceBase: 'Lives and trains year-round on IMWC Nice course.',
       swimStrength: 'Good front-pack swimmer',
       bikeStrength: 'Strong biker — Nice-based = daily col climbing',
       runLevel: 'Solid 70.3 runner; iron-distance marathon still developing',
@@ -510,12 +503,11 @@ const PRO_ATHLETES = [
       sun: { swim: '4km easy', bike: 'Long easy', run: 'Long easy run' },
     },
     keySessions: [
-      { name: 'Nice Descent Practice', detail: 'Year-round training on actual IMWC Nice descent (Col de Vence) — course mastery is a documented tactical advantage. Documented course knowledge.' },
-      { name: '70.3 Bike Build', detail: 'Flat-course bike specialist — Oceanside 2025: 2:05:57 (3rd fastest bike of day) to finish 2nd overall.' },
+      { name: 'Nice Descent Practice', detail: 'Year-round training on actual IMWC Nice descent (Col de Vence) — course mastery is a documented tactical advantage.' },
     ],
     nutrition: { philosophy: 'Standard high-carb pro approach', training: 'Fuels training volume appropriately', race: 'High carb on bike. Electrolytes for Nice heat.', recovery: 'Nice climate = year-round consistent training conditions.' },
-    recovery: { sleep: '8–9h', tools: 'Year-round Nice base training. Course familiarity.', philosophy: 'Consistency of training on race course = reduced race-day variables.', taper: 'Standard 10-day taper. Course knowledge reduces anxiety.' },
-    physiology: { notes: 'Strong swimmer-biker at 70.3. Iron-distance marathon still developing. Top-10 IMWC Nice 2025. Nice base = biggest long-term strategic advantage.' },
+    recovery: { sleep: '8–9h', tools: 'Year-round Nice base training.', philosophy: 'Consistency of training on race course = reduced race-day variables.', taper: 'Standard 10-day taper.' },
+    physiology: { notes: 'Strong swimmer-biker at 70.3. Top-10 IMWC Nice 2025. Nice base = biggest long-term strategic advantage.' },
     raceData2025: [
       { race: 'IM 70.3 Oceanside', pos: 2, swim: '23:53 (15th)', bike: '2:05:57 (3rd)', run: '1:14:26', total: '3:47:42' },
     ],
@@ -537,7 +529,6 @@ const PRO_ATHLETES = [
       olympicMedal: '2016 Rio Olympic silver (super-sprint mixed relay)',
       swimStrength: 'Elite front-pack swimmer — exits with leaders consistently',
       bikeStrength: 'Strong 70.3 biker',
-      runStrength: 'Good 70.3 runner',
       heatTraining: 'Arizona base = year-round heat acclimatisation advantage',
     },
     weekStructure: {
@@ -550,12 +541,12 @@ const PRO_ATHLETES = [
       sun: { swim: 'Easy', bike: 'Easy or rest', run: 'Long easy run' },
     },
     keySessions: [
-      { name: 'Elite Swim Speed Sessions', detail: 'Olympic swimmer background — uses speed advantage to exit with front pack and preserve energy for bike/run. Swim is a strength, not a limiter.' },
+      { name: 'Elite Swim Speed Sessions', detail: 'Olympic swimmer background — uses speed advantage to exit with front pack and preserve energy for bike/run.' },
       { name: 'Arizona Heat Adaptation', detail: 'Year-round Tempe desert training builds significant heat acclimatisation advantage for hot-weather races.' },
     ],
-    nutrition: { philosophy: 'High carb race fueling, standard pro approach', training: 'Fuels training. Heat nutrition knowledge.', race: 'High carb + electrolytes. Heat experience guides fluid strategy.', recovery: 'Standard pro protocols.' },
+    nutrition: { philosophy: 'High carb race fueling, standard pro approach', training: 'Fuels training. Heat nutrition knowledge.', race: 'High carb + electrolytes.', recovery: 'Standard pro protocols.' },
     recovery: { sleep: '8h', tools: 'Arizona desert training. Heat adaptation.', philosophy: 'Olympic background brings professional discipline and periodisation knowledge.', taper: 'Standard 10-day.' },
-    physiology: { notes: '2016 Rio Olympic silver. Consistent PTO top-10 triathlete. Elite swimmer by background — rare attribute in field.' },
+    physiology: { notes: '2016 Rio Olympic silver. Elite swimmer by background — rare attribute in field.' },
     raceData2025: [
       { race: 'IM 70.3 Oceanside', pos: 5, swim: '23:30 (7th)', bike: '2:07:27 (7th)', run: '1:14:55', total: '3:49:24' },
     ],
@@ -571,10 +562,10 @@ const PRO_ATHLETES = [
     podiums2025: ['2nd IM 70.3 Chattanooga (fastest run 1:08:34)'],
     coach: 'Professional',
     base: 'USA',
-    dataQuality: 'MODERATE — race data confirmed; training structure limited',
+    dataQuality: 'MODERATE',
     source: 'TRI247 Chattanooga 2025; besttriathletes.com race report',
     keyStats: {
-      runStrength: '1:08:34 half-marathon off bike — fastest at Chattanooga. Consistent fast runner.',
+      runStrength: '1:08:34 half-marathon off bike — fastest at Chattanooga.',
       overallProfile: 'Run-strong athlete making strong moves through field on the run leg.',
     },
     weekStructure: {
@@ -592,7 +583,7 @@ const PRO_ATHLETES = [
     ],
     nutrition: { philosophy: 'Standard pro high-carb', training: 'High carb around run sessions', race: 'Standard high-carb race day', recovery: 'Run-focused recovery — ice, sleep, protein.' },
     recovery: { sleep: '8–9h', tools: 'Standard', philosophy: 'Building toward consistent top-5.', taper: 'Standard 10 days.' },
-    physiology: { notes: '1:08:34 half-marathon off bike at Chattanooga = fastest in field. Clear top American run talent. Watch for breakthrough 2026.' },
+    physiology: { notes: '1:08:34 half-marathon off bike at Chattanooga = fastest in field. Watch for breakthrough 2026.' },
     raceData2025: [
       { race: 'IM 70.3 Chattanooga (no swim)', pos: 2, swim: 'CANCELLED', bike: '2:02:28', run: '1:08:34 (fastest field)', total: '3:11:57' },
     ],
@@ -609,9 +600,9 @@ const PRO_ATHLETES = [
     coach: 'Professional / hybrid self-coached',
     base: 'USA',
     dataQuality: 'MODERATE',
-    source: 'TRI247 Chattanooga 2025; besttriathletes.com; PTO race results',
+    source: 'TRI247 Chattanooga 2025; PTO race results',
     keyStats: {
-      runStrength: '1:08:14 at Chattanooga — among fastest in field. Consistent 70.3 run performer.',
+      runStrength: '1:08:14 at Chattanooga — among fastest in field.',
       wins2025: 'Augusta 70.3 winner — first Gold-level career win.',
     },
     weekStructure: {
@@ -624,8 +615,7 @@ const PRO_ATHLETES = [
       sun: { swim: 'Easy', bike: 'Easy', run: 'Long easy run 18–20 miles' },
     },
     keySessions: [
-      { name: 'Track Interval Run', detail: 'Track intervals 400m–1mile reps at 5K race pace. Builds raw speed that carries to fast 70.3 half-marathons.' },
-      { name: 'Augusta Race Build', detail: 'Specific preparation for flat, fast Augusta course. Bike power + fast run pace. Won 2025.' },
+      { name: 'Track Interval Run', detail: 'Track intervals 400m–1mile reps at 5K race pace. Builds raw speed for fast 70.3 half-marathons.' },
     ],
     nutrition: { philosophy: 'Standard high-carb', training: 'Fuels run volume well', race: 'High carb race day', recovery: 'Standard' },
     recovery: { sleep: '8h', tools: 'Standard', philosophy: 'Developing top-5 consistency.', taper: 'Standard 10 days.' },
@@ -675,15 +665,39 @@ const PRO_ATHLETES = [
 ];
 
 const SESSION_MATRIX = [
-  { session: 'Double Threshold Day', athletes: ['Blummenfelt', 'Stornes', 'Iden'], detail: 'AM threshold swim + PM threshold bike or run. Lactate-controlled at 2.5–3mmol throughout both sessions. Can only be done with lactate testing for precision.', frequency: '2× per week (Tue + Thu)', benefit: 'Maximises threshold stimulus without exceeding metabolic capacity. Cornerstone of Norwegian group dominance since 2021.' },
-  { session: '35s/15s VO₂ Intervals', athletes: ['Geens', 'Blummenfelt', 'Stornes'], detail: '35s at VO₂max intensity / 15s easy × 6 reps per block = 4 min block. 2–4 blocks per session. Can be on bike or run. Very high aerobic ceiling stimulus, low recovery cost.', frequency: '1× per week per discipline', benefit: 'Huge aerobic ceiling stimulus with manageable recovery. 6 reps = can complete 3–4 blocks in one session. Geens confirmed targeting ~400W on bike version.' },
-  { session: 'Norwegian Track Brick', athletes: ['Stornes', 'Blummenfelt', 'Iden'], detail: 'Bike to track, ride outer lane. 3×10min bike@LT2 → 3×2km run → 4×6min bike → 4×1km run → 3×4min bike → 3×1km VO₂. All transitions happen on track.', frequency: '1× per week (Saturday)', benefit: 'Three disciplines in one 3h session. Race-specific transition practice. Neuromuscular specificity for bike-to-run switchover.' },
-  { session: 'Tucson Shootout', athletes: ['Sanders', 'Sam Long'], detail: "America's fastest group ride, 2–3h, all out. Pro cyclists, elite triathletes. Sustained high-intensity group racing dynamics. Cannot replicate solo.", frequency: 'Weekly in winter block (6+ consecutive weeks)', benefit: 'Real competitive race-pace cycling in group. Develops bike power, race tactics, mental toughness in adversarial environment.' },
-  { session: 'Monster Volume Ride (6–7h)', athletes: ['Ditlev', 'Laidlow'], detail: '6–7h long ride at Z1-Z2 pace. ~150–180km. Ditlev in Girona, Laidlow in Pyrenees. Builds aerobic base and fat oxidation for 4h+ iron-distance bike.', frequency: '1× per week (Wednesday)', benefit: 'Extreme aerobic base. Trains body to oxidise fat at race pace. Creates the engine that can maintain race power for full 180km.' },
-  { session: 'Long Brick Big Day', athletes: ['Geens', 'Blummenfelt', 'Stornes'], detail: '90–105 min AM easy run + 4–4.5h PM bike = 6h combined leg load. Simulates race-day accumulated fatigue. Legs must work off pre-fatigued state.', frequency: '1× per week (Saturday)', benefit: 'Pre-fatigues legs before key bike/run work. Forces body to perform when glycogen-depleted and muscles fatigued. Race-specific stress.' },
-  { session: 'Race-Course Bike Recon', athletes: ['Stornes', 'Blummenfelt', 'Iden', 'Von Berg'], detail: 'Full race-course bike at race pace with training partners. Stornes did on Marbella course; Von Berg does on Nice course year-round.', frequency: 'Once or twice pre-major race', benefit: 'Eliminates course uncertainty. Builds race-specific pacing confidence. Can identify exact where to push and where to conserve.' },
-  { session: 'Altitude Block (3–4 weeks)', athletes: ['Blummenfelt', 'Stornes', 'Iden', 'Laidlow'], detail: 'Sierra Nevada (2,300m) or Pyrenees (1,800–2,400m). All sessions at altitude for 3–4 weeks. Full camp, not just a visit.', frequency: '1–2× per season pre-key races', benefit: 'Haematological adaptation — increased red blood cell mass, VO₂max ceiling elevation, improved oxygen delivery to muscles.' },
+  { session: 'Double Threshold Day', athletes: ['Blummenfelt', 'Stornes', 'Iden'], detail: 'AM threshold swim + PM threshold bike or run. Lactate-controlled at 2.5–3mmol throughout both sessions.', frequency: '2× per week (Tue + Thu)', benefit: 'Maximises threshold stimulus without exceeding metabolic capacity. Cornerstone of Norwegian group dominance since 2021.' },
+  { session: '35s/15s VO₂ Intervals', athletes: ['Geens', 'Blummenfelt', 'Stornes'], detail: '35s at VO₂max intensity / 15s easy × 6 reps per block = 4 min block. 2–4 blocks per session.', frequency: '1× per week per discipline', benefit: 'Huge aerobic ceiling stimulus with manageable recovery. Geens confirmed targeting ~400W on bike version.' },
+  { session: 'Norwegian Track Brick', athletes: ['Stornes', 'Blummenfelt', 'Iden'], detail: 'Bike to track, ride outer lane. 3×10min bike@LT2 → 3×2km run → 4×6min bike → 4×1km run → 3×4min bike → 3×1km VO₂.', frequency: '1× per week (Saturday)', benefit: 'Three disciplines in one 3h session. Race-specific transition practice. Neuromuscular specificity for bike-to-run.' },
+  { session: 'Tucson Shootout', athletes: ['Sanders', 'Sam Long'], detail: "America's fastest group ride, 2–3h, all out. Sustained high-intensity group racing dynamics.", frequency: 'Weekly in winter block (6+ consecutive weeks)', benefit: 'Real competitive race-pace cycling in group. Develops bike power, race tactics, mental toughness.' },
+  { session: 'Monster Volume Ride (6–7h)', athletes: ['Ditlev', 'Laidlow'], detail: '6–7h long ride at Z1-Z2 pace. ~150–180km. Ditlev in Girona, Laidlow in Pyrenees.', frequency: '1× per week (Wednesday)', benefit: 'Extreme aerobic base. Trains body to oxidise fat at race pace. Creates the engine for full 180km.' },
+  { session: 'Long Brick Big Day', athletes: ['Geens', 'Blummenfelt', 'Stornes'], detail: '90–105 min AM easy run + 4–4.5h PM bike = 6h combined leg load. Forces body to perform when fatigued.', frequency: '1× per week (Saturday)', benefit: 'Pre-fatigues legs before key bike/run work. Race-specific stress.' },
+  { session: 'Altitude Block (3–4 weeks)', athletes: ['Blummenfelt', 'Stornes', 'Iden', 'Laidlow'], detail: 'Sierra Nevada (2,300m) or Pyrenees (1,800–2,400m). All sessions at altitude for 3–4 weeks.', frequency: '1–2× per season pre-key races', benefit: 'Haematological adaptation — increased red blood cell mass, VO₂max ceiling elevation.' },
 ];
+
+// ─────────────────────────────────────────────────────────────
+// DARK THEME PALETTE (matches TriCoach CSS variables)
+// ─────────────────────────────────────────────────────────────
+const T = {
+  bg:        '#080c10',
+  surface:   '#0f1520',
+  surface2:  '#141d2a',
+  surface3:  '#1a2535',
+  border:    '#1e2d3d',
+  border2:   '#243447',
+  blue:      '#2196f3',
+  blueGlow:  'rgba(33,150,243,.15)',
+  green:     '#00e676',
+  greenDim:  'rgba(0,230,118,.08)',
+  orange:    '#ff9800',
+  orangeDim: 'rgba(255,152,0,.08)',
+  red:       '#f44336',
+  purple:    '#ce93d8',
+  cyan:      '#26c6da',
+  yellow:    '#ffd54f',
+  text:      '#e8edf2',
+  textDim:   '#5a7080',
+  textMid:   '#8aa0b0',
+};
 
 // ─────────────────────────────────────────────────────────────
 // RENDER
@@ -692,22 +706,41 @@ function renderProBlueprint() {
   const container = document.getElementById('page-problueprintpage');
   if (!container) return;
   container.innerHTML = '';
+  container.style.cssText = `background:${T.bg};min-height:100vh;padding-bottom:40px;`;
 
   // Header
   const header = document.createElement('div');
   header.style.cssText = 'padding:24px 20px 0;';
   header.innerHTML = `
-    <h2 style="font-size:1.5rem;font-weight:700;color:#1e293b;margin:0 0 4px;">🏆 Pro Blueprint</h2>
-    <p style="color:#64748b;font-size:0.9rem;margin:0 0 16px;">${PRO_ATHLETES.length} athletes · 2025 verified race data · Training, nutrition &amp; recovery deep-dives</p>
+    <div style="font-family:'Bebas Neue',sans-serif;font-size:28px;letter-spacing:3px;color:${T.blue};">🏆 PRO BLUEPRINT</div>
+    <div style="color:${T.textDim};font-size:12px;margin-top:4px;margin-bottom:16px;">${PRO_ATHLETES.length} athletes · 2025 verified race data · Training, nutrition &amp; recovery deep-dives</div>
   `;
   container.appendChild(header);
+
+  // Stats banner
+  const banner = document.createElement('div');
+  banner.style.cssText = 'display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:0 20px 16px;';
+  const confirmed = PRO_ATHLETES.filter(a => a.dataQuality === 'CONFIRMED').length;
+  const totalWins = PRO_ATHLETES.reduce((s, a) => s + a.wins2025.length, 0);
+  [
+    { n: PRO_ATHLETES.length, l: 'Athletes', c: T.blue },
+    { n: confirmed, l: 'Confirmed', c: T.green },
+    { n: totalWins, l: '2025 Wins', c: T.yellow },
+    { n: 6, l: 'Nations', c: T.cyan },
+  ].forEach(s => {
+    const d = document.createElement('div');
+    d.style.cssText = `background:${T.surface};border:1px solid ${T.border};border-radius:10px;padding:10px;text-align:center;`;
+    d.innerHTML = `<div style="font-family:'Bebas Neue',sans-serif;font-size:1.6rem;color:${s.c};">${s.n}</div><div style="font-size:10px;color:${T.textDim};letter-spacing:1px;text-transform:uppercase;">${s.l}</div>`;
+    banner.appendChild(d);
+  });
+  container.appendChild(banner);
 
   // Filter bar
   const filterBar = document.createElement('div');
   filterBar.style.cssText = 'display:flex;gap:8px;padding:0 20px 16px;flex-wrap:wrap;';
   const filterDefs = [
     { label: 'All Athletes', fn: () => true },
-    { label: '⭐ World Champions', fn: a => a.tier.includes('World Champion') || a.tier.includes('Pro Series') },
+    { label: '⭐ World Champs', fn: a => a.tier.includes('World Champion') || a.tier.includes('Pro Series') },
     { label: '🇳🇴 Norway Group', fn: a => a.country === 'NOR' },
     { label: '🇺🇸 Americans', fn: a => a.country === 'USA' },
     { label: '✅ Confirmed Data', fn: a => a.dataQuality === 'CONFIRMED' },
@@ -715,10 +748,12 @@ function renderProBlueprint() {
   filterDefs.forEach((f, i) => {
     const btn = document.createElement('button');
     btn.textContent = f.label;
-    btn.style.cssText = `padding:6px 14px;border-radius:20px;border:1.5px solid ${i===0?'#3b82f6':'#e2e8f0'};background:${i===0?'#3b82f6':'#fff'};color:${i===0?'#fff':'#475569'};font-size:0.8rem;cursor:pointer;font-weight:${i===0?'600':'400'};`;
+    const activeStyle = `padding:6px 14px;border-radius:20px;border:1.5px solid ${T.blue};background:${T.blueGlow};color:${T.blue};font-size:11px;cursor:pointer;font-weight:600;font-family:'DM Sans',sans-serif;`;
+    const inactiveStyle = `padding:6px 14px;border-radius:20px;border:1.5px solid ${T.border};background:${T.surface2};color:${T.textMid};font-size:11px;cursor:pointer;font-weight:400;font-family:'DM Sans',sans-serif;`;
+    btn.style.cssText = i === 0 ? activeStyle : inactiveStyle;
     btn.addEventListener('click', () => {
-      filterBar.querySelectorAll('button').forEach(b => { b.style.background='#fff'; b.style.color='#475569'; b.style.borderColor='#e2e8f0'; b.style.fontWeight='400'; });
-      btn.style.background='#3b82f6'; btn.style.color='#fff'; btn.style.borderColor='#3b82f6'; btn.style.fontWeight='600';
+      filterBar.querySelectorAll('button').forEach(b => b.style.cssText = inactiveStyle);
+      btn.style.cssText = activeStyle;
       grid.querySelectorAll('[data-athlete-id]').forEach(card => {
         const a = PRO_ATHLETES.find(x => x.id === card.dataset.athleteId);
         card.style.display = (a && f.fn(a)) ? '' : 'none';
@@ -727,24 +762,6 @@ function renderProBlueprint() {
     filterBar.appendChild(btn);
   });
   container.appendChild(filterBar);
-
-  // Stats banner
-  const banner = document.createElement('div');
-  banner.style.cssText = 'display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:0 20px 20px;';
-  const confirmed = PRO_ATHLETES.filter(a => a.dataQuality === 'CONFIRMED').length;
-  const totalWins = PRO_ATHLETES.reduce((s, a) => s + a.wins2025.length, 0);
-  [
-    { n: PRO_ATHLETES.length, l: 'Athletes' },
-    { n: confirmed, l: 'Confirmed' },
-    { n: totalWins, l: '2025 Wins' },
-    { n: 6, l: 'Nationalities' },
-  ].forEach(s => {
-    const d = document.createElement('div');
-    d.style.cssText = 'background:#eff6ff;border-radius:10px;padding:10px;text-align:center;';
-    d.innerHTML = `<div style="font-size:1.4rem;font-weight:700;color:#1d4ed8;">${s.n}</div><div style="font-size:0.75rem;color:#475569;">${s.l}</div>`;
-    banner.appendChild(d);
-  });
-  container.appendChild(banner);
 
   // Athlete grid
   const grid = document.createElement('div');
@@ -756,18 +773,21 @@ function renderProBlueprint() {
   // Session Matrix section
   const matSection = document.createElement('div');
   matSection.style.cssText = 'padding:28px 20px 16px;';
-  matSection.innerHTML = `<h3 style="font-size:1.1rem;font-weight:700;color:#1e293b;margin:0 0 4px;">🔑 Key Sessions Matrix</h3><p style="color:#64748b;font-size:0.82rem;margin:0 0 14px;">Cross-athlete session comparison — confirmed from sources</p>`;
+  matSection.innerHTML = `
+    <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:2px;color:${T.text};margin-bottom:4px;">🔑 KEY SESSIONS MATRIX</div>
+    <div style="color:${T.textDim};font-size:12px;margin-bottom:14px;">Cross-athlete session comparison — confirmed from sources</div>
+  `;
   const matGrid = document.createElement('div');
   matGrid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;';
   SESSION_MATRIX.forEach(s => {
     const c = document.createElement('div');
-    c.style.cssText = 'background:#fff;border:1.5px solid #e2e8f0;border-radius:12px;padding:14px;';
+    c.style.cssText = `background:${T.surface};border:1px solid ${T.border};border-radius:12px;padding:14px;`;
     c.innerHTML = `
-      <div style="font-weight:700;color:#1e293b;font-size:0.88rem;margin-bottom:4px;">${s.session}</div>
-      <div style="color:#3b82f6;font-size:0.76rem;margin-bottom:6px;">Used by: ${s.athletes.join(' · ')}</div>
-      <div style="color:#475569;font-size:0.8rem;line-height:1.45;margin-bottom:8px;">${s.detail}</div>
-      <div style="background:#eff6ff;border-radius:8px;padding:8px;font-size:0.78rem;color:#1d4ed8;"><strong>Why it works:</strong> ${s.benefit}</div>
-      <div style="margin-top:6px;"><span style="background:#f0fdf4;color:#16a34a;padding:2px 8px;border-radius:10px;font-size:0.72rem;">⏱ ${s.frequency}</span></div>
+      <div style="font-weight:700;color:${T.text};font-size:0.88rem;margin-bottom:4px;">${s.session}</div>
+      <div style="color:${T.blue};font-size:0.76rem;margin-bottom:6px;font-family:'DM Mono',monospace;">Used by: ${s.athletes.join(' · ')}</div>
+      <div style="color:${T.textMid};font-size:0.8rem;line-height:1.45;margin-bottom:8px;">${s.detail}</div>
+      <div style="background:${T.greenDim};border:1px solid rgba(0,230,118,.2);border-radius:8px;padding:8px;font-size:0.78rem;color:${T.green};"><strong>Why it works:</strong> ${s.benefit}</div>
+      <div style="margin-top:6px;"><span style="background:${T.surface2};color:${T.textMid};padding:2px 8px;border-radius:10px;font-size:0.72rem;border:1px solid ${T.border};">⏱ ${s.frequency}</span></div>
     `;
     matGrid.appendChild(c);
   });
@@ -778,25 +798,25 @@ function renderProBlueprint() {
   const aiSection = document.createElement('div');
   aiSection.style.cssText = 'padding:16px 20px 40px;';
   aiSection.innerHTML = `
-    <h3 style="font-size:1.1rem;font-weight:700;color:#1e293b;margin:0 0 4px;">🤖 AI Pro Insights</h3>
-    <p style="color:#64748b;font-size:0.82rem;margin:0 0 14px;">Ask Claude to analyse, compare, and apply pro training to your racing</p>
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin-bottom:14px;">
+    <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:2px;color:${T.text};margin-bottom:4px;">🤖 AI PRO INSIGHTS</div>
+    <div style="color:${T.textDim};font-size:12px;margin-bottom:14px;">Ask Claude to analyse, compare, and apply pro training to your racing</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:14px;">
       ${[
         {icon:'🎯',label:'Athlete Match',p:'Which of these 14 pro athletes does my triathlon profile most closely resemble, and what are the top 3 things I can learn from their specific approach?'},
         {icon:'📋',label:'Build My Week',p:'Using the training patterns of the pro athletes above, design me a complete training week scaled to a 12-hour/week age-group triathlete preparing for a 70.3.'},
-        {icon:'📊',label:'Volume Gap',p:'Analyse how a typical 12-hour/week age-group athlete\'s training volume compares to these pros, and where the most impactful gaps are.'},
+        {icon:'📊',label:'Volume Gap',p:"Analyse how a typical 12-hour/week age-group athlete's training volume compares to these pros, and where the most impactful gaps are."},
         {icon:'🍌',label:'Race Nutrition',p:'Explain the race nutrition strategies used by Stornes (180g/hr), Sam Long (310g/hr on bike), and Geens in simple terms and how I can apply them to my next 70.3.'},
         {icon:'😴',label:'Recovery Plan',p:'Design a weekly recovery schedule using what these pros actually do: sleep hours, taper structure, rest day activities, and post-session protocols.'},
         {icon:'🔍',label:'Limiter Fix',p:'Based on the pro data above, help me understand which of the three disciplines is most likely to be my limiter and how pros attack that weakness.'},
       ].map(b => `
-        <button onclick="runProBlueprintAI('${b.p.replace(/'/g,'\\\'')}')" style="background:#fff;border:1.5px solid #e2e8f0;border-radius:12px;padding:14px 12px;cursor:pointer;text-align:left;transition:all 0.15s;">
+        <button onclick="runProBlueprintAI('${b.p.replace(/'/g,"\\'")}') " style="background:${T.surface};border:1px solid ${T.border};border-radius:12px;padding:14px 12px;cursor:pointer;text-align:left;transition:all 0.15s;" onmouseover="this.style.borderColor='${T.blue}'" onmouseout="this.style.borderColor='${T.border}'">
           <div style="font-size:1.3rem;margin-bottom:5px;">${b.icon}</div>
-          <div style="font-weight:600;color:#1e293b;font-size:0.82rem;">${b.label}</div>
+          <div style="font-weight:600;color:${T.text};font-size:0.82rem;">${b.label}</div>
         </button>
       `).join('')}
     </div>
-    <div id="pb-ai-output" style="display:none;background:#fff;border:1.5px solid #e2e8f0;border-radius:12px;padding:16px;">
-      <div id="pb-ai-text" style="color:#1e293b;font-size:0.88rem;line-height:1.65;white-space:pre-wrap;"></div>
+    <div id="pb-ai-output" style="display:none;background:${T.surface};border:1px solid ${T.border};border-radius:12px;padding:16px;">
+      <div id="pb-ai-text" style="color:${T.text};font-size:0.88rem;line-height:1.65;white-space:pre-wrap;"></div>
     </div>
   `;
   container.appendChild(aiSection);
@@ -805,7 +825,7 @@ function renderProBlueprint() {
   if (!document.getElementById('pb-modal-overlay')) {
     const ov = document.createElement('div');
     ov.id = 'pb-modal-overlay';
-    ov.style.cssText = 'display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.55);z-index:1000;overflow-y:auto;padding:20px;box-sizing:border-box;';
+    ov.style.cssText = `display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.75);z-index:1000;overflow-y:auto;padding:20px;box-sizing:border-box;`;
     ov.addEventListener('click', e => { if(e.target===ov) closePBModal(); });
     document.body.appendChild(ov);
   }
@@ -816,33 +836,31 @@ function renderProBlueprint() {
 // ─────────────────────────────────────────────────────────────
 function buildAthleteCard(a) {
   const card = document.createElement('div');
-  card.style.cssText = 'background:#fff;border:1.5px solid #e2e8f0;border-radius:14px;padding:16px;transition:all 0.2s;';
+  card.style.cssText = `background:${T.surface};border:1px solid ${T.border};border-radius:14px;padding:16px;transition:all 0.2s;cursor:pointer;`;
   card.dataset.athleteId = a.id;
-  const badgeBg = a.dataQuality === 'CONFIRMED' ? '#f0fdf4' : '#fefce8';
-  const badgeBorder = a.dataQuality === 'CONFIRMED' ? '#86efac' : '#fde047';
-  const badgeLabel = a.dataQuality === 'CONFIRMED' ? '✅ Verified' : '⚠ Moderate';
+  const verified = a.dataQuality === 'CONFIRMED';
   card.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
       <div>
         <div style="font-size:1.5rem;">${a.flag}</div>
-        <div style="font-weight:700;color:#1e293b;font-size:0.98rem;margin-top:2px;">${a.name}</div>
-        <div style="color:#94a3b8;font-size:0.75rem;">${a.country} · Age ${a.age} · ${a.base}</div>
+        <div style="font-weight:700;color:${T.text};font-size:0.98rem;margin-top:2px;">${a.name}</div>
+        <div style="color:${T.textDim};font-size:11px;font-family:'DM Mono',monospace;">${a.country} · Age ${a.age}</div>
       </div>
-      <span style="background:${badgeBg};border:1px solid ${badgeBorder};padding:2px 8px;border-radius:10px;font-size:0.7rem;color:#374151;white-space:nowrap;">${badgeLabel}</span>
+      <span style="background:${verified ? T.greenDim : T.orangeDim};border:1px solid ${verified ? 'rgba(0,230,118,.3)' : 'rgba(255,152,0,.3)'};padding:2px 8px;border-radius:10px;font-size:10px;color:${verified ? T.green : T.orange};white-space:nowrap;">${verified ? '✅ Verified' : '⚠ Moderate'}</span>
     </div>
-    <div style="font-size:0.76rem;color:#7c3aed;font-weight:600;margin-bottom:8px;">${a.tier}</div>
+    <div style="font-size:11px;color:${T.purple};font-weight:600;margin-bottom:8px;">${a.tier}</div>
     <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;">
-      <span style="background:#eff6ff;color:#1d4ed8;padding:3px 8px;border-radius:8px;font-size:0.73rem;">🏆 ${a.wins2025.length} win${a.wins2025.length!==1?'s':''}</span>
-      <span style="background:#f5f3ff;color:#6d28d9;padding:3px 8px;border-radius:8px;font-size:0.73rem;">🎖 ${a.podiums2025.length} podiums</span>
+      <span style="background:${T.blueGlow};color:${T.blue};padding:3px 8px;border-radius:8px;font-size:11px;border:1px solid rgba(33,150,243,.2);">🏆 ${a.wins2025.length} win${a.wins2025.length!==1?'s':''}</span>
+      <span style="background:rgba(206,147,216,.08);color:${T.purple};padding:3px 8px;border-radius:8px;font-size:11px;border:1px solid rgba(206,147,216,.2);">🎖 ${a.podiums2025.length} podiums</span>
     </div>
-    <div style="background:#f8fafc;border-radius:8px;padding:8px;margin-bottom:10px;font-size:0.78rem;color:#475569;line-height:1.5;">
-      <strong>Peak week:</strong> ${a.keyStats.peakWeekHours || '—'}<br>
-      <strong>Coach:</strong> ${a.coach}
+    <div style="background:${T.surface2};border-radius:8px;padding:8px;margin-bottom:10px;font-size:11px;color:${T.textMid};line-height:1.5;border:1px solid ${T.border};">
+      <span style="color:${T.textDim};">Peak week:</span> <span style="color:${T.text};">${a.keyStats.peakWeekHours || '—'}</span><br>
+      <span style="color:${T.textDim};">Coach:</span> <span style="color:${T.text};">${a.coach}</span>
     </div>
-    <button onclick="openPBModal('${a.id}')" style="width:100%;background:#3b82f6;color:#fff;border:none;border-radius:8px;padding:9px;font-size:0.84rem;font-weight:600;cursor:pointer;">View Full Blueprint →</button>
+    <button onclick="openPBModal('${a.id}')" style="width:100%;background:${T.blue};color:#fff;border:none;border-radius:8px;padding:9px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;letter-spacing:.03em;">View Full Blueprint →</button>
   `;
-  card.addEventListener('mouseenter', () => { card.style.borderColor='#3b82f6'; card.style.transform='translateY(-2px)'; card.style.boxShadow='0 4px 16px rgba(59,130,246,0.15)'; });
-  card.addEventListener('mouseleave', () => { card.style.borderColor='#e2e8f0'; card.style.transform=''; card.style.boxShadow=''; });
+  card.addEventListener('mouseenter', () => { card.style.borderColor=T.blue; card.style.transform='translateY(-2px)'; card.style.boxShadow=`0 4px 20px ${T.blueGlow}`; });
+  card.addEventListener('mouseleave', () => { card.style.borderColor=T.border; card.style.transform=''; card.style.boxShadow=''; });
   return card;
 }
 
@@ -858,23 +876,23 @@ function openPBModal(athleteId) {
   overlay.style.display = 'block';
 
   const modal = document.createElement('div');
-  modal.style.cssText = 'background:#fff;border-radius:16px;max-width:820px;margin:0 auto;overflow:hidden;';
+  modal.style.cssText = `background:${T.surface};border:1px solid ${T.border2};border-radius:16px;max-width:820px;margin:0 auto;overflow:hidden;`;
 
   // Header
   const mh = document.createElement('div');
-  mh.style.cssText = 'background:linear-gradient(135deg,#1e40af,#3b82f6);color:#fff;padding:20px 24px;';
+  mh.style.cssText = `background:linear-gradient(135deg,#0d2137,${T.surface2});border-bottom:1px solid ${T.border2};color:${T.text};padding:20px 24px;`;
   mh.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:flex-start;">
       <div>
         <div style="font-size:2rem;">${a.flag}</div>
-        <div style="font-size:1.35rem;font-weight:700;margin-top:4px;">${a.name}</div>
-        <div style="opacity:0.85;font-size:0.82rem;margin-top:2px;">${a.tier} · ${a.base}</div>
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:2px;color:${T.text};margin-top:4px;">${a.name}</div>
+        <div style="color:${T.textDim};font-size:11px;margin-top:2px;">${a.tier} · ${a.base}</div>
       </div>
-      <button onclick="closePBModal()" style="background:rgba(255,255,255,0.2);border:none;color:#fff;width:34px;height:34px;border-radius:50%;cursor:pointer;font-size:1.2rem;line-height:1;">×</button>
+      <button onclick="closePBModal()" style="background:${T.surface3};border:1px solid ${T.border};color:${T.text};width:34px;height:34px;border-radius:50%;cursor:pointer;font-size:1.2rem;line-height:1;">×</button>
     </div>
     <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
-      ${a.wins2025.map(w=>`<span style="background:rgba(255,255,255,0.2);padding:3px 10px;border-radius:10px;font-size:0.76rem;">🏆 ${w}</span>`).join('')}
-      <span style="background:rgba(255,255,255,0.15);padding:3px 10px;border-radius:10px;font-size:0.76rem;">Coach: ${a.coach}</span>
+      ${a.wins2025.map(w=>`<span style="background:${T.blueGlow};border:1px solid rgba(33,150,243,.25);color:${T.blue};padding:3px 10px;border-radius:10px;font-size:11px;">🏆 ${w}</span>`).join('')}
+      <span style="background:${T.surface3};border:1px solid ${T.border};color:${T.textMid};padding:3px 10px;border-radius:10px;font-size:11px;">Coach: ${a.coach}</span>
     </div>
   `;
   modal.appendChild(mh);
@@ -882,18 +900,22 @@ function openPBModal(athleteId) {
   // Tabs
   const TABS = ['Overview', 'Week Structure', 'Key Sessions', 'Nutrition & Recovery', 'Race Data', '🤖 AI'];
   const tabBar = document.createElement('div');
-  tabBar.style.cssText = 'display:flex;overflow-x:auto;border-bottom:1px solid #e2e8f0;background:#f8fafc;';
+  tabBar.style.cssText = `display:flex;overflow-x:auto;border-bottom:1px solid ${T.border};background:${T.surface2};`;
   const content = document.createElement('div');
-  content.style.cssText = 'padding:20px 24px;max-height:62vh;overflow-y:auto;';
+  content.style.cssText = `padding:20px 24px;max-height:62vh;overflow-y:auto;background:${T.surface};`;
+
+  const activeTabStyle  = `padding:11px 15px;border:none;cursor:pointer;font-size:11px;white-space:nowrap;background:${T.surface};color:${T.blue};font-weight:700;border-bottom:2px solid ${T.blue};font-family:'DM Sans',sans-serif;`;
+  const inactiveTabStyle = `padding:11px 15px;border:none;cursor:pointer;font-size:11px;white-space:nowrap;background:transparent;color:${T.textDim};font-weight:400;border-bottom:2px solid transparent;font-family:'DM Sans',sans-serif;`;
 
   TABS.forEach((t, i) => {
     const tb = document.createElement('button');
     tb.textContent = t;
-    const active = () => { tb.style.background='#fff'; tb.style.color='#1d4ed8'; tb.style.fontWeight='700'; tb.style.borderBottom='2px solid #3b82f6'; };
-    const inactive = () => { tb.style.background='transparent'; tb.style.color='#64748b'; tb.style.fontWeight='400'; tb.style.borderBottom='2px solid transparent'; };
-    tb.style.cssText = `padding:11px 15px;border:none;cursor:pointer;font-size:0.8rem;white-space:nowrap;`;
-    if (i===0) active(); else inactive();
-    tb.addEventListener('click', () => { tabBar.querySelectorAll('button').forEach(inactive); active(); renderModalTab(content, a, t); });
+    tb.style.cssText = i === 0 ? activeTabStyle : inactiveTabStyle;
+    tb.addEventListener('click', () => {
+      tabBar.querySelectorAll('button').forEach(b => b.style.cssText = inactiveTabStyle);
+      tb.style.cssText = activeTabStyle;
+      renderModalTab(content, a, t);
+    });
     tabBar.appendChild(tb);
   });
   modal.appendChild(tabBar);
@@ -911,36 +933,53 @@ function renderModalTab(content, a, tab) {
   content.innerHTML = '';
 
   if (tab === 'Overview') {
-    content.innerHTML = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
-      ${Object.entries(a.keyStats).map(([k,v])=>`<div style="background:#f8fafc;border-radius:8px;padding:11px;"><div style="font-size:0.7rem;color:#94a3b8;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:2px;">${k.replace(/([A-Z])/g,' $1').trim()}</div><div style="font-weight:600;color:#1e293b;font-size:0.86rem;line-height:1.4;">${v}</div></div>`).join('')}
-    </div>
-    <div style="background:#f0fdf4;border-radius:8px;padding:12px;"><div style="font-weight:700;color:#15803d;margin-bottom:4px;">📚 Data Source</div><div style="font-size:0.84rem;color:#374151;">${a.source}</div></div>`;
+    const grid = document.createElement('div');
+    grid.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;';
+    Object.entries(a.keyStats).forEach(([k,v]) => {
+      const cell = document.createElement('div');
+      cell.style.cssText = `background:${T.surface2};border:1px solid ${T.border};border-radius:8px;padding:11px;`;
+      cell.innerHTML = `<div style="font-size:10px;color:${T.textDim};text-transform:uppercase;letter-spacing:0.06em;margin-bottom:3px;font-family:'DM Mono',monospace;">${k.replace(/([A-Z])/g,' $1').trim()}</div><div style="font-weight:600;color:${T.text};font-size:0.85rem;line-height:1.4;">${v}</div>`;
+      grid.appendChild(cell);
+    });
+    content.appendChild(grid);
+    const src = document.createElement('div');
+    src.style.cssText = `background:${T.greenDim};border:1px solid rgba(0,230,118,.2);border-radius:8px;padding:12px;`;
+    src.innerHTML = `<div style="font-weight:700;color:${T.green};margin-bottom:4px;font-size:11px;font-family:'DM Mono',monospace;letter-spacing:1px;">📚 DATA SOURCE</div><div style="font-size:12px;color:${T.textMid};">${a.source}</div>`;
+    content.appendChild(src);
   }
 
   else if (tab === 'Week Structure') {
-    const days = [{k:'mon',l:'Monday'},{k:'tue',l:'Tuesday'},{k:'wed',l:'Wednesday'},{k:'thu',l:'Thursday'},{k:'fri',l:'Friday'},{k:'sat',l:'Saturday'},{k:'sun',l:'Sunday'}];
-    const wrap = document.createElement('div');
-    wrap.innerHTML = `<p style="font-size:0.78rem;color:#64748b;margin:0 0 12px;">Typical training week — from ${a.source}</p>`;
+    const days = [{k:'mon',l:'Mon'},{k:'tue',l:'Tue'},{k:'wed',l:'Wed'},{k:'thu',l:'Thu'},{k:'fri',l:'Fri'},{k:'sat',l:'Sat'},{k:'sun',l:'Sun'}];
+    const note = document.createElement('div');
+    note.style.cssText = `font-size:11px;color:${T.textDim};margin:0 0 12px;`;
+    note.textContent = `Typical training week — from ${a.source}`;
+    content.appendChild(note);
     days.forEach(d => {
       const day = a.weekStructure[d.k];
       if (!day) return;
-      const sessions = [day.swim?`🏊 ${day.swim}`:null, day.bike?`🚴 ${day.bike}`:null, day.run?`🏃 ${day.run}`:null].filter(Boolean);
+      const sessions = [
+        day.swim ? `🏊 ${day.swim}` : null,
+        day.bike ? `🚴 ${day.bike}` : null,
+        day.run  ? `🏃 ${day.run}`  : null,
+      ].filter(Boolean);
       const row = document.createElement('div');
       row.style.cssText = 'display:flex;gap:12px;align-items:flex-start;margin-bottom:10px;';
-      row.innerHTML = `<div style="min-width:88px;font-weight:700;color:#1e293b;font-size:0.83rem;padding-top:3px;">${d.l}</div>
-        <div style="flex:1;">${sessions.length?sessions.map(s=>`<div style="background:#f8fafc;border-radius:6px;padding:6px 10px;font-size:0.8rem;color:#334155;margin-bottom:4px;line-height:1.4;">${s}</div>`).join(''):'<div style="color:#94a3b8;font-size:0.8rem;padding:6px 10px;">Rest / Recovery only</div>'}</div>`;
-      wrap.appendChild(row);
+      row.innerHTML = `<div style="min-width:34px;font-family:'DM Mono',monospace;font-size:10px;color:${T.blue};padding-top:7px;letter-spacing:1px;">${d.l}</div>
+        <div style="flex:1;">${sessions.length
+          ? sessions.map(s=>`<div style="background:${T.surface2};border:1px solid ${T.border};border-radius:6px;padding:6px 10px;font-size:11px;color:${T.textMid};margin-bottom:4px;line-height:1.4;">${s}</div>`).join('')
+          : `<div style="color:${T.textDim};font-size:11px;padding:6px 10px;">Rest / Recovery only</div>`
+        }</div>`;
+      content.appendChild(row);
     });
-    content.appendChild(wrap);
   }
 
   else if (tab === 'Key Sessions') {
     a.keySessions.forEach(s => {
       const card = document.createElement('div');
-      card.style.cssText = 'background:#fff;border:1.5px solid #e2e8f0;border-radius:10px;padding:14px;margin-bottom:10px;';
-      card.innerHTML = `<div style="font-weight:700;color:#1e293b;margin-bottom:6px;">🎯 ${s.name}</div>
-        <div style="color:#475569;font-size:0.84rem;line-height:1.5;margin-bottom:10px;">${s.detail}</div>
-        <button onclick="scaleSession('${a.id}','${encodeURIComponent(s.name)}','${encodeURIComponent(s.detail)}')" style="background:#7c3aed;color:#fff;border:none;border-radius:6px;padding:7px 14px;font-size:0.8rem;font-weight:600;cursor:pointer;">⚡ Scale to My Fitness</button>`;
+      card.style.cssText = `background:${T.surface2};border:1px solid ${T.border};border-radius:10px;padding:14px;margin-bottom:10px;`;
+      card.innerHTML = `<div style="font-weight:700;color:${T.text};margin-bottom:6px;font-size:13px;">🎯 ${s.name}</div>
+        <div style="color:${T.textMid};font-size:12px;line-height:1.5;margin-bottom:10px;">${s.detail}</div>
+        <button onclick="scaleSession('${a.id}','${encodeURIComponent(s.name)}','${encodeURIComponent(s.detail)}')" style="background:rgba(206,147,216,.15);color:${T.purple};border:1px solid rgba(206,147,216,.3);border-radius:6px;padding:7px 14px;font-size:11px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;">⚡ Scale to My Fitness</button>`;
       content.appendChild(card);
     });
   }
@@ -949,26 +988,29 @@ function renderModalTab(content, a, tab) {
     [['🍌 Nutrition', a.nutrition], ['😴 Recovery & Sleep', a.recovery], ['🧬 Physiology', a.physiology]].forEach(([label, data]) => {
       const block = document.createElement('div');
       block.style.cssText = 'margin-bottom:16px;';
-      block.innerHTML = `<div style="font-weight:700;color:#1e293b;margin-bottom:8px;">${label}</div>`;
+      block.innerHTML = `<div style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:2px;color:${T.textDim};text-transform:uppercase;margin-bottom:8px;">${label}</div>`;
       Object.entries(data).forEach(([k,v]) => {
-        block.innerHTML += `<div style="background:#f8fafc;border-radius:8px;padding:10px;margin-bottom:6px;"><div style="font-size:0.7rem;color:#94a3b8;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:3px;">${k.replace(/([A-Z])/g,' $1').trim()}</div><div style="color:#1e293b;font-size:0.83rem;line-height:1.5;">${v}</div></div>`;
+        block.innerHTML += `<div style="background:${T.surface2};border:1px solid ${T.border};border-radius:8px;padding:10px;margin-bottom:6px;"><div style="font-size:10px;color:${T.textDim};text-transform:uppercase;letter-spacing:0.06em;margin-bottom:3px;font-family:'DM Mono',monospace;">${k.replace(/([A-Z])/g,' $1').trim()}</div><div style="color:${T.text};font-size:12px;line-height:1.5;">${v}</div></div>`;
       });
       content.appendChild(block);
     });
   }
 
   else if (tab === 'Race Data') {
-    if (!a.raceData2025?.length) { content.innerHTML = '<p style="color:#64748b;">No confirmed 2025 race splits available.</p>'; return; }
+    if (!a.raceData2025?.length) {
+      content.innerHTML = `<p style="color:${T.textDim};">No confirmed 2025 race splits available.</p>`;
+      return;
+    }
     const t = document.createElement('table');
-    t.style.cssText = 'width:100%;border-collapse:collapse;font-size:0.8rem;';
-    t.innerHTML = `<thead><tr style="background:#f1f5f9;">${['Race','Pos','Swim','Bike','Run','Total'].map(h=>`<th style="text-align:${h==='Race'?'left':'center'};padding:8px 10px;color:#475569;font-weight:600;">${h}</th>`).join('')}</tr></thead>
-      <tbody>${a.raceData2025.map(r=>`<tr style="border-bottom:1px solid #f1f5f9;">
-        <td style="padding:8px 10px;font-weight:600;color:#1e293b;">${r.race}</td>
-        <td style="padding:8px;text-align:center;font-weight:700;color:${r.pos===1?'#16a34a':r.pos===2?'#ea580c':r.pos===3?'#b45309':'#475569'};">${r.pos===1?'🥇':r.pos===2?'🥈':r.pos===3?'🥉':r.pos}</td>
-        <td style="padding:8px;text-align:center;color:#475569;">${r.swim||'—'}</td>
-        <td style="padding:8px;text-align:center;color:#475569;">${r.bike||'—'}</td>
-        <td style="padding:8px;text-align:center;color:#475569;">${r.run||'—'}</td>
-        <td style="padding:8px;text-align:center;font-weight:600;color:#1e293b;">${r.total||'—'}</td>
+    t.style.cssText = 'width:100%;border-collapse:collapse;font-size:12px;';
+    t.innerHTML = `<thead><tr style="background:${T.surface2};">${['Race','Pos','Swim','Bike','Run','Total'].map(h=>`<th style="text-align:${h==='Race'?'left':'center'};padding:8px 10px;color:${T.textDim};font-weight:600;font-family:'DM Mono',monospace;font-size:10px;letter-spacing:1px;">${h.toUpperCase()}</th>`).join('')}</tr></thead>
+      <tbody>${a.raceData2025.map(r=>`<tr style="border-bottom:1px solid ${T.border};">
+        <td style="padding:8px 10px;font-weight:600;color:${T.text};">${r.race}</td>
+        <td style="padding:8px;text-align:center;font-weight:700;color:${r.pos===1?T.green:r.pos===2?T.orange:r.pos===3?T.yellow:T.textMid};">${r.pos===1?'🥇':r.pos===2?'🥈':r.pos===3?'🥉':r.pos}</td>
+        <td style="padding:8px;text-align:center;color:${T.textMid};">${r.swim||'—'}</td>
+        <td style="padding:8px;text-align:center;color:${T.textMid};">${r.bike||'—'}</td>
+        <td style="padding:8px;text-align:center;color:${T.textMid};">${r.run||'—'}</td>
+        <td style="padding:8px;text-align:center;font-weight:600;color:${T.cyan};">${r.total||'—'}</td>
       </tr>`).join('')}</tbody>`;
     content.appendChild(t);
   }
@@ -981,10 +1023,10 @@ function renderModalTab(content, a, tab) {
         {icon:'📋',label:'Scale Sessions',p:`Take ${a.name}'s key sessions and scale them to a 12-hour/week age-group triathlete. Give specific numbers.`},
         {icon:'🍌',label:'Nutrition Copy',p:`Explain ${a.name}'s race nutrition strategy in practical terms and exactly how an age-grouper can apply it.`},
         {icon:'😴',label:'Recovery Lessons',p:`What are the top 3 recovery lessons from ${a.name}'s approach that I should implement this week?`},
-      ].map(b=>`<button onclick="runProBlueprintAI('${b.p.replace(/'/g,"\\'")}','${a.id}')" style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:10px;padding:12px;cursor:pointer;text-align:left;"><div style="font-size:1.1rem;">${b.icon}</div><div style="font-weight:600;color:#1e293b;font-size:0.8rem;margin-top:4px;">${b.label}</div></button>`).join('')}
+      ].map(b=>`<button onclick="runProBlueprintAI('${b.p.replace(/'/g,"\\'")}','${a.id}')" style="background:${T.surface2};border:1px solid ${T.border};border-radius:10px;padding:12px;cursor:pointer;text-align:left;" onmouseover="this.style.borderColor='${T.blue}'" onmouseout="this.style.borderColor='${T.border}'"><div style="font-size:1.1rem;">${b.icon}</div><div style="font-weight:600;color:${T.text};font-size:11px;margin-top:4px;">${b.label}</div></button>`).join('')}
     </div>
-    <div id="pb-modal-ai-output" style="display:none;background:#f0fdf4;border-radius:10px;padding:14px;">
-      <div id="pb-modal-ai-text" style="color:#1e293b;font-size:0.84rem;line-height:1.65;white-space:pre-wrap;"></div>
+    <div id="pb-modal-ai-output" style="display:none;background:${T.greenDim};border:1px solid rgba(0,230,118,.2);border-radius:10px;padding:14px;">
+      <div id="pb-modal-ai-text" style="color:${T.text};font-size:12px;line-height:1.65;white-space:pre-wrap;"></div>
     </div>`;
     content.appendChild(wrap);
   }
@@ -995,8 +1037,8 @@ function renderModalTab(content, a, tab) {
 // ─────────────────────────────────────────────────────────────
 async function runProBlueprintAI(prompt, athleteId) {
   const inModal = document.getElementById('pb-modal-overlay')?.style.display !== 'none';
-  const outBox = inModal ? document.getElementById('pb-modal-ai-output') : document.getElementById('pb-ai-output');
-  const outText = inModal ? document.getElementById('pb-modal-ai-text') : document.getElementById('pb-ai-text');
+  const outBox  = inModal ? document.getElementById('pb-modal-ai-output') : document.getElementById('pb-ai-output');
+  const outText = inModal ? document.getElementById('pb-modal-ai-text')   : document.getElementById('pb-ai-text');
   if (!outBox || !outText) return;
   outBox.style.display = 'block';
   outText.textContent = '⏳ Generating insights...';
@@ -1026,12 +1068,12 @@ async function runProBlueprintAI(prompt, athleteId) {
 }
 
 async function scaleSession(athleteId, nameEnc, detailEnc) {
-  const sessionName = decodeURIComponent(nameEnc);
+  const sessionName   = decodeURIComponent(nameEnc);
   const sessionDetail = decodeURIComponent(detailEnc);
   const a = PRO_ATHLETES.find(x => x.id === athleteId);
   const prompt = `Scale this pro session from ${a?.name || 'a pro triathlete'} to an age-group athlete:\n\nSession: ${sessionName}\nDetail: ${sessionDetail}\n\nProvide:\n1. The scaled version for someone training 12h/week\n2. Specific targets: pace (assume ~4:50/km run threshold, ~240W bike threshold)\n3. The key purpose\n4. Common mistakes to avoid`;
 
-  const outBox = document.getElementById('pb-modal-ai-output');
+  const outBox  = document.getElementById('pb-modal-ai-output');
   const outText = document.getElementById('pb-modal-ai-text');
   if (!outBox || !outText) return;
   outBox.style.display = 'block';
@@ -1044,7 +1086,7 @@ async function scaleSession(athleteId, nameEnc, detailEnc) {
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
         max_tokens: 700,
-        system: 'You are TriCoach\'s session scaling AI. Take elite pro sessions and make them practical for age-group athletes. Be specific with numbers and pacing. Keep it concise and actionable.',
+        system: "You are TriCoach's session scaling AI. Take elite pro sessions and make them practical for age-group athletes. Be specific with numbers and pacing. Keep it concise and actionable.",
         messages: [{ role: 'user', content: prompt }],
       }),
     });
