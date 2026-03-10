@@ -136,6 +136,7 @@
         <div class="metric o"><div class="mlb">Sleep Score</div><div class="mv" id="d-sleep-v">—</div><div class="ms" id="d-sleep-s">Target 88+</div></div>
         <div class="metric p"><div class="mlb">Garmin Stress</div><div class="mv" id="d-stress-v">—</div><div class="ms">Yesterday's score</div></div>
       </div>
+      <div style="font-size:10px;margin-bottom:8px;margin-top:-6px;"><span id="d-health-date" style="color:var(--text-dim);">No morning check yet today</span> <span style="color:var(--text-dim);cursor:pointer;" onclick="nav('morning')">→ Log check</span></div>
       <!-- Planner Strava week totals -->
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;" id="d-strava-totals">
         <div style="background:var(--surface2);border-radius:7px;padding:8px 10px;text-align:center;">
@@ -252,6 +253,24 @@
       </div>
     </div>
   </div>
+</div>
+
+<!-- ===== RACE PREDICTOR MINI (Dashboard) ===== -->
+<div class="card" id="d-race-pred-card" style="margin-bottom:14px;">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+    <div>
+      <div class="sl">🎯 Race Time Predictor</div>
+      <div style="font-size:10px;color:var(--text-dim);">Calculated from your Strava training data</div>
+    </div>
+    <button class="btn sec sml" onclick="nav('performance');setTimeout(()=>switchPT('predictor'),100)">Full View →</button>
+  </div>
+  <div id="d-race-pred-mini" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;">
+    <div style="background:var(--surface2);border-radius:8px;padding:10px;text-align:center;"><div style="font-size:18px;">🏃</div><div style="font-size:10px;color:var(--text-dim);margin-bottom:4px;">Sprint</div><div style="font-family:'Bebas Neue',sans-serif;font-size:20px;color:var(--text-dim);" id="d-pred-sprint">—</div></div>
+    <div style="background:var(--surface2);border-radius:8px;padding:10px;text-align:center;"><div style="font-size:18px;">🏅</div><div style="font-size:10px;color:var(--text-dim);margin-bottom:4px;">Olympic</div><div style="font-family:'Bebas Neue',sans-serif;font-size:20px;color:var(--text-dim);" id="d-pred-olympic">—</div></div>
+    <div style="background:var(--surface2);border-radius:8px;padding:10px;text-align:center;border:1px solid rgba(0,230,118,.2);"><div style="font-size:18px;">🥇</div><div style="font-size:10px;color:var(--green);margin-bottom:4px;font-weight:600;">70.3 Half IM</div><div style="font-family:'Bebas Neue',sans-serif;font-size:20px;color:var(--green);" id="d-pred-703">—</div></div>
+    <div style="background:var(--surface2);border-radius:8px;padding:10px;text-align:center;"><div style="font-size:18px;">🏆</div><div style="font-size:10px;color:var(--text-dim);margin-bottom:4px;">Full IM</div><div style="font-family:'Bebas Neue',sans-serif;font-size:20px;color:var(--text-dim);" id="d-pred-ironman">—</div></div>
+  </div>
+  <div id="d-pred-confidence" style="margin-top:8px;font-size:10px;color:var(--text-dim);text-align:center;"></div>
 </div>
 
 <!-- ===== PLANNER ===== -->
@@ -563,7 +582,7 @@
             <div style="font-size:9px;" id="ci-hrv-trend"></div>
           </div>
           <div style="background:var(--surface2);border-radius:8px;padding:10px;text-align:center;">
-            <div style="font-size:9px;color:var(--text-dim);letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;">Sleep Avg</div>
+            <div style="font-size:9px;color:var(--text-dim);letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;">Sleep Score</div>
             <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;" id="ci-sleep-display">—</div>
             <div style="font-size:9px;" id="ci-sleep-trend"></div>
           </div>
@@ -756,14 +775,32 @@
 <!-- ===== PERFORMANCE ANALYSIS ===== -->
 <div id="page-performance" class="page">
   <div class="pt">PERFORMANCE</div>
-  <div class="ps">346 Strava activities · Feb 2021 – Mar 2026 · 217 runs · 89 rides · 40 swims</div>
+  <div class="ps" id="perf-subtitle">346 Strava activities · Feb 2021 – Mar 2026 · 217 runs · 89 rides · 40 swims</div>
   <div style="display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap;">
+    <button class="btn sec" id="pt-overview" onclick="switchPT('overview')">🧠 AI Overview</button>
     <button class="btn" id="pt-run" onclick="switchPT('run')">🏃 Run</button>
     <button class="btn sec" id="pt-bike" onclick="switchPT('bike')">🚴 Bike</button>
     <button class="btn sec" id="pt-swim" onclick="switchPT('swim')">🏊 Swim</button>
     <button class="btn sec" id="pt-volume" onclick="switchPT('volume')">📊 Volume</button>
+    <button class="btn sec" id="pt-trends" onclick="switchPT('trends')">📈 Trends</button>
     <button class="btn sec" id="pt-autopb" onclick="switchPT('autopb')">🏅 Auto PBs</button>
     <button id="pt-predictor" onclick="switchPT('predictor')" style="background:transparent;border:1px solid var(--green);border-radius:7px;color:var(--green);cursor:pointer;font-family:'DM Sans',sans-serif;font-size:12px;font-weight:700;padding:9px 18px;transition:all .15s;letter-spacing:.5px;">🎯 Race Predictor</button>
+  </div>
+
+  <!-- OVERVIEW AI -->
+  <div id="pv-overview" style="display:none;">
+    <div id="pv-overview-content">
+      <div class="card" style="text-align:center;padding:32px;"><div style="font-size:32px;margin-bottom:12px;">🧠</div><div style="font-family:'Bebas Neue',sans-serif;font-size:18px;color:var(--text-dim);">Loading AI Performance Analysis…</div></div>
+    </div>
+  </div>
+
+  <!-- TRENDS (links to dedicated Trends tab) -->
+  <div id="pv-trends" style="display:none;">
+    <div class="card" style="padding:32px;text-align:center;">
+      <div style="font-size:32px;margin-bottom:12px;">📈</div>
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:18px;margin-bottom:8px;">Opening Trends & Charts…</div>
+      <div style="font-size:11px;color:var(--text-dim);">If not redirected, <span style="color:var(--blue);cursor:pointer;" onclick="nav('trends')">click here</span></div>
+    </div>
   </div>
 
   <!-- RUN -->

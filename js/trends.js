@@ -495,27 +495,35 @@ function autoFillCI() {
     hrvTrend.textContent = 'No morning data';
   }
 
-  // Sleep display
+  // Sleep display — primary metric is Sleep Score (not hours)
   const sleepEl = document.getElementById('ci-sleep-display');
   const sleepTrend = document.getElementById('ci-sleep-trend');
   const sleepAuto = document.getElementById('ci-sleep-autotext');
-  if(thisSleep) {
-    sleepEl.textContent = thisSleep+'h';
-    const goodSleep = thisSleep >= 8.5 && (thisSleepScore||0) >= 78;
-    sleepEl.style.color = goodSleep?'var(--green)':thisSleep<7.5?'var(--red)':'var(--orange)';
-    if(prevSleep) {
-      const diff = Math.round((thisSleep-prevSleep)*10)/10;
-      sleepTrend.innerHTML = diff>0.2?'<span style="color:var(--green)">📈 +'+diff+'h vs last week</span>':diff<-0.2?'<span style="color:var(--orange)">📉 '+diff+'h vs last week</span>':'<span style="color:var(--text-dim)">➡️ Similar to last week</span>';
+  if(thisSleepScore) {
+    sleepEl.textContent = thisSleepScore;
+    const goodSleep = thisSleepScore >= 80 && (thisSleep||0) >= 7.5;
+    sleepEl.style.color = thisSleepScore>=80?'var(--green)':thisSleepScore>=70?'var(--orange)':'var(--red)';
+    const prevSleepScore = avgSleepScore(prevWeekMornings);
+    if(prevSleepScore) {
+      const diff = thisSleepScore - prevSleepScore;
+      sleepTrend.innerHTML = diff>=3?'<span style="color:var(--green)">📈 +'+diff+' pts vs last week</span>':diff<=-3?'<span style="color:var(--orange)">📉 '+diff+' pts vs last week</span>':'<span style="color:var(--text-dim)">➡️ Similar to last week ('+(thisSleep||'?')+'h avg)</span>';
     } else {
-      sleepTrend.textContent = thisSleepScore?'Score: '+thisSleepScore:'';
+      sleepTrend.textContent = thisSleep ? thisSleep+'h avg sleep' : 'Score avg this week';
     }
-    const q7val = goodSleep?'good':thisSleep<7?'bad':'ok';
+    const q7val = thisSleepScore>=80&&(thisSleep||0)>=7.5?'good':thisSleepScore<70||(thisSleep||9)<7?'bad':'ok';
     document.getElementById('q7').value = q7val;
     const q7labels = {good:'✅ Consistent — auto-set',ok:'⚠️ Hit and miss — auto-set',bad:'❌ Poor — auto-set'};
     if(sleepAuto) sleepAuto.innerHTML = '<span style="color:var(--text-dim)">'+q7labels[q7val]+'</span>';
+  } else if(thisSleep) {
+    sleepEl.textContent = thisSleep+'h';
+    const goodSleep = thisSleep >= 8.5;
+    sleepEl.style.color = goodSleep?'var(--green)':thisSleep<7.5?'var(--red)':'var(--orange)';
+    sleepTrend.textContent = 'No sleep score data — using hours';
+    const q7val = goodSleep?'good':thisSleep<7?'bad':'ok';
+    document.getElementById('q7').value = q7val;
   } else {
     sleepEl.textContent='—'; sleepEl.style.color='var(--text-dim)';
-    sleepTrend.textContent='No morning data';
+    sleepTrend.textContent='No morning data this week';
   }
 
   // ── Training Load Score (replaces Z2 pace) ────────────────────────
@@ -582,21 +590,45 @@ function calcCI(){
 
 function saveCI(){
   if(window._ciScore===undefined)calcCI();
-  D.checkins.push({
-    date:document.getElementById('ci-date').value,
-    block:document.getElementById('ci-block').value,
-    hours:parseFloat(document.getElementById('ci-hours').value)||null,
-    hrvAvg:parseFloat(document.getElementById('ci-hrv').value)||null,
-    score:window._ciScore||0,
-    q3trend:document.getElementById('q3').value,
-    failedNote:document.getElementById('ci-failed')?.value||'',
-    nutrition:ciScores.nutrition||null,
-    recovery_protocol:ciScores.recovery_protocol||null,
-    lifestress:ciScores.lifestress||null,
-    intention:document.getElementById('ci-intention').value,
-    recap:document.getElementById('ci-recap')?.value||'',
-    timestamp:Date.now()
-  });
-  save();showToast('Check-in saved ✓');updateDashboard();
+  const ciDate = document.getElementById('ci-date').value;
+  if(!ciDate){ showToast('Please set a check-in date', true); return; }
+
+  // Collect all dropdown answers
+  const getVal = id => { const el=document.getElementById(id); return el ? el.value : ''; };
+  const entry = {
+    date:     ciDate,
+    block:    getVal('ci-block'),
+    hours:    parseFloat(getVal('ci-hours'))||null,
+    hrvAvg:   parseFloat(getVal('ci-hrv'))||null,
+    sleepScore: parseFloat(document.getElementById('ci-sleep-display')?.textContent)||null,
+    score:    window._ciScore||0,
+    // All question answers
+    q1:       getVal('q1'),
+    q2:       getVal('q2'),
+    q3trend:  getVal('q3'),
+    q4:       getVal('q4'),
+    q5:       getVal('q5'),
+    q6:       getVal('q6'),
+    q7:       getVal('q7'),
+    q8:       getVal('q8'),
+    failedNote: getVal('ci-failed'),
+    nutrition:  ciScores.nutrition||null,
+    recovery_protocol: ciScores.recovery_protocol||null,
+    lifestress: ciScores.lifestress||null,
+    intention:  getVal('ci-intention'),
+    recap:      getVal('ci-recap'),
+    timestamp:  Date.now()
+  };
+
+  // Update existing entry for same date, or push new one
+  const existingIdx = D.checkins.findIndex(c => c.date === ciDate);
+  if(existingIdx >= 0){
+    D.checkins[existingIdx] = entry;
+    showToast('Check-in updated ✓');
+  } else {
+    D.checkins.push(entry);
+    showToast('Check-in saved ✓');
+  }
+  save(); updateDashboard();
 }
 

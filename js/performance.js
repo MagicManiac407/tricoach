@@ -98,7 +98,7 @@ function stravaImportWeek(weekKey) {
 
 // ===== PERFORMANCE =====
 function switchPT(tab) {
-  ['run','bike','swim','volume','autopb','predictor'].forEach(t => {
+  ['overview','run','bike','swim','volume','trends','autopb','predictor'].forEach(t => {
     const pv = document.getElementById('pv-'+t);
     if(pv) pv.style.display = t===tab?'block':'none';
     const btn = document.getElementById('pt-'+t);
@@ -106,6 +106,8 @@ function switchPT(tab) {
     if(t==='predictor') {
       btn.style.background = t===tab ? 'var(--green)' : 'transparent';
       btn.style.color = t===tab ? '#000' : 'var(--green)';
+    } else if(t==='overview') {
+      btn.className = t===tab?'btn':'btn sec';
     } else {
       btn.className = t===tab?'btn':'btn sec';
     }
@@ -116,9 +118,26 @@ function switchPT(tab) {
   if(tab==='volume')    renderVolumeCharts();
   if(tab==='autopb')    renderAutoPBs();
   if(tab==='predictor') renderRacePredictor();
+  if(tab==='trends') {
+    // Navigate to the dedicated Trends tab which has the full chart infrastructure
+    setTimeout(() => nav('trends'), 50);
+  }
+  if(tab==='overview')  renderAIOverview();
 }
 
-function renderPerformance() { renderRunCharts(); }
+function renderPerformance() {
+  // Update the subtitle with actual data counts
+  const acts = STRAVA_ACTS.acts || [];
+  if(acts.length) {
+    const runs = acts.filter(a=>a.s==='Run').length;
+    const bikes = acts.filter(a=>a.s==='Bike').length;
+    const swims = acts.filter(a=>a.s==='Swim').length;
+    const dates = acts.map(a=>a.d).sort();
+    const el = document.getElementById('perf-subtitle');
+    if(el) el.textContent = `${acts.length} Strava activities · ${dates[0]||'—'} – ${dates[dates.length-1]||'—'} · ${runs} runs · ${bikes} rides · ${swims} swims`;
+  }
+  renderRunCharts();
+}
 
 function daysAgo(n) { const d=new Date(); d.setDate(d.getDate()-n); return localDateStr(d); }
 
@@ -536,11 +555,11 @@ function renderRunCharts() {
     const recent=acts.filter(a=>a.hr).slice(-20).reverse();
     if(!recent.length){tDiv.innerHTML='<div style="color:var(--text-dim);font-size:12px;padding:12px 0;">No matching sessions</div>';}
     else{
-      tDiv.innerHTML='<div style="overflow-x:auto;"><table class="tbl"><thead><tr><th>Date</th><th>Session</th><th>Dist</th><th>Pace</th><th>HR</th><th>Duration</th><th>AE</th><th>Effort</th></tr></thead><tbody>'+
+      tDiv.innerHTML='<div style="overflow-x:auto;"><table class="tbl"><thead><tr><th>Date</th><th>Session</th><th>Dist</th><th>Pace</th><th>HR</th><th>Duration</th><th>AE</th><th>Effort</th><th></th></tr></thead><tbody>'+
         recent.map(a=>{
           const ec=a.ef==='easy'?'var(--blue)':a.ef==='moderate'?'var(--orange)':'var(--red)';
           const ac=a.ae>20?'var(--green)':a.ae>17?'var(--orange)':'var(--red)';
-          return `<tr><td style="white-space:nowrap;">${fmtDate(a.d)}</td><td style="font-size:10px;color:var(--text-dim);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${a.n}">${a.n}</td><td>${a.dk?a.dk.toFixed(1):'—'}km</td><td style="font-family:monospace;">${a.p?fmtPace(a.p):'—'}/km</td><td>${a.hr?a.hr.toFixed(0):'—'}bpm</td><td style="color:var(--text-dim);">${a.mm?a.mm.toFixed(0):'—'}min</td><td style="font-family:'Bebas Neue',sans-serif;font-size:16px;color:${ac};">${a.ae?a.ae.toFixed(1):'—'}</td><td><span style="font-size:10px;font-weight:600;color:${ec};">${a.ef}</span></td></tr>`;
+          return `<tr><td style="white-space:nowrap;">${fmtDate(a.d)}</td><td style="font-size:10px;color:var(--text-dim);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${a.n}">${a.n}</td><td>${a.dk?a.dk.toFixed(1):'—'}km</td><td style="font-family:monospace;">${a.p?fmtPace(a.p):'—'}/km</td><td>${a.hr?a.hr.toFixed(0):'—'}bpm</td><td style="color:var(--text-dim);">${a.mm?a.mm.toFixed(0):'—'}min</td><td style="font-family:'Bebas Neue',sans-serif;font-size:16px;color:${ac};">${a.ae?a.ae.toFixed(1):'—'}</td><td><span style="font-size:10px;font-weight:600;color:${ec};">${a.ef}</span></td><td><button class="btn sec sml" style="font-size:9px;padding:2px 6px;" onclick="editWorkout(${a.id})">✏️</button></td></tr>`;
         }).join('')+'</tbody></table></div>';
     }
   }
@@ -549,8 +568,8 @@ function renderRunCharts() {
   if(iDiv){
     const recent=ivActs.slice(-15).reverse();
     if(!recent.length){iDiv.innerHTML='<div style="color:var(--text-dim);font-size:12px;padding:8px 0;">No interval sessions in range</div>';return;}
-    iDiv.innerHTML='<div style="overflow-x:auto;"><table class="tbl"><thead><tr><th>Date</th><th>Session</th><th>Dist</th><th>Avg Pace</th><th>HR</th></tr></thead><tbody>'+
-      recent.map(a=>`<tr><td style="white-space:nowrap;">${fmtDate(a.d)}</td><td style="font-size:10px;color:var(--text-dim);">${a.n}</td><td>${a.dk?a.dk.toFixed(1):'—'}km</td><td style="font-family:monospace;color:var(--red);">${a.p?fmtPace(a.p):'—'}/km</td><td>${a.hr?a.hr.toFixed(0):'—'}bpm</td></tr>`).join('')+'</tbody></table></div>';
+    iDiv.innerHTML='<div style="overflow-x:auto;"><table class="tbl"><thead><tr><th>Date</th><th>Session</th><th>Dist</th><th>Avg Pace</th><th>HR</th><th></th></tr></thead><tbody>'+
+      recent.map(a=>`<tr><td style="white-space:nowrap;">${fmtDate(a.d)}</td><td style="font-size:10px;color:var(--text-dim);">${a.n}</td><td>${a.dk?a.dk.toFixed(1):'—'}km</td><td style="font-family:monospace;color:var(--red);">${a.p?fmtPace(a.p):'—'}/km</td><td>${a.hr?a.hr.toFixed(0):'—'}bpm</td><td><button class="btn sec sml" style="font-size:9px;padding:2px 6px;" onclick="editWorkout(${a.id})">✏️</button></td></tr>`).join('')+'</tbody></table></div>';
   }
 }
 
@@ -643,10 +662,10 @@ function renderBikeCharts() {
   if(tDiv){
     const recent=acts.slice(-20).reverse();
     if(!recent.length){tDiv.innerHTML='<div style="color:var(--text-dim);font-size:12px;padding:12px 0;">No rides matching filters</div>';return;}
-    tDiv.innerHTML='<div style="overflow-x:auto;"><table class="tbl"><thead><tr><th>Date</th><th>Session</th><th>Dist</th><th>Duration</th><th>Avg W</th><th>NP</th><th>HR</th><th>W:HR</th><th>Type</th></tr></thead><tbody>'+
+    tDiv.innerHTML='<div style="overflow-x:auto;"><table class="tbl"><thead><tr><th>Date</th><th>Session</th><th>Dist</th><th>Duration</th><th>Avg W</th><th>NP</th><th>HR</th><th>W:HR</th><th>Type</th><th></th></tr></thead><tbody>'+
       recent.map(a=>{
         const ec=a.be>1.4?'var(--green)':a.be>1.1?'var(--orange)':'var(--text-dim)';
-        return `<tr><td style="white-space:nowrap;">${fmtDate(a.d)}</td><td style="font-size:10px;color:var(--text-dim);max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${a.n}">${a.n}</td><td>${a.dk?a.dk.toFixed(0):'—'}km</td><td>${a.mm?a.mm.toFixed(0):'—'}min</td><td style="font-family:monospace;">${a.w?a.w.toFixed(0):'—'}W</td><td style="font-family:monospace;font-weight:600;">${a.nw?a.nw.toFixed(0):'—'}W</td><td>${a.hr?a.hr.toFixed(0):'—'}bpm</td><td style="font-family:'Bebas Neue',sans-serif;font-size:15px;color:${ec};">${a.be?a.be.toFixed(2):'—'}</td><td style="font-size:10px;color:var(--text-dim);">${a.vr?'Rouvy':'Outdoor'}</td></tr>`;
+        return `<tr><td style="white-space:nowrap;">${fmtDate(a.d)}</td><td style="font-size:10px;color:var(--text-dim);max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${a.n}">${a.n}</td><td>${a.dk?a.dk.toFixed(0):'—'}km</td><td>${a.mm?a.mm.toFixed(0):'—'}min</td><td style="font-family:monospace;">${a.w?a.w.toFixed(0):'—'}W</td><td style="font-family:monospace;font-weight:600;">${a.nw?a.nw.toFixed(0):'—'}W</td><td>${a.hr?a.hr.toFixed(0):'—'}bpm</td><td style="font-family:'Bebas Neue',sans-serif;font-size:15px;color:${ec};">${a.be?a.be.toFixed(2):'—'}</td><td style="font-size:10px;color:var(--text-dim);">${a.vr?'Rouvy':'Outdoor'}</td><td><button class="btn sec sml" style="font-size:9px;padding:2px 6px;" onclick="editWorkout(${a.id})">✏️</button></td></tr>`;
       }).join('')+'</tbody></table></div>';
   }
 }
@@ -757,10 +776,10 @@ function renderSwimCharts() {
   const tDiv=document.getElementById('swim-table');
   if(tDiv){
     const recent=acts.slice(-20).reverse();
-    tDiv.innerHTML='<div style="overflow-x:auto;"><table class="tbl"><thead><tr><th>Date</th><th>Session</th><th>Distance</th><th>Duration</th><th>Pace</th><th>HR</th></tr></thead><tbody>'+
+    tDiv.innerHTML='<div style="overflow-x:auto;"><table class="tbl"><thead><tr><th>Date</th><th>Session</th><th>Distance</th><th>Duration</th><th>Pace</th><th>HR</th><th></th></tr></thead><tbody>'+
       recent.map(a=>{
         const pc=a.sp<1.8?'var(--green)':a.sp<2.1?'var(--orange)':'var(--text-dim)';
-        return `<tr><td style="white-space:nowrap;">${fmtDate(a.d)}</td><td style="font-size:10px;color:var(--text-dim);">${a.n}</td><td>${Math.round((a.dk||0)*1000)}m</td><td>${a.mm?a.mm.toFixed(0):'—'}min</td><td style="font-family:monospace;color:${pc};">${a.sp?fmtPace(a.sp):'—'}/100m</td><td>${a.hr?a.hr.toFixed(0):'—'}bpm</td></tr>`;
+        return `<tr><td style="white-space:nowrap;">${fmtDate(a.d)}</td><td style="font-size:10px;color:var(--text-dim);">${a.n}</td><td>${Math.round((a.dk||0)*1000)}m</td><td>${a.mm?a.mm.toFixed(0):'—'}min</td><td style="font-family:monospace;color:${pc};">${a.sp?fmtPace(a.sp):'—'}/100m</td><td>${a.hr?a.hr.toFixed(0):'—'}bpm</td><td><button class="btn sec sml" style="font-size:9px;padding:2px 6px;" onclick="editWorkout(${a.id})">✏️</button></td></tr>`;
       }).join('')+'</tbody></table></div>';
   }
 }
@@ -1493,4 +1512,326 @@ function showPredSignals() {
       <span style="color:var(--text-dim);font-size:10px;">References: Banister 1991, Allen & Coggan, Wakayoshi 1992, Riegel 1981, Friel Triathlete's Training Bible</span>
     </div>
   </div>`;
+}
+
+// ===== DASHBOARD RACE PREDICTOR MINI =====
+function renderDashboardRacePredictor() {
+  const acts = STRAVA_ACTS.acts || [];
+  if(acts.length < 5) {
+    const conf = document.getElementById('d-pred-confidence');
+    if(conf) conf.textContent = 'Sync Strava to get race predictions (need 5+ sessions)';
+    return;
+  }
+  try {
+    const R = buildRunModel_pred(), B = buildBikeModel_pred(), S = buildSwimModel_pred();
+    const setEl = (id, v) => { const e=document.getElementById(id); if(e) e.textContent = v; };
+    Object.entries(RACE_DISTANCES).forEach(([k, d]) => {
+      const p = _calcPrediction(d, R, B, S);
+      const elId = 'd-pred-' + (k==='70.3'?'703':k==='ironman'?'ironman':k==='sprint'?'sprint':'olympic');
+      setEl(elId, _fmtHMS(p.total));
+    });
+    const confPct = Math.round(Math.min(R.runs.length/30,1)*35 + Math.min(B.bikes.length/20,1)*40 + Math.min(S.swims.length/10,1)*25);
+    const conf = document.getElementById('d-pred-confidence');
+    if(conf) conf.textContent = `Confidence: ${confPct}% · ${R.runs.length} runs · ${B.bikes.length} bikes · ${S.swims.length} swims · Click Full View for detailed breakdown`;
+  } catch(e) {
+    console.warn('Race predictor error:', e);
+  }
+}
+
+// ===== WORKOUT EDIT =====
+function editWorkout(actId) {
+  const act = STRAVA_ACTS.acts.find(a => a.id === actId);
+  if(!act) { showToast('Activity not found', true); return; }
+
+  const fP = p => { const m=Math.floor(p),s=Math.round((p-m)*60); return m+':'+(s<10?'0':'')+s; };
+  const inpStyle = 'background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 10px;font-size:12px;';
+  const sportFields = act.s === 'Run' ? `
+    <div><label style="font-size:10px;color:var(--text-dim);">Distance (km)</label><input type="number" id="ew-dk" step="0.01" value="${act.dk||''}" style="width:100%;${inpStyle}"></div>
+    <div><label style="font-size:10px;color:var(--text-dim);">Duration (min)</label><input type="number" id="ew-mm" step="0.1" value="${act.mm||''}" style="width:100%;${inpStyle}"></div>
+    <div><label style="font-size:10px;color:var(--text-dim);">Avg HR (bpm)</label><input type="number" id="ew-hr" value="${act.hr||''}" style="width:100%;${inpStyle}"></div>
+    <div><label style="font-size:10px;color:var(--text-dim);">Avg Pace (min/km)</label><input type="text" id="ew-p" value="${act.p?fP(act.p):''}" placeholder="e.g. 5:30" style="width:100%;${inpStyle}"></div>
+  ` : act.s === 'Bike' ? `
+    <div><label style="font-size:10px;color:var(--text-dim);">Distance (km)</label><input type="number" id="ew-dk" step="0.1" value="${act.dk||''}" style="width:100%;${inpStyle}"></div>
+    <div><label style="font-size:10px;color:var(--text-dim);">Duration (min)</label><input type="number" id="ew-mm" step="1" value="${act.mm||''}" style="width:100%;${inpStyle}"></div>
+    <div><label style="font-size:10px;color:var(--text-dim);">Avg HR (bpm)</label><input type="number" id="ew-hr" value="${act.hr||''}" style="width:100%;${inpStyle}"></div>
+    <div><label style="font-size:10px;color:var(--text-dim);">NP Watts</label><input type="number" id="ew-nw" value="${act.nw||''}" style="width:100%;${inpStyle}"></div>
+    <div><label style="font-size:10px;color:var(--text-dim);">Avg Watts</label><input type="number" id="ew-w" value="${act.w||''}" style="width:100%;${inpStyle}"></div>
+    <div><label style="font-size:10px;color:var(--text-dim);">Cadence (rpm)</label><input type="number" id="ew-cad" value="${act.cad||''}" style="width:100%;${inpStyle}"></div>
+  ` : `
+    <div><label style="font-size:10px;color:var(--text-dim);">Distance (km)</label><input type="number" id="ew-dk" step="0.01" value="${act.dk||''}" style="width:100%;${inpStyle}"></div>
+    <div><label style="font-size:10px;color:var(--text-dim);">Duration (min)</label><input type="number" id="ew-mm" step="0.1" value="${act.mm||''}" style="width:100%;${inpStyle}"></div>
+    <div><label style="font-size:10px;color:var(--text-dim);">Avg HR (bpm)</label><input type="number" id="ew-hr" value="${act.hr||''}" style="width:100%;${inpStyle}"></div>
+    <div><label style="font-size:10px;color:var(--text-dim);">Pace /100m (min)</label><input type="text" id="ew-sp" value="${act.sp?fP(act.sp):''}" placeholder="e.g. 1:45" style="width:100%;${inpStyle}"></div>
+  `;
+
+  const efOpts = ['easy','moderate','hard','max'].map(v=>`<option value="${v}" ${act.ef===v?'selected':''}>${v}</option>`).join('');
+  const html = `
+    <div id="edit-modal-bg" onclick="closeEditModal()" style="position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:12px;">
+      <div onclick="event.stopPropagation()" style="background:var(--card);border-radius:12px;padding:24px;width:min(520px,98vw);max-height:92vh;overflow-y:auto;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:20px;color:var(--orange);">EDIT WORKOUT — ${act.d}</div>
+          <button class="btn sec sml" onclick="closeEditModal()">✕</button>
+        </div>
+        <div style="margin-bottom:12px;"><label style="font-size:10px;color:var(--text-dim);">Activity Name</label><input type="text" id="ew-name" value="${act.n||''}" style="width:100%;${inpStyle}"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+          ${sportFields}
+          <div><label style="font-size:10px;color:var(--text-dim);">Effort Level</label><select id="ew-ef" style="width:100%;${inpStyle}"><option value="">—</option>${efOpts}</select></div>
+          <div><label style="font-size:10px;color:var(--text-dim);">Training Load</label><input type="number" id="ew-tl" value="${act.tl||''}" style="width:100%;${inpStyle}"></div>
+        </div>
+        <div style="font-size:10px;color:var(--text-dim);margin-bottom:12px;">⚠️ Changes apply to local data only. Re-syncing from Strava will overwrite edits.</div>
+        <div style="display:flex;gap:10px;justify-content:flex-end;">
+          <button class="btn sec" onclick="closeEditModal()">Cancel</button>
+          <button class="btn" style="background:var(--orange);color:#000;font-weight:700;" onclick="saveWorkoutEdit(${actId})">💾 Save Changes</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.insertAdjacentHTML('beforeend', html);
+}
+
+function saveWorkoutEdit(actId) {
+  const idx = STRAVA_ACTS.acts.findIndex(a => a.id === actId);
+  if(idx < 0) { showToast('Activity not found', true); return; }
+  const a = STRAVA_ACTS.acts[idx];
+  const getNum = id => { const el=document.getElementById(id); return el&&el.value?parseFloat(el.value)||null:null; };
+  const getStr = id => { const el=document.getElementById(id); return el?el.value.trim():null; };
+  const parsePace = str => {
+    if(!str) return null;
+    const m = str.match(/(\d+):(\d+)/);
+    return m ? parseInt(m[1]) + parseInt(m[2])/60 : null;
+  };
+
+  a.n  = getStr('ew-name') || a.n;
+  a.dk = getNum('ew-dk') || a.dk;
+  a.mm = getNum('ew-mm') || a.mm;
+  a.hr = getNum('ew-hr') || a.hr;
+  a.tl = getNum('ew-tl') || a.tl;
+  a.ef = getStr('ew-ef') || a.ef;
+  if(a.s === 'Run')  a.p  = parsePace(getStr('ew-p'))  || a.p;
+  if(a.s === 'Bike') { a.nw=getNum('ew-nw')||a.nw; a.w=getNum('ew-w')||a.w; a.cad=getNum('ew-cad')||a.cad; }
+  if(a.s === 'Swim') a.sp = parsePace(getStr('ew-sp')) || a.sp;
+
+  // Persist edits in localStorage under a separate key so they survive page reloads
+  try {
+    const edits = JSON.parse(localStorage.getItem('tc26_workout_edits') || '{}');
+    edits[actId] = {...a};
+    localStorage.setItem('tc26_workout_edits', JSON.stringify(edits));
+  } catch(e) {}
+
+  closeEditModal();
+  renderPerformance(); // refresh current tab
+  showToast('Workout updated ✓');
+}
+
+// ===== AI PERFORMANCE OVERVIEW (#8) =====
+function renderAIOverview() {
+  const container = document.getElementById('pv-overview-content');
+  if(!container) return;
+
+  // Gather all data for AI analysis
+  const acts = STRAVA_ACTS.acts || [];
+  const wk = getWeekKey(new Date());
+  const prevWk = (() => { const d=new Date(wk); d.setDate(d.getDate()-7); return getWeekKey(d); })();
+  const t = calcWeekTotalsFromStrava(wk);
+  const prevT = calcWeekTotalsFromStrava(prevWk);
+
+  // Last 7 morning checks
+  const last7Days = [];
+  for(let i=6; i>=0; i--) { const d=new Date(); d.setDate(d.getDate()-i); last7Days.push(localDateStr(d)); }
+  const recentMornings = D.mornings.filter(m => last7Days.includes(m.date));
+  const lastMorning = D.mornings.length ? D.mornings[D.mornings.length-1] : null;
+
+  // Recent week's activities
+  const [wStart, wEnd] = [wk, (() => { const [y,m,d]=wk.split('-').map(Number); const e=new Date(y,m-1,d+6); return e.getFullYear()+'-'+String(e.getMonth()+1).padStart(2,'0')+'-'+String(e.getDate()).padStart(2,'0'); })()];
+  const weekActs = acts.filter(a => a.d >= wStart && a.d <= wEnd);
+
+  // Last checkin
+  const lastCI = D.checkins.length ? D.checkins[D.checkins.length-1] : null;
+
+  // Performance models
+  let R = null, B = null, S = null, pred703 = null;
+  try {
+    R = buildRunModel_pred(); B = buildBikeModel_pred(); S = buildSwimModel_pred();
+    pred703 = _calcPrediction(RACE_DISTANCES['70.3'], R, B, S);
+  } catch(e) {}
+
+  // Build context for AI
+  const avgHRV = recentMornings.filter(m=>m.hrv).length ? Math.round(recentMornings.filter(m=>m.hrv).reduce((a,m)=>a+m.hrv,0)/recentMornings.filter(m=>m.hrv).length) : null;
+  const avgSleep = recentMornings.filter(m=>m.sleepScore).length ? Math.round(recentMornings.filter(m=>m.sleepScore).reduce((a,m)=>a+m.sleepScore,0)/recentMornings.filter(m=>m.sleepScore).length) : null;
+
+  const dataContext = {
+    athlete: 'Triathlete training for Half Ironman',
+    currentWeek: {
+      totalHrs: t.totalMin ? (t.totalMin/60).toFixed(1) : 0,
+      runKm: t.runKm?.toFixed(1),
+      bikeKm: t.bikeKm?.toFixed(0),
+      swimM: t.swimKm ? (t.swimKm*1000).toFixed(0) : 0,
+      sessions: t.totalSessions,
+      hardSessions: weekActs.filter(a=>a.ef==='hard'||a.ef==='max'||a.iv).length
+    },
+    previousWeek: {
+      totalHrs: prevT.totalMin ? (prevT.totalMin/60).toFixed(1) : 0
+    },
+    healthMetrics7Days: {
+      avgHRV,
+      latestHRV: lastMorning?.hrv,
+      avgSleepScore: avgSleep,
+      latestRHR: lastMorning?.rhr,
+      latestGarminStress: lastMorning?.gstress,
+      latestReadinessScore: lastMorning?.readinessScore,
+      latestLegs: lastMorning?.legs,
+      checkCount: recentMornings.length
+    },
+    weekActivities: weekActs.map(a => ({
+      date: a.d, sport: a.s, distKm: a.dk?.toFixed(1), mins: a.mm?.toFixed(0),
+      hr: a.hr, effort: a.ef, interval: a.iv, watts: a.nw||a.w, pace: a.p
+    })),
+    lastCheckin: lastCI ? {
+      date: lastCI.date, score: lastCI.score, hours: lastCI.hours,
+      freshness: lastCI.q4, sleep: lastCI.q7, motivation: lastCI.q8,
+      trainingLoadTrend: lastCI.q3trend, recap: lastCI.recap
+    } : null,
+    fitness: R && B && S ? {
+      runVDOT: Math.round(R.vdot),
+      runThresholdPace: R.threshold ? (m=>m.toFixed(0)+':'+(Math.round((R.threshold-Math.floor(R.threshold))*60)+'').padStart(2,'0'))(Math.floor(R.threshold)) : null,
+      bikeFTP: Math.round(B.ftp),
+      swimCSS: S.css,
+      pred703: pred703 ? _fmtHMS(pred703.total) : null,
+      runTSB: R.tsb?.toFixed(2),
+      bikeTSB: B.tsb?.toFixed(2)
+    } : null,
+    nutrition: lastMorning ? {
+      calIn: lastMorning.calIn, protein: lastMorning.protein, fuel: lastMorning.fuel
+    } : null
+  };
+
+  // Show loading state
+  container.innerHTML = `
+    <div class="card" style="margin-bottom:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <div>
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:2px;color:var(--green);">🧠 AI PERFORMANCE ANALYSIS</div>
+          <div style="font-size:10px;color:var(--text-dim);">Comprehensive assessment based on all your training, health and recovery data</div>
+        </div>
+        <button class="btn sec sml" onclick="renderAIOverview()">🔄 Refresh</button>
+      </div>
+      <div id="ai-overview-loading" style="text-align:center;padding:32px;">
+        <div style="font-size:32px;margin-bottom:12px;animation:pulse 1.5s infinite;">🧠</div>
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:16px;color:var(--text-dim);">Analysing your training data…</div>
+        <div style="font-size:11px;color:var(--text-dim);margin-top:8px;">Reviewing ${acts.length} activities, ${D.mornings.length} morning checks, ${D.checkins.length} weekly check-ins</div>
+      </div>
+      <div id="ai-overview-result" style="display:none;"></div>
+    </div>
+    <div id="ai-overview-stats" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px;">
+      ${[
+        ['Week Volume', t.totalMin ? (t.totalMin/60).toFixed(1)+'h' : '—', t.totalMin>=10*60?'var(--green)':t.totalMin>=6*60?'var(--orange)':'var(--text-dim)'],
+        ['Avg HRV 7d', avgHRV||'—', avgHRV>=70?'var(--green)':avgHRV>=55?'var(--orange)':'var(--red)'],
+        ['Sleep Score', avgSleep||'—', avgSleep>=80?'var(--green)':avgSleep>=70?'var(--orange)':'var(--red)'],
+        ['Readiness', lastMorning?.readinessScore||'—', (lastMorning?.readinessScore||0)>=70?'var(--green)':(lastMorning?.readinessScore||0)>=40?'var(--orange)':'var(--red)']
+      ].map(([l,v,c])=>`<div style="background:var(--surface2);border-radius:8px;padding:10px;text-align:center;">
+        <div style="font-size:9px;color:var(--text-dim);letter-spacing:1px;text-transform:uppercase;">${l}</div>
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:24px;color:${c};">${v}</div>
+      </div>`).join('')}
+    </div>`;
+
+  // Call Claude API
+  const prompt = `You are an expert triathlon coach analysing an athlete's training data. Provide a comprehensive performance overview in 4 sections:
+
+1. **PERFORMANCE INDICATOR** (give a score out of 100 and label: OPTIMAL/BUILDING/MANAGING/FATIGUED/REST NEEDED, with a 1-sentence headline)
+2. **TRAINING ASSESSMENT** (2-3 sentences on this week's training load, quality, and progression vs last week)
+3. **RECOVERY & READINESS** (2-3 sentences on HRV trends, sleep quality, stress, and overall recovery status)  
+4. **KEY RECOMMENDATIONS** (3 specific, actionable bullet points for the coming week based on the data)
+
+Be direct, data-specific, and coach-like. Reference actual numbers from the data. If data is missing, note it briefly.
+
+ATHLETE DATA:
+${JSON.stringify(dataContext, null, 2)}
+
+Format your response exactly like this (use these exact section headers):
+## PERFORMANCE INDICATOR
+[Score/100] [LABEL] — [headline]
+
+## TRAINING ASSESSMENT
+[assessment]
+
+## RECOVERY & READINESS
+[assessment]
+
+## KEY RECOMMENDATIONS
+• [recommendation 1]
+• [recommendation 2]
+• [recommendation 3]`;
+
+  fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 1000,
+      messages: [{ role: 'user', content: prompt }]
+    })
+  })
+  .then(r => r.json())
+  .then(data => {
+    const text = data.content?.map(c=>c.text||'').join('') || '';
+    if(!text) { throw new Error('No response from AI'); }
+
+    // Parse the score/label from the first section
+    const scoreMatch = text.match(/(\d+)\/100.*?(OPTIMAL|BUILDING|MANAGING|FATIGUED|REST NEEDED)/i);
+    const score = scoreMatch ? parseInt(scoreMatch[1]) : 70;
+    const label = scoreMatch ? scoreMatch[2].toUpperCase() : 'BUILDING';
+    const scoreColor = score>=80?'var(--green)':score>=60?'var(--orange)':score>=40?'#ff5722':'var(--red)';
+
+    // Render the formatted result
+    const sections = text.split('##').filter(s=>s.trim()).map(s => {
+      const lines = s.trim().split('\n').filter(l=>l.trim());
+      const title = lines[0].trim();
+      const body = lines.slice(1).join('\n').trim();
+      return { title, body };
+    });
+
+    const loadingEl = document.getElementById('ai-overview-loading');
+    const resultEl = document.getElementById('ai-overview-result');
+    if(loadingEl) loadingEl.style.display = 'none';
+    if(resultEl) {
+      resultEl.style.display = 'block';
+      resultEl.innerHTML = `
+        <div style="display:flex;align-items:center;gap:20px;padding:16px;background:var(--surface2);border-radius:10px;margin-bottom:16px;">
+          <div style="position:relative;width:80px;height:80px;flex-shrink:0;">
+            <svg width="80" height="80" viewBox="0 0 80 80">
+              <circle cx="40" cy="40" r="33" fill="none" stroke="var(--border2)" stroke-width="8"/>
+              <circle cx="40" cy="40" r="33" fill="none" stroke="${scoreColor}" stroke-width="8" stroke-linecap="round"
+                stroke-dasharray="${2*Math.PI*33}" stroke-dashoffset="${2*Math.PI*33*(1-score/100)}" transform="rotate(-90 40 40)"/>
+            </svg>
+            <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;">
+              <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;color:${scoreColor};line-height:1;">${score}</div>
+            </div>
+          </div>
+          <div>
+            <div style="font-family:'Bebas Neue',sans-serif;font-size:24px;letter-spacing:2px;color:${scoreColor};">${label}</div>
+            ${sections[0]?.body ? `<div style="font-size:12px;color:var(--text-mid);margin-top:4px;line-height:1.5;">${sections[0].body.replace(/\[Score.*?\]/,'').replace(/OPTIMAL|BUILDING|MANAGING|FATIGUED|REST NEEDED/,'').trim()}</div>` : ''}
+          </div>
+        </div>
+        ${sections.slice(1).map(s => `
+          <div style="margin-bottom:14px;">
+            <div style="font-size:11px;font-weight:700;color:var(--text-dim);letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">${s.title}</div>
+            <div style="font-size:12px;color:var(--text-mid);line-height:1.7;">
+              ${s.body.replace(/^•\s*/gm, '<div style="display:flex;gap:8px;margin-bottom:6px;"><span style="color:var(--green);flex-shrink:0;">▸</span><span>').replace(/\n(?=▸|<div)/g, '</span></div>').replace(/\n/g,'<br>')}
+            </div>
+          </div>`).join('')}
+        <div style="font-size:9px;color:var(--text-dim);text-align:right;margin-top:8px;">AI Analysis · ${new Date().toLocaleDateString('en-AU')} · Click Refresh to re-analyse</div>`;
+    }
+  })
+  .catch(err => {
+    const loadingEl = document.getElementById('ai-overview-loading');
+    const resultEl = document.getElementById('ai-overview-result');
+    if(loadingEl) loadingEl.style.display = 'none';
+    if(resultEl) {
+      resultEl.style.display = 'block';
+      resultEl.innerHTML = `<div style="background:rgba(244,67,54,.08);border-radius:8px;padding:16px;color:var(--orange);">
+        <div style="font-weight:700;margin-bottom:8px;">⚠️ AI Analysis Unavailable</div>
+        <div style="font-size:11px;">Could not connect to AI: ${err.message}</div>
+        <div style="font-size:11px;margin-top:8px;">Your manual data summary: HRV ${avgHRV||'—'} · Sleep score ${avgSleep||'—'} · Week volume ${t.totalMin?(t.totalMin/60).toFixed(1)+'h':'—'} · Readiness ${lastMorning?.readinessScore||'—'}/100</div>
+      </div>`;
+    }
+  });
 }

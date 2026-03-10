@@ -387,6 +387,9 @@ def inject_into_html(garmin_data, strava_acts):
     dash_js_path = html_path.parent / "js" / "dashboard.js"
 
     # ── 1. Inject Garmin data into js/strava.js ───────────────────
+    # Always include today's date so the dashboard can detect stale data
+    if garmin_data:
+        garmin_data['date'] = datetime.now().strftime('%Y-%m-%d')
     garmin_json = json.dumps(garmin_data) if garmin_data else "null"
     if garmin_js_path.exists():
         garmin_html = garmin_js_path.read_text(encoding="utf-8")

@@ -73,7 +73,11 @@ function nav(page){
   if(page==='performance')renderPerformance();
   if(page==='nutrition')renderNutrition();
   if(page==='athletes')renderAthletes();
-  if(page==='checkin')document.getElementById('ci-date').value=localDateStr(new Date());
+  if(page==='checkin'){
+    document.getElementById('ci-date').value=localDateStr(new Date());
+    // Auto-fill training load, HRV, sleep from this week's data
+    if(typeof autoFillCI === 'function') setTimeout(autoFillCI, 100);
+  }
   if(page==='problueprintpage')renderProBlueprint();
 }
 

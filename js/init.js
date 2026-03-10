@@ -253,26 +253,38 @@ function saveAndDownload(){ exportBackup(); }
 function editMorning(idx) {
   const m = D.mornings[idx];
   if(!m) return;
+  const inp = (id, type, val, extra='') => `<input type="${type}" id="${id}" value="${val||''}" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 10px;font-size:12px;" ${extra}>`;
+  const scoreRow = (label, field, val) => `<div><label style="font-size:10px;color:var(--text-dim);">${label} (1–5)</label><div style="display:flex;gap:4px;margin-top:4px;">${[1,2,3,4,5].map(n=>`<button type="button" onclick="this.parentElement.querySelectorAll('button').forEach(b=>b.style.background='var(--surface2)');this.style.background='var(--green)';document.getElementById('em-${field}').value=${n}" style="flex:1;padding:4px 0;border:1px solid var(--border);border-radius:5px;background:${val===n?'var(--green)':'var(--surface2)'};color:var(--text);cursor:pointer;font-size:12px;font-weight:600;">${n}</button>`).join('')}</div><input type="hidden" id="em-${field}" value="${val||''}"></div>`;
   const html = `
-    <div id="edit-modal-bg" onclick="closeEditModal()" style="position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:center;justify-content:center;">
-      <div onclick="event.stopPropagation()" style="background:var(--card);border-radius:12px;padding:24px;width:min(520px,95vw);max-height:90vh;overflow-y:auto;">
+    <div id="edit-modal-bg" onclick="closeEditModal()" style="position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:12px;">
+      <div onclick="event.stopPropagation()" style="background:var(--card);border-radius:12px;padding:24px;width:min(580px,98vw);max-height:92vh;overflow-y:auto;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
-          <div style="font-family:'Bebas Neue',sans-serif;font-size:20px;color:var(--green);">EDIT MORNING — ${m.date}</div>
-          <button class="btn sec sml" onclick="closeEditModal()">✕ Close</button>
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:20px;color:var(--green);">EDIT MORNING CHECK — ${m.date}</div>
+          <button class="btn sec sml" onclick="closeEditModal()">✕</button>
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
-          <div><label style="font-size:10px;color:var(--text-dim);">HRV</label><input type="number" id="em-hrv" value="${m.hrv||''}" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 10px;"></div>
-          <div><label style="font-size:10px;color:var(--text-dim);">HRV 7-day avg</label><input type="number" id="em-hrv7" value="${m.hrv7||''}" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 10px;"></div>
-          <div><label style="font-size:10px;color:var(--text-dim);">Resting HR</label><input type="number" id="em-rhr" value="${m.rhr||''}" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 10px;"></div>
-          <div><label style="font-size:10px;color:var(--text-dim);">Sleep Score</label><input type="number" id="em-sleepscore" value="${m.sleepScore||''}" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 10px;"></div>
-          <div><label style="font-size:10px;color:var(--text-dim);">Sleep Hours</label><input type="number" id="em-sleep" step="0.1" value="${m.sleep||''}" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 10px;"></div>
-          <div><label style="font-size:10px;color:var(--text-dim);">Garmin Stress</label><input type="number" id="em-gstress" value="${m.gstress||''}" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 10px;"></div>
-          <div><label style="font-size:10px;color:var(--text-dim);">Cal In</label><input type="number" id="em-calin" value="${m.calIn||''}" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 10px;"></div>
-          <div><label style="font-size:10px;color:var(--text-dim);">Cal Out</label><input type="number" id="em-calout" value="${m.calOut||''}" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 10px;"></div>
-          <div><label style="font-size:10px;color:var(--text-dim);">Protein (g)</label><input type="number" id="em-protein" value="${m.protein||''}" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 10px;"></div>
-          <div><label style="font-size:10px;color:var(--text-dim);">Carbs (g)</label><input type="number" id="em-carbs" value="${m.carbs||''}" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 10px;"></div>
+        <div style="font-size:10px;color:var(--text-dim);font-weight:600;letter-spacing:1px;margin-bottom:8px;">GARMIN METRICS</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">
+          <div><label style="font-size:10px;color:var(--text-dim);">HRV</label>${inp('em-hrv','number',m.hrv)}</div>
+          <div><label style="font-size:10px;color:var(--text-dim);">HRV 7-day avg</label>${inp('em-hrv7','number',m.hrv7)}</div>
+          <div><label style="font-size:10px;color:var(--text-dim);">Resting HR (bpm)</label>${inp('em-rhr','number',m.rhr)}</div>
+          <div><label style="font-size:10px;color:var(--text-dim);">Sleep Score</label>${inp('em-sleepscore','number',m.sleepScore,'min="0" max="100"')}</div>
+          <div><label style="font-size:10px;color:var(--text-dim);">Sleep Hours</label>${inp('em-sleep','number',m.sleep,'step="0.1"')}</div>
+          <div><label style="font-size:10px;color:var(--text-dim);">Garmin Stress</label>${inp('em-gstress','number',m.gstress)}</div>
         </div>
-        <div style="margin-bottom:14px;"><label style="font-size:10px;color:var(--text-dim);">Note</label><textarea id="em-note" rows="2" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 10px;resize:vertical;">${m.note||''}</textarea></div>
+        <div style="font-size:10px;color:var(--text-dim);font-weight:600;letter-spacing:1px;margin-bottom:8px;">SUBJECTIVE SCORES</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px;">
+          ${scoreRow('Legs Freshness','legs',m.legs)}
+          ${scoreRow('Life Stress','stress',m.stress)}
+          ${scoreRow('Readiness','readiness',m.readiness)}
+        </div>
+        <div style="font-size:10px;color:var(--text-dim);font-weight:600;letter-spacing:1px;margin-bottom:8px;">NUTRITION</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">
+          <div><label style="font-size:10px;color:var(--text-dim);">Calories In</label>${inp('em-calin','number',m.calIn)}</div>
+          <div><label style="font-size:10px;color:var(--text-dim);">Calories Out</label>${inp('em-calout','number',m.calOut)}</div>
+          <div><label style="font-size:10px;color:var(--text-dim);">Protein (g)</label>${inp('em-protein','number',m.protein)}</div>
+          <div><label style="font-size:10px;color:var(--text-dim);">Carbs (g)</label>${inp('em-carbs','number',m.carbs)}</div>
+        </div>
+        <div style="margin-bottom:14px;"><label style="font-size:10px;color:var(--text-dim);">Notes / Observations</label><textarea id="em-note" rows="3" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 10px;resize:vertical;font-size:12px;">${m.note||''}</textarea></div>
         <div style="display:flex;gap:10px;justify-content:flex-end;">
           <button class="btn" style="background:var(--red);color:#fff;" onclick="deleteMorning(${idx})">🗑 Delete</button>
           <button class="btn" style="background:var(--green);color:#000;font-weight:700;" onclick="saveMorningEdit(${idx})">💾 Save Changes</button>
@@ -285,16 +297,20 @@ function editMorning(idx) {
 function saveMorningEdit(idx) {
   const m = D.mornings[idx];
   if(!m) return;
-  m.hrv        = parseFloat(document.getElementById('em-hrv').value) || null;
-  m.hrv7       = parseFloat(document.getElementById('em-hrv7').value) || null;
-  m.rhr        = parseFloat(document.getElementById('em-rhr').value) || null;
-  m.sleepScore = parseFloat(document.getElementById('em-sleepscore').value) || null;
-  m.sleep      = parseFloat(document.getElementById('em-sleep').value) || null;
-  m.gstress    = parseFloat(document.getElementById('em-gstress').value) || null;
-  m.calIn      = parseFloat(document.getElementById('em-calin').value) || null;
-  m.calOut     = parseFloat(document.getElementById('em-calout').value) || null;
-  m.protein    = parseFloat(document.getElementById('em-protein').value) || null;
-  m.carbs      = parseFloat(document.getElementById('em-carbs').value) || null;
+  const getNum = id => parseFloat(document.getElementById(id)?.value) || null;
+  m.hrv        = getNum('em-hrv');
+  m.hrv7       = getNum('em-hrv7');
+  m.rhr        = getNum('em-rhr');
+  m.sleepScore = getNum('em-sleepscore');
+  m.sleep      = getNum('em-sleep');
+  m.gstress    = getNum('em-gstress');
+  m.legs       = getNum('em-legs') || m.legs;
+  m.stress     = getNum('em-stress') || m.stress;
+  m.readiness  = getNum('em-readiness') || m.readiness;
+  m.calIn      = getNum('em-calin');
+  m.calOut     = getNum('em-calout');
+  m.protein    = getNum('em-protein');
+  m.carbs      = getNum('em-carbs');
   m.note       = document.getElementById('em-note').value;
   save();
   closeEditModal();
@@ -314,23 +330,36 @@ function deleteMorning(idx) {
 function editCheckin(idx) {
   const c = D.checkins[idx];
   if(!c) return;
-  const trendOpts = ['improving','holding','declining'].map(v=>`<option value="${v}" ${c.q3trend===v?'selected':''}>${v}</option>`).join('');
+  const sel = (id, val, opts) => `<select id="${id}" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 10px;font-size:12px;"><option value="">—</option>${opts.map(o=>`<option value="${o.v}" ${String(c[id]||'')==String(o.v)?'selected':''}>${o.l}</option>`).join('')}</select>`;
+  const inp = (id, type, val, extra='') => `<input type="${type}" id="${id}" value="${val||''}" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 10px;font-size:12px;" ${extra}>`;
   const html = `
-    <div id="edit-modal-bg" onclick="closeEditModal()" style="position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:center;justify-content:center;">
-      <div onclick="event.stopPropagation()" style="background:var(--card);border-radius:12px;padding:24px;width:min(480px,95vw);max-height:90vh;overflow-y:auto;">
+    <div id="edit-modal-bg" onclick="closeEditModal()" style="position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:12px;">
+      <div onclick="event.stopPropagation()" style="background:var(--card);border-radius:12px;padding:24px;width:min(560px,98vw);max-height:92vh;overflow-y:auto;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
           <div style="font-family:'Bebas Neue',sans-serif;font-size:20px;color:var(--blue);">EDIT CHECK-IN — ${c.date}</div>
-          <button class="btn sec sml" onclick="closeEditModal()">✕ Close</button>
+          <button class="btn sec sml" onclick="closeEditModal()">✕</button>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
-          <div><label style="font-size:10px;color:var(--text-dim);">Training Block</label><input type="text" id="ec-block" value="${c.block||''}" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 10px;"></div>
-          <div><label style="font-size:10px;color:var(--text-dim);">Hours This Week</label><input type="number" id="ec-hours" step="0.5" value="${c.hours||''}" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 10px;"></div>
-          <div><label style="font-size:10px;color:var(--text-dim);">Overall Score (1–10)</label><input type="number" id="ec-score" min="1" max="10" value="${c.score||''}" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 10px;"></div>
-          <div><label style="font-size:10px;color:var(--text-dim);">Z2 Trend</label><select id="ec-trend" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 10px;"><option value="">—</option>${trendOpts}</select></div>
-          <div><label style="font-size:10px;color:var(--text-dim);">Nutrition (1–5)</label><input type="number" id="ec-nutrition" min="1" max="5" value="${c.nutrition||''}" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 10px;"></div>
-          <div><label style="font-size:10px;color:var(--text-dim);">Life Stress (1–5)</label><input type="number" id="ec-lifestress" min="1" max="5" value="${c.lifestress||''}" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 10px;"></div>
+          <div><label style="font-size:10px;color:var(--text-dim);">Training Block</label>${inp('ec-block','text',c.block)}</div>
+          <div><label style="font-size:10px;color:var(--text-dim);">Hours This Week</label>${inp('ec-hours','number',c.hours,'step="0.5"')}</div>
+          <div><label style="font-size:10px;color:var(--text-dim);">Overall Score (1–10)</label>${inp('ec-score','number',c.score,'min="0" max="10"')}</div>
+          <div><label style="font-size:10px;color:var(--text-dim);">HRV Avg This Week</label>${inp('ec-hrv','number',c.hrvAvg)}</div>
         </div>
-        <div style="margin-bottom:14px;"><label style="font-size:10px;color:var(--text-dim);">Notes</label><textarea id="ec-notes" rows="3" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 10px;resize:vertical;">${c.notes||''}</textarea></div>
+        <div style="font-size:10px;color:var(--text-dim);font-weight:600;letter-spacing:1px;margin-bottom:8px;">SESSION QUALITY</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
+          <div><label style="font-size:10px;color:var(--text-dim);">Sessions completed</label>${sel('q1',c.q1,[{v:'3',l:'✅ All 3 (3pts)'},{v:'2',l:'⚠️ 2 of 3 (2pts)'},{v:'0',l:'❌ 1 or fewer (0pts)'}])}</div>
+          <div><label style="font-size:10px;color:var(--text-dim);">Z2 discipline</label>${sel('q2',c.q2,[{v:'2',l:'✅ Stayed in Z2 (2pts)'},{v:'1',l:'⚠️ Mostly (1pt)'},{v:'0',l:'❌ Drifting (0pts)'}])}</div>
+          <div><label style="font-size:10px;color:var(--text-dim);">Training load trend</label>${sel('q3trend',c.q3trend,[{v:'improving',l:'📈 Improving'},{v:'holding',l:'➡️ Stable'},{v:'declining',l:'📉 Declining'}])}</div>
+          <div><label style="font-size:10px;color:var(--text-dim);">Freshness / readiness</label>${sel('q4',c.q4,[{v:'2',l:'💪 Fresh (2pts)'},{v:'1',l:'😐 Tired but ok (1pt)'},{v:'0',l:'😓 Fatigued (0pts)'}])}</div>
+          <div><label style="font-size:10px;color:var(--text-dim);">Pushed too hard?</label>${sel('q5',c.q5,[{v:'no',l:'No — listened to body'},{v:'yes',l:'Yes — should have backed off'}])}</div>
+          <div><label style="font-size:10px;color:var(--text-dim);">HRV trend</label>${sel('q6',c.q6,[{v:'2',l:'📈 Trending up (2pts)'},{v:'1',l:'➡️ Stable (1pt)'},{v:'0',l:'📉 Trending down (0pts)'}])}</div>
+          <div><label style="font-size:10px;color:var(--text-dim);">Sleep quality</label>${sel('q7',c.q7,[{v:'good',l:'✅ Good 8.5h+ / score 80+ (2pts)'},{v:'ok',l:'⚠️ Hit and miss (1pt)'},{v:'bad',l:'❌ Consistently poor (0pts)'}])}</div>
+          <div><label style="font-size:10px;color:var(--text-dim);">Training motivation</label>${sel('q8',c.q8,[{v:'1',l:'🔥 Keen (1pt)'},{v:'0',l:'😐 Neutral (0pts)'},{v:'-1',l:'😩 Dreading (-1pt)'}])}</div>
+          <div><label style="font-size:10px;color:var(--text-dim);">Nutrition (1–5)</label>${inp('ec-nutrition','number',c.nutrition,'min="1" max="5"')}</div>
+          <div><label style="font-size:10px;color:var(--text-dim);">Life Stress (1–5)</label>${inp('ec-lifestress','number',c.lifestress,'min="1" max="5"')}</div>
+        </div>
+        <div style="margin-bottom:10px;"><label style="font-size:10px;color:var(--text-dim);">Weekly Intention / Focus</label><input type="text" id="ec-intention" value="${c.intention||''}" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 10px;font-size:12px;"></div>
+        <div style="margin-bottom:14px;"><label style="font-size:10px;color:var(--text-dim);">Recap / Notes</label><textarea id="ec-recap" rows="3" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 10px;resize:vertical;font-size:12px;">${c.recap||c.notes||''}</textarea></div>
         <div style="display:flex;gap:10px;justify-content:flex-end;">
           <button class="btn" style="background:var(--red);color:#fff;" onclick="deleteCheckin(${idx})">🗑 Delete</button>
           <button class="btn" style="background:var(--blue);color:#fff;font-weight:700;" onclick="saveCheckinEdit(${idx})">💾 Save Changes</button>
@@ -343,13 +372,23 @@ function editCheckin(idx) {
 function saveCheckinEdit(idx) {
   const c = D.checkins[idx];
   if(!c) return;
-  c.block      = document.getElementById('ec-block').value;
-  c.hours      = parseFloat(document.getElementById('ec-hours').value) || null;
-  c.score      = parseFloat(document.getElementById('ec-score').value) || null;
-  c.q3trend    = document.getElementById('ec-trend').value || null;
-  c.nutrition  = parseFloat(document.getElementById('ec-nutrition').value) || null;
-  c.lifestress = parseFloat(document.getElementById('ec-lifestress').value) || null;
-  c.notes      = document.getElementById('ec-notes').value;
+  const getV = id => { const el=document.getElementById(id); return el?el.value:''; };
+  c.block      = getV('ec-block');
+  c.hours      = parseFloat(getV('ec-hours')) || null;
+  c.score      = parseFloat(getV('ec-score')) || c.score || 0;
+  c.hrvAvg     = parseFloat(getV('ec-hrv')) || null;
+  c.q1         = getV('q1');
+  c.q2         = getV('q2');
+  c.q3trend    = getV('q3trend') || null;
+  c.q4         = getV('q4');
+  c.q5         = getV('q5');
+  c.q6         = getV('q6');
+  c.q7         = getV('q7');
+  c.q8         = getV('q8');
+  c.nutrition  = parseFloat(getV('ec-nutrition')) || null;
+  c.lifestress = parseFloat(getV('ec-lifestress')) || null;
+  c.intention  = getV('ec-intention');
+  c.recap      = getV('ec-recap');
   save();
   closeEditModal();
   renderHistory();

@@ -260,7 +260,7 @@ function autoPopulatePlannerFromStrava() {
 
 
 // ===== SYNC DATA — fallback constants (overridden by Supabase garmin_data if available) =====
-const GARMIN_TODAY = {"hrv": 82, "hrv7": 83, "sleepScore": 89, "sleepHrs": 9.5, "rhr": 47, "yesterdayStress": 21, "bodyBattery": 67}; // @@GARMIN_INJECT@@ — do not edit this line
+const GARMIN_TODAY = {"hrv": 82, "hrv7": 83, "sleepScore": 89, "sleepHrs": 9.5, "rhr": 47, "yesterdayStress": 21, "bodyBattery": 67, "date": "2026-03-09"}; // @@GARMIN_INJECT@@ — do not edit this line
 const SYNC_META = {"synced_at": "2026-03-09T10:35:16.078102", "strava_count": 0};    // @@SYNC_META@@    — do not edit this line
 
 // Refresh planner for recent weeks from STRAVA_ACTS (handles duplication safely)
@@ -312,13 +312,20 @@ function applySyncData() {
   // ── Garmin: auto-fill morning check fields ──────────────────────
   // Priority: 1) Cloud data from Supabase, 2) Hardcoded GARMIN_TODAY fallback
   let garmin = null;
+  let garminIsToday = false;
   // getGarminData is defined in strava_oauth.js (loaded after strava.js)
   if(typeof getGarminData === 'function') {
     garmin = getGarminData();
+    // Cloud garmin data: check date if present
+    if(garmin && garmin.date) garminIsToday = (garmin.date === today);
+    else if(garmin) garminIsToday = true; // cloud data assumed current
   } else if(typeof GARMIN_TODAY !== 'undefined') {
     garmin = GARMIN_TODAY;
+    // Static injected data: only use if date matches today
+    garminIsToday = garmin.date ? (garmin.date === today) : false;
   }
-  if(garmin) {
+
+  if(garmin && garminIsToday) {
     const fill = (id, val) => {
       const el = document.getElementById(id);
       if(el && val != null) el.value = val;

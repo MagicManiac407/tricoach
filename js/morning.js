@@ -306,9 +306,9 @@ function populateMorningForm(){
 
   // ── Numeric inputs ───────────────────────────────────────────
   const set=(id,v)=>{const el=document.getElementById(id);if(el&&v!=null&&v!==undefined)el.value=v;};
-  // For Garmin device fields: always prefer live GARMIN_TODAY data over saved data
-  // so that a fresh sync always shows the latest readings
-  const G = GARMIN_TODAY || {};
+  // For Garmin device fields: only prefer live GARMIN_TODAY data if it's from today
+  // A stale GARMIN_TODAY (from a previous day's sync) must NOT overwrite today's manually entered data
+  const G = (GARMIN_TODAY && GARMIN_TODAY.date === today) ? GARMIN_TODAY : {};
   set('m-hrv',        G.hrv        ?? m.hrv);
   set('m-hrv7',       G.hrv7       ?? m.hrv7);
   set('m-rhr',        G.rhr        ?? m.rhr);

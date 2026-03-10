@@ -166,15 +166,73 @@ function renderHistory(){
     <td style="white-space:nowrap;min-width:80px;"><div style="display:flex;flex-wrap:wrap;gap:3px;">${loadTags||'<span style="color:var(--text-dim);font-size:10px;">—</span>'}</div></td>
     <td style="max-width:240px;font-size:10px;line-height:1.8;">${stats}</td>
   </tr>`;}).join('')}</tbody></table></div>`;
-  // Checkins
+  // Checkins — full detail table
   const cc=document.getElementById('hc-checkins');
   if(!D.checkins.length){cc.innerHTML='<div style="color:var(--text-dim);font-size:12px;padding:16px 0;text-align:center;">No check-ins yet</div>';} else {
-    cc.innerHTML=`<div class="tbl-scroll"><table class="tbl"><thead><tr><th>Date</th><th>Block</th><th>Hrs</th><th>Score</th><th>Nutrition</th><th>Life Stress</th><th>Decision</th><th></th></tr></thead><tbody>${[...D.checkins].map((c,i)=>{const idx=D.checkins.indexOf(c);const sc=c.score>=8?'var(--green)':c.score>=5?'var(--orange)':'var(--red)';const action=c.score>=8?'🟢 Increase':c.score>=5?'🟡 Hold':'🔴 Reduce';return`<tr><td style="white-space:nowrap;">${c.date}</td><td>${c.block||'—'}</td><td>${c.hours||'—'}</td><td style="font-family:'Bebas Neue',sans-serif;font-size:16px;color:${sc};">${c.score}/10</td><td>${c.nutrition?c.nutrition+'/5':'—'}</td><td>${c.lifestress?c.lifestress+'/5':'—'}</td><td style="font-size:11px;">${action}</td><td><button class="btn sec sml" style="font-size:10px;padding:2px 8px;" onclick="editCheckin(${idx})">✏️ Edit</button></td></tr>`;}).join('')}</tbody></table></div>`;
+    const qLabel = (key, val) => {
+      const maps = {
+        q1: {3:'✅ All 3 sessions',2:'⚠️ 2 of 3',0:'❌ 1 or fewer'},
+        q2: {2:'✅ Stayed in Z2','1':'⚠️ Mostly Z2',0:'❌ Drifting'},
+        q4: {2:'💪 Fresh',1:'😐 Tired but ok',0:'😓 Fatigued'},
+        q7: {good:'✅ Good sleep',ok:'⚠️ Hit and miss',bad:'❌ Poor sleep'},
+        q8: {1:'🔥 Keen',0:'😐 Neutral','-1':'😩 Dreading'}
+      };
+      if(maps[key] && val!==undefined && val!=='') return maps[key][val] || val;
+      return val||'—';
+    };
+    cc.innerHTML=`<div class="tbl-scroll"><table class="tbl">
+      <thead><tr><th>Date</th><th>Block</th><th>Score</th><th>Hrs</th><th>HRV Avg</th><th>Sessions</th><th>Z2 Discipline</th><th>Training Load</th><th>Freshness</th><th>Sleep</th><th>Motivation</th><th>Nutrition</th><th>Life Stress</th><th>Decision</th><th>Notes</th><th></th></tr></thead>
+      <tbody>${[...D.checkins].reverse().map((c)=>{
+        const idx=D.checkins.indexOf(c);
+        const sc=c.score>=8?'var(--green)':c.score>=5?'var(--orange)':'var(--red)';
+        const action=c.score>=8?'🟢 Increase':c.score>=5?'🟡 Hold':'🔴 Reduce';
+        return`<tr>
+          <td style="white-space:nowrap;font-size:10px;">${c.date}</td>
+          <td style="font-size:11px;">${c.block||'—'}</td>
+          <td style="font-family:'Bebas Neue',sans-serif;font-size:18px;color:${sc};">${c.score}/10</td>
+          <td>${c.hours||'—'}</td>
+          <td style="color:var(--blue);">${c.hrvAvg||'—'}</td>
+          <td style="font-size:10px;">${qLabel('q1',c.q1)}</td>
+          <td style="font-size:10px;">${qLabel('q2',c.q2)}</td>
+          <td style="font-size:10px;">${c.q3trend||'—'}</td>
+          <td style="font-size:10px;">${qLabel('q4',c.q4)}</td>
+          <td style="font-size:10px;">${c.sleepScore?c.sleepScore+' score':qLabel('q7',c.q7)}</td>
+          <td style="font-size:10px;">${qLabel('q8',c.q8)}</td>
+          <td>${c.nutrition?c.nutrition+'/5':'—'}</td>
+          <td>${c.lifestress?c.lifestress+'/5':'—'}</td>
+          <td style="font-size:11px;white-space:nowrap;">${action}</td>
+          <td style="font-size:10px;max-width:160px;color:var(--text-dim);">${(c.recap||c.intention||'').substring(0,60)||'—'}</td>
+          <td><button class="btn sec sml" style="font-size:10px;padding:2px 8px;white-space:nowrap;" onclick="editCheckin(${idx})">✏️ Edit</button></td>
+        </tr>`;}).join('')}
+      </tbody></table></div>`;
   }
-  // Morning
+  // Morning log — full detail with edit
   const mc=document.getElementById('hc-morning');
   if(!D.mornings.length){mc.innerHTML='<div style="color:var(--text-dim);font-size:12px;padding:16px 0;text-align:center;">No morning checks yet</div>';}else{
-    mc.innerHTML=`<div style="overflow-x:auto;"><table class="tbl"><thead><tr><th>Date</th><th>HRV</th><th>RHR</th><th>Sleep</th><th>Sleep h</th><th>Stress</th><th>Legs</th><th>Cal In</th><th>Status</th><th></th></tr></thead><tbody>${[...D.mornings].reverse().map(m=>{const idx=D.mornings.indexOf(m);const se=m.status==='green'?'🟢':m.status==='amber'?'🟡':'🔴';return`<tr><td style="white-space:nowrap;font-size:10px;">${m.date}</td><td>${m.hrv||'—'}</td><td>${m.rhr||'—'}</td><td>${m.sleepScore||'—'}</td><td>${m.sleep||'—'}</td><td>${m.gstress||'—'}</td><td>${m.legs||'—'}</td><td>${m.calIn||'—'}</td><td>${se}</td><td><button class="btn sec sml" style="font-size:10px;padding:2px 8px;" onclick="editMorning(${idx})">✏️ Edit</button></td></tr>`;}).join('')}</tbody></table></div>`;
+    mc.innerHTML=`<div style="overflow-x:auto;"><table class="tbl">
+      <thead><tr><th>Date</th><th>HRV</th><th>RHR</th><th>Sleep Score</th><th>Sleep h</th><th>Stress</th><th>Readiness</th><th>Legs</th><th>Cal In</th><th>Protein</th><th>Readiness Score</th><th>Status</th><th>Note</th><th></th></tr></thead>
+      <tbody>${[...D.mornings].reverse().map(m=>{
+        const idx=D.mornings.indexOf(m);
+        const se=m.status==='green'?'🟢':m.status==='amber'?'🟡':'🔴';
+        const rScore=m.readinessScore;
+        const rColor=rScore>=70?'var(--green)':rScore>=40?'var(--orange)':'var(--red)';
+        return`<tr>
+          <td style="white-space:nowrap;font-size:10px;">${m.date}</td>
+          <td style="color:var(--blue);font-weight:600;">${m.hrv||'—'}</td>
+          <td>${m.rhr?m.rhr+'bpm':'—'}</td>
+          <td style="color:${m.sleepScore>=80?'var(--green)':m.sleepScore>=70?'var(--orange)':'var(--text-dim)'};">${m.sleepScore||'—'}</td>
+          <td>${m.sleep?m.sleep+'h':'—'}</td>
+          <td>${m.gstress||'—'}</td>
+          <td>${m.readiness?m.readiness+'/5':'—'}</td>
+          <td>${m.legs?m.legs+'/5':'—'}</td>
+          <td>${m.calIn?m.calIn+'kcal':'—'}</td>
+          <td>${m.protein?m.protein+'g':'—'}</td>
+          <td style="font-family:'Bebas Neue',sans-serif;font-size:16px;color:${rColor};">${rScore||'—'}</td>
+          <td>${se}</td>
+          <td style="font-size:10px;color:var(--text-dim);max-width:120px;">${(m.note||'').substring(0,50)||'—'}</td>
+          <td><button class="btn sec sml" style="font-size:10px;padding:2px 8px;white-space:nowrap;" onclick="editMorning(${idx})">✏️ Edit</button></td>
+        </tr>`;}).join('')}
+      </tbody></table></div>`;
   }
 }
 
@@ -185,6 +243,18 @@ function updateDashboard(){
   if(m.length){
     const l=m[m.length-1];
     const isToday = l.date===today;
+    const isYesterday = !isToday && l.date === (() => { const d=new Date(); d.setDate(d.getDate()-1); return localDateStr(d); })();
+    // Show a staleness badge on the dashboard health metrics if data is not today's
+    const staleEl = document.getElementById('d-health-date');
+    if(staleEl) {
+      if(isToday) {
+        staleEl.textContent = 'Today · ' + l.date;
+        staleEl.style.color = 'var(--green)';
+      } else {
+        staleEl.textContent = (isYesterday ? 'Yesterday' : l.date) + ' · Log today\'s check →';
+        staleEl.style.color = 'var(--orange)';
+      }
+    }
     if(l.hrv){
       document.getElementById('d-hrv-v').textContent=l.hrv;
       const prev=m.slice(-8,-1).filter(x=>x.hrv);
@@ -237,8 +307,10 @@ function updateDashboard(){
   // Week snap
   const snap=document.getElementById('d-week-snap');
   const days=DAYS.map((_,di)=>plan[di]).filter(d=>d&&d.types);
-  if(!days.length){snap.innerHTML='<div style="color:var(--text-dim);font-size:12px;padding:8px 0;">No sessions planned — <span style="color:var(--blue);cursor:pointer;" onclick="nav(\'planner\')">open planner →</span></div>';return;}
-  snap.innerHTML=`<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:10px;">${DAYS.map((_,di)=>{const d=plan[di];if(!d||!d.types)return`<div style="background:var(--surface2);border-radius:7px;padding:8px 6px;text-align:center;"><div style="font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:1px;color:var(--text-dim);">${DAYS[di].slice(0,3).toUpperCase()}</div><div style="font-size:9px;color:var(--text-dim);margin-top:2px;">Rest</div></div>`;const isHard=/interval|effort|threshold|max|285|260|245|hard|vo2/i.test(d.plan||'');const qc=d.quality>=4?'var(--green)':d.quality>=3?'var(--orange)':d.quality?'var(--red)':'';return`<div style="background:var(--surface2);border:1px solid ${isHard?'rgba(244,67,54,.3)':'var(--border)'};border-radius:7px;padding:8px 6px;"><div style="font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:1px;${isHard?'color:var(--red)':''};">${DAYS[di].slice(0,3).toUpperCase()}</div><div style="font-size:9px;color:var(--text-mid);margin-top:2px;line-height:1.3;">${d.types}</div>${d.quality?`<div style="font-family:'Bebas Neue',sans-serif;font-size:12px;color:${qc};margin-top:3px;">Q${d.quality} R${d.recovery||'?'}</div>`:''}</div>`;}).join('')}</div>`;
+  if(!days.length){snap.innerHTML='<div style="color:var(--text-dim);font-size:12px;padding:8px 0;">No sessions planned — <span style="color:var(--blue);cursor:pointer;" onclick="nav(\'planner\')">open planner →</span></div>';}
+  else {snap.innerHTML=`<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:10px;">${DAYS.map((_,di)=>{const d=plan[di];if(!d||!d.types)return`<div style="background:var(--surface2);border-radius:7px;padding:8px 6px;text-align:center;"><div style="font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:1px;color:var(--text-dim);">${DAYS[di].slice(0,3).toUpperCase()}</div><div style="font-size:9px;color:var(--text-dim);margin-top:2px;">Rest</div></div>`;const isHard=/interval|effort|threshold|max|285|260|245|hard|vo2/i.test(d.plan||'');const qc=d.quality>=4?'var(--green)':d.quality>=3?'var(--orange)':d.quality?'var(--red)':'';return`<div style="background:var(--surface2);border:1px solid ${isHard?'rgba(244,67,54,.3)':'var(--border)'};border-radius:7px;padding:8px 6px;"><div style="font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:1px;${isHard?'color:var(--red)':''};">${DAYS[di].slice(0,3).toUpperCase()}</div><div style="font-size:9px;color:var(--text-mid);margin-top:2px;line-height:1.3;">${d.types}</div>${d.quality?`<div style="font-family:'Bebas Neue',sans-serif;font-size:12px;color:${qc};margin-top:3px;">Q${d.quality} R${d.recovery||'?'}</div>`:''}</div>`;}).join('')}</div>`;}
+  // Render race predictor mini widget
+  if(typeof renderDashboardRacePredictor === 'function') setTimeout(renderDashboardRacePredictor, 50);
 }
 
 // ===== PBs =====

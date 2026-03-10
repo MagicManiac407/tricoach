@@ -24,10 +24,10 @@ function renderPlanner(){
     <div class="day-body" id="db-${di}" style="display:none;">
       <div class="g2"><div>
         <div class="fg"><label>Session Types</label><input type="text" id="tp-${di}" value="${dd.types||''}" placeholder="e.g. Easy Cycle, Interval Run" onchange="updateTags(${di})" oninput="liveUpdateTotals()"></div>
-        <div class="fg"><label>Programmed Plan</label><textarea class="plan-txt" id="pl-${di}" placeholder="e.g. Cycle: 2hr @ Z2 (145–162bpm)&#10;Run: 10km @ Z2 — no higher than 162bpm" oninput="liveUpdateTotals()">${dd.plan||''}</textarea></div>
-        <div class="fg"><label>Notes</label><textarea id="nt-${di}" placeholder="e.g. Rest day on Thursdays reduces cycle to 3x per week" style="min-height:44px;">${dd.notes||''}</textarea></div>
+        <div class="fg"><label>Programmed Plan</label><textarea class="plan-txt" id="pl-${di}" placeholder="e.g. Cycle: 2hr @ Z2 (145–162bpm)&#10;Run: 10km @ Z2 — no higher than 162bpm" oninput="liveUpdateTotals()" onblur="autoSavePlanDay(${di})">${dd.plan||''}</textarea></div>
+        <div class="fg"><label>Notes</label><textarea id="nt-${di}" placeholder="e.g. Rest day on Thursdays reduces cycle to 3x per week" style="min-height:44px;" onblur="autoSavePlanDay(${di})">${dd.notes||''}</textarea></div>
       </div><div>
-        <div class="fg"><label>Training Completed</label><textarea class="plan-txt done" id="cp-${di}" placeholder="e.g. Cycle: 3hr 12min @ 105W | Avg HR 130&#10;Run: 10km @ 6:30 @ 144bpm (stopped twice)" style="min-height:110px;">${dd.completed||''}</textarea></div>
+        <div class="fg"><label>Training Completed</label><textarea class="plan-txt done" id="cp-${di}" placeholder="e.g. Cycle: 3hr 12min @ 105W | Avg HR 130&#10;Run: 10km @ 6:30 @ 144bpm (stopped twice)" style="min-height:110px;" onblur="autoSavePlanDay(${di})">${dd.completed||''}</textarea></div>
         <label style="margin-bottom:8px;">Quality / Recovery</label>
         <div style="display:flex;gap:8px;align-items:center;">
           <span style="font-size:11px;color:var(--text-dim);white-space:nowrap;">Quality</span>
@@ -153,6 +153,20 @@ function checkStack(){
 function autoSaveFocus(){
   if(!D.plans[currentWeekKey])D.plans[currentWeekKey]={};
   D.plans[currentWeekKey]._focus=document.getElementById('week-focus').value;
+  save();
+}
+
+function autoSavePlanDay(di){
+  // Auto-save a single day's fields when user clicks away (blur event)
+  if(!D.plans[currentWeekKey])D.plans[currentWeekKey]={};
+  const p=D.plans[currentWeekKey];
+  const existing=p[di]||{};
+  p[di]={...existing,
+    types:document.getElementById('tp-'+di)?.value||existing.types||'',
+    plan:document.getElementById('pl-'+di)?.value||existing.plan||'',
+    completed:document.getElementById('cp-'+di)?.value||existing.completed||'',
+    notes:document.getElementById('nt-'+di)?.value||existing.notes||''
+  };
   save();
 }
 
