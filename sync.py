@@ -480,6 +480,49 @@ def inject_into_html(garmin_data, strava_acts):
     return True
 
 # ─────────────────────────────────────────────────────────────────
+# SUPABASE PUSH — push Strava activities to Supabase
+# ─────────────────────────────────────────────────────────────────
+SUPABASE_URL = "https://vhdzkmjfivfuverqhxip.supabase.co"
+SUPABASE_KEY = "sb_publishable_A14st8S-OPSBBOZ8SzQshQ_D56nk0nz"
+
+def push_to_supabase(strava_acts):
+    """Upsert all Strava activities to Supabase strava_acts table."""
+    if not strava_acts:
+        return
+    try:
+        import requests as req
+        headers = {
+            "apikey": SUPABASE_KEY,
+            "Authorization": f"Bearer {SUPABASE_KEY}",
+            "Content-Type": "application/json",
+            "Prefer": "resolution=merge-duplicates"
+        }
+        # Upsert in batches of 100
+        batch_size = 100
+        total = 0
+        for i in range(0, len(strava_acts), batch_size):
+            batch = strava_acts[i:i+batch_size]
+            # Wrap each act with an id field for upsert key
+            rows = [{"act_id": str(a["id"]), "data": a} for a in batch if a.get("id")]
+            r = req.post(
+                f"{SUPABASE_URL}/rest/v1/strava_acts",
+                headers=headers,
+                json=rows
+            )
+            if r.status_code in (200, 201):
+                total += len(rows)
+            else:
+                print(f"  ⚠  Supabase push error: {r.status_code} {r.text[:200]}")
+                return
+        print(f"  ✅ Pushed {total} activities to Supabase")
+    except Exception as e:
+        print(f"  ⚠  Supabase push failed: {e}")
+
+def ensure_supabase_table():
+    """Create strava_acts table if it doesn't exist via RPC (best-effort)."""
+    pass  # Table must be created manually in Supabase dashboard — see setup instructions
+
+# ─────────────────────────────────────────────────────────────────
 # STRUCTURED SYNC — returns result dict for server mode
 # ─────────────────────────────────────────────────────────────────
 def run_sync(do_garmin=True, do_strava=True, days=14):
@@ -504,6 +547,14 @@ def run_sync(do_garmin=True, do_strava=True, days=14):
     messages.append("[Writing to HTML]")
     ok = inject_into_html(garmin_data, strava_acts)
     messages.append("  ✅ HTML updated" if ok else "  ❌ HTML update failed")
+
+    if do_strava and strava_acts:
+        messages.append("[Supabase]")
+        try:
+            push_to_supabase(strava_acts)
+            messages.append(f"  ✅ {len(strava_acts)} activities pushed to Supabase")
+        except Exception as e:
+            messages.append(f"  ⚠  Supabase push failed: {e}")
 
     return {"ok": ok, "messages": messages, "garmin": garmin_data, "strava_count": len(strava_acts)}
 

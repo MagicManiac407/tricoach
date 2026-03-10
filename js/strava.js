@@ -1,3 +1,40 @@
+// ===== SUPABASE STRAVA LOADER =====
+// Loads all activities from Supabase strava_acts table and overrides STRAVA_ACTS in memory.
+// This means sync.py just needs to push to Supabase — no git push needed for data updates.
+async function loadStravaFromSupabase() {
+  try {
+    const SUPA_URL = "https://vhdzkmjfivfuverqhxip.supabase.co";
+    const SUPA_KEY = "sb_publishable_A14st8S-OPSBBOZ8SzQshQ_D56nk0nz";
+    let all = [];
+    let from = 0;
+    const pageSize = 1000;
+    // Paginate through all rows
+    while(true) {
+      const r = await fetch(`${SUPA_URL}/rest/v1/strava_acts?select=data&order=act_id&offset=${from}&limit=${pageSize}`, {
+        headers: { "apikey": SUPA_KEY, "Authorization": `Bearer ${SUPA_KEY}` }
+      });
+      if(!r.ok) break;
+      const rows = await r.json();
+      if(!rows.length) break;
+      all = all.concat(rows.map(row => row.data));
+      if(rows.length < pageSize) break;
+      from += pageSize;
+    }
+    if(all.length > 0) {
+      all.sort((a,b) => (a.d||'').localeCompare(b.d||''));
+      STRAVA_ACTS.acts = all;
+      console.log(`[TriCoach] Loaded ${all.length} activities from Supabase`);
+      // Re-render performance if it's currently visible
+      if(typeof renderPerformance === 'function') {
+        const perfPage = document.getElementById('page-performance');
+        if(perfPage && perfPage.classList.contains('active')) renderPerformance();
+      }
+    }
+  } catch(e) {
+    console.warn('[TriCoach] Supabase activity load failed, using static data:', e);
+  }
+}
+
 // ===== STRAVA CLEAR / RESYNC =====
 function confirmClearAllStrava() {
   // Show a modal-style confirm rather than browser confirm()
@@ -260,8 +297,8 @@ function autoPopulatePlannerFromStrava() {
 
 
 // ===== SYNC DATA — fallback constants (overridden by Supabase garmin_data if available) =====
-const GARMIN_TODAY = {"hrv": 82, "hrv7": 82, "sleepScore": 84, "sleepHrs": 7.9, "rhr": 49, "yesterdayStress": 33, "bodyBattery": 60, "date": "2026-03-10"}; // @@GARMIN_INJECT@@ — do not edit this line
-const SYNC_META = {"synced_at": "2026-03-10T11:24:08.394435", "strava_count": 26};    // @@SYNC_META@@    — do not edit this line
+const GARMIN_TODAY = {"hrv": 82, "hrv7": 83, "sleepScore": 89, "sleepHrs": 9.5, "rhr": 47, "yesterdayStress": 21, "bodyBattery": 67, "date": "2026-03-09"}; // @@GARMIN_INJECT@@ — do not edit this line
+const SYNC_META = {"synced_at": "2026-03-09T10:35:16.078102", "strava_count": 0};    // @@SYNC_META@@    — do not edit this line
 
 // Refresh planner for recent weeks from STRAVA_ACTS (handles duplication safely)
 function refreshPlannerFromStrava() {
