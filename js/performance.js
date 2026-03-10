@@ -386,8 +386,8 @@ function renderRunCharts() {
   const range=(document.getElementById('rf-range')||{value:'all'}).value;
   const noIv=(document.getElementById('rf-noiv')||{checked:false}).checked;
 
-  const acts=filterActs('Run',{effort,minDist,range,noInterval:noIv}).filter(a=>a.ae||a.p||a.hr);
-  const allActs=filterActs('Run',{minDist:5,range}).filter(a=>a.p&&a.hr);
+  const acts=filterActs('Run',{effort,minDist,range,noInterval:noIv}).filter(a=>a.p||a.hr||a.dk);
+  const allActs=filterActs('Run',{minDist:5,range}).filter(a=>a.p);
   const ivActs=filterActs('Run',{range}).filter(a=>a.iv);
 
   // Stats summary
@@ -578,7 +578,7 @@ function renderBikeCharts() {
   const rideType=(document.getElementById('bf-type')||{value:'rouvy'}).value;
   const minDur=parseFloat((document.getElementById('bf-dur')||{value:40}).value||40);
   const range=(document.getElementById('bf-range')||{value:'all'}).value;
-  const acts=filterActs('Bike',{rideType,minDur,range}).filter(a=>a.nw||a.w||a.hr);
+  const acts=filterActs('Bike',{rideType,minDur,range}).filter(a=>a.nw||a.w||a.hr||a.dk);
 
   // Stats summary
   const sDiv=document.getElementById('bike-stats');
