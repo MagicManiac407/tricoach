@@ -1,7 +1,7 @@
 # TriCoach 2026 — Project Context Document
 
 > **Purpose**: Upload this file to any new Claude chat so it instantly understands the full project state. No need to read old conversations.
-> **Last updated**: 2026-03-07
+> **Last updated**: 2026-03-12
 > **Live URL**: https://MagicManiac407.github.io/tricoach/
 > **Repo**: https://github.com/MagicManiac407/tricoach
 
@@ -11,41 +11,69 @@
 
 **Hosting**: GitHub Pages (static files, free)
 **Backend**: Supabase (auth, database, row-level security)
-**Data sync**: Strava OAuth (in-browser), Garmin via `sync.py` (Python script → Supabase)
+**Data sync**: Strava OAuth (in-browser), Garmin via `sync.py` (Python script → Supabase + GitHub auto-push)
 **Users**: Multi-user — each user has their own Supabase account with isolated data
 
 ### File Structure
 ```
 tricoach/
-├── index.html          (1,159 lines — HTML shell, all page layouts)
-├── css/styles.css      (284 lines — full CSS, dark theme, responsive)
-├── js/config.js        (195 lines — Supabase config, auth, state, save)
-├── js/core.js          (115 lines — nav, score buttons, backup, week helpers)
-├── js/morning.js       (367 lines — morning check, readiness algorithm)
-├── js/planner.js       (196 lines — weekly planner)
-├── js/trends.js        (604 lines — trends, multi-metric charts, check-in)
-├── js/dashboard.js     (411 lines — dashboard, history, PBs, utils, chart tooltip)
-├── js/performance.js   (1,018 lines — run/bike/swim/volume charts, auto PBs)
-├── js/strava.js        (290 lines — Strava clear/resync, Garmin inject, sync data)
-├── js/nutrition.js     (605 lines — food search, logging, library, templates)
-├── js/init.js          (375 lines — auth UI, athletes, backup reminder, startup)
-├── sync.py             (671 lines — Garmin Connect scraper, pushes to Supabase)
-└── PROJECT.md          (this file)
+├── index.html              (HTML shell, all page layouts)
+├── js/styles.css           (full CSS, dark theme, responsive)
+├── js/config.js            (Supabase config, auth, state, save/load)
+├── js/core.js              (nav, score buttons, backup, week helpers)
+├── js/morning.js           (morning check, readiness algorithm)
+├── js/planner.js           (weekly planner, Strava auto-populate)
+├── js/trends.js            (trends, multi-metric charts, check-in)
+├── js/dashboard.js         (dashboard, STRAVA_ACTS definition, history, PBs, utils)
+├── js/performance.js       (run/bike/swim/volume charts, race predictor, auto PBs)
+├── js/strava.js            (Strava clear/resync, GARMIN_TODAY, Supabase loaders)
+├── js/nutrition.js         (food search, logging, library, templates)
+├── js/init.js              (auth UI, athletes, backup reminder, startup, Supabase loaders)
+├── js/problueprintpage.js  (Pro Blueprint athlete profiles)
+├── sync.py                 (Garmin Connect scraper → Supabase + auto git push)
+├── garmin_backfill.py      (one-time: pulls 180 days of Garmin history → Supabase)
+└── PROJECT.md              (this file)
 ```
+
+### Critical Architecture Notes
+- **`STRAVA_ACTS` is defined in `dashboard.js`** (not strava.js) — sync.py writes there
+- **`GARMIN_TODAY` is defined in `strava.js`** — sync.py injects today's data there
+- **Dashboard health cards** read from `D.mornings` (user's logged morning checks), not directly from Garmin
+- **Garmin data auto-fills morning check FORM only** — user must save to see on dashboard cards
+- **Script load order matters**: dashboard.js must load before strava.js (STRAVA_ACTS dependency)
 
 ### Supabase Config
 - **URL**: `https://vhdzkmjfivfuverqhxip.supabase.co`
 - **Anon Key**: `sb_publishable_A14st8S-OPSBBOZ8SzQshQ_D56nk0nz`
-- **Tables**: `user_data` (id, data JSON, updated_at), `athlete_profiles` (id, display_name, share_enabled, summary)
-- **Auth**: Email/password, instant signup (email confirmation disabled)
-- **RLS**: Each user can only read/write their own rows
+- **Service Role Key**: stored in sync.py / garmin_backfill.py (bypasses RLS)
+- **User ID**: `a4dd3dc4-19a4-4740-90f8-cef054cfab99`
+- **Tables**:
+  - `user_data` — (id, data JSON, updated_at) — all user app data
+  - `strava_acts` — (act_id PK, data jsonb) — Strava activities mirror
+  - `garmin_today` — (id PK, data jsonb) — latest Garmin sync (id="latest")
+  - `athlete_profiles` — (id, display_name, share_enabled, summary)
+- **Auth**: GitHub OAuth (Travis's account is GitHub-linked, no email/password)
+- **RLS**: Each user can only read/write their own rows; service role key bypasses RLS
+
+### Sync Architecture
+```
+python3 sync.py
+  → Garmin Connect API → GARMIN_TODAY injected into js/strava.js
+  → Strava API → STRAVA_ACTS injected into js/dashboard.js
+  → Push both to Supabase (strava_acts + garmin_today tables)
+  → Auto git add + commit + push to GitHub (live site updates automatically)
+
+On page load (init.js):
+  → loadGarminFromSupabase() — fetches garmin_today, calls applySyncData()
+  → loadStravaFromSupabase() — fetches all strava_acts, overrides STRAVA_ACTS.acts
+```
 
 ---
 
 ## Features — What's BUILT & WORKING
 
 ### 1. Authentication & Multi-User
-- Email/password signup/signin via Supabase Auth
+- GitHub OAuth signup/signin via Supabase Auth
 - Each user's data stored in `user_data` table as JSON blob
 - Local-first: localStorage cache + debounced cloud sync (2s delay)
 - First login migrates any existing localStorage data to cloud
@@ -54,8 +82,10 @@ tricoach/
 ### 2. Dashboard
 - Readiness arc (circular progress) based on morning check scores
 - Today's metrics: HRV, RHR, Sleep Score, Sleep Hours, Garmin Stress
+- Race predictor summary card (Sprint / Olympic / 70.3 predicted times)
 - Quick links to all pages
 - Sync status indicator (shows how recently Garmin data was synced)
+- Weekly training totals from Strava
 
 ### 3. Morning Check & Readiness Algorithm
 - 100-point scoring system across 8 weighted categories:
@@ -67,9 +97,9 @@ tricoach/
   - Yesterday's training load (10pts)
   - Week accumulated load (5pts)
   - Garmin stress score (5pts)
-- Consecutive bad-days cap
-- Auto-save with debouncing
-- Garmin data auto-fills fields when synced
+- Consecutive bad-days cap, auto-save with debouncing
+- Garmin data auto-fills fields when synced today
+- **180 days of historical Garmin data backfilled** via garmin_backfill.py
 
 ### 4. Weekly Planner
 - 7-day expandable cards with: types, programmed plan, completed, notes, quality/recovery scores
@@ -77,183 +107,164 @@ tricoach/
 - Color-coded effort tags (Z2=cyan, Z3=orange, Z4/Z5=red)
 - Week totals bar (swim/bike/run counts, sessions, hard/easy ratio)
 - Auto-detect totals from Strava data (km, time, effort breakdown)
-- Copy last week's plan
-- Back-to-back hard session warnings
+- Copy last week's plan, back-to-back hard session warnings
 
 ### 5. Strava Integration
 - OAuth flow built into the app (Connections tab)
 - Activities imported into planner automatically
-- STRAVA_ACTS data structure with parsed activities
+- STRAVA_ACTS: 379 activities from 2024-02-07 onward
+- Supabase mirror of all activities (strava_acts table)
 - Clear/resync functionality per-week or all weeks
-- Strava → planner import with deduplication
 
 ### 6. Garmin Integration
-- `sync.py` Python script reads from Garmin Connect API
-- Injects data into `GARMIN_TODAY` constant in `js/strava.js`
-- Fields: HRV, HRV 7-day avg, RHR, Sleep Score, Sleep Hours, Stress, Body Battery
-- For multi-user: each user runs `sync.py --setup-cloud` to push to their own Supabase account
+- `sync.py` pulls HRV, HRV 7-day avg, RHR, Sleep Score, Sleep Hours, Stress, Body Battery
+- Pushes to Supabase `garmin_today` (id="latest") + auto-pushes to GitHub
+- App loads fresh Garmin data from Supabase on every page load
+- `garmin_backfill.py` — backfills 180 days of history into morning log in Supabase
 - **LIMITATION**: Garmin has no public OAuth API — requires Python script per user
 
 ### 7. Trends & Charts
 - Multi-metric overlay chart (canvas-based, custom tooltip engine)
-- Metric pills for toggling: HRV, RHR, Sleep, Stress, Legs, Readiness, Calories, etc.
+- Metric pills: HRV, RHR, Sleep, Stress, Legs, Readiness, Calories, etc.
 - Presets: Recovery, Performance, Sleep Quality, Body Composition
-- Daily/weekly view toggle
-- Trend insights: HRV trend, consecutive low readiness, recovery action tracking
+- Daily/weekly view toggle, trend insights
 
 ### 8. Weekly Check-In
 - Training load analysis (this week vs last)
-- HRV comparison (this week vs last week averages)
-- Z2 pace analysis (easy run pace trends)
+- HRV comparison, Z2 pace analysis
 - Subjective scores: nutrition, life stress, recovery protocol
 
 ### 9. Performance Page
-- Run charts: pace progression, HR zones, distance trends
-- Bike charts: power progression, cadence, speed
-- Swim charts: pace per 100m, distance trends
+- Run/Bike/Swim charts: progression, HR zones, distance trends
 - Volume charts: weekly hours by sport, cumulative distance
 - Auto-detected PBs from Strava data
+- Race Predictor (see below)
 
-### 10. PBs (Personal Bests)
+### 10. Race Predictor
+- Located in: Performance tab + Dashboard home card
+- Predicts Sprint / Olympic / 70.3 / Ironman finish times
+- **Anchored to real PBs** (fixed 2026-03-12):
+  - Swim: uses CSS PB (1:44/100m) directly → race pace ~1:50/100m
+  - Bike: derives from stored FTP PBs (~230W), hard cap 300W → race effort 173-196W
+  - Run: derives threshold from HM PB (1:39:46) or LTHR pace → 4:41-4:54/km race pace
+- Current realistic predictions: Sprint ~1:09, Olympic ~2:17, 70.3 ~4:37
+- Previous bug: CTL over-extrapolation produced fantasy numbers (swim 1:23, bike 355W, run 5:22)
+
+### 11. PBs (Personal Bests)
 - Categories: Swim, Bike, Run, Triathlon, Physiological
-- Pre-populated with user's known PBs
-- Editable inline
-- Auto-PB detection from Strava activities
+- Key values: CSS ~1:44/100m | FTP ~230W | HM 1:39:46 | 5km 22:09 | LTHR 181bpm
+- Editable inline, auto-PB detection from Strava activities
 
-### 11. Nutrition (PARTIALLY BUILT — needs completion)
-- **Working**: Day-by-day food log, meal categories (Breakfast/Lunch/Dinner/Snacks)
-- **Working**: Open Food Facts search with Australian filter (`countries_tags=en:australia`)
-- **Working**: Food library (save custom foods), meal templates
-- **Working**: Manual food entry with full macros
-- **Working**: Daily totals display (calories, protein, carbs, fat)
-- **Working**: MFP-style log popup with serving size dropdown
-- **NEEDS**: Barcode scanner (camera-based, using phone camera via HTTPS)
-- **NEEDS**: Nutritional label OCR via Claude API (scan label → auto-extract macros)
-- **NEEDS**: Better Australian food database coverage (Woolworths, Coles, Aldi products)
-- **NEEDS**: Burned/net calorie rows (calories eaten minus calories burned from Strava)
-- **NEEDS**: Nutrition goals setting and tracking against goals
-
-### 12. Decision Rules
-- Table of training rules (e.g., "If readiness < 60, reduce intensity")
-- Configurable thresholds
+### 12. Nutrition (PARTIALLY BUILT)
+- **Working**: Day-by-day food log, Open Food Facts search (AU filter), food library, meal templates, manual entry, daily totals
+- **NEEDS**: Barcode scanner, nutritional label OCR, burned/net calories, nutrition goals
 
 ### 13. History
-- Morning check history with edit/delete
-- Check-in history with edit/delete
-- Search and filter
+- Morning check history with edit/delete (180 days of backfilled data)
+- Check-in history with edit/delete, search and filter
 
-### 14. Backup System
-- JSON export/import
-- Weekly backup reminder (checks last backup date)
+### 14. Pro Blueprint Page
+- Athlete profiles (e.g. Gustav Iden) with training philosophy, race analysis, recovery protocols
 
 ---
 
-## Features — PLANNED / NOT YET BUILT
+## Known Bugs Fixed (2026-03-12)
 
-### Priority 1: Garmin No-Terminal Solution
-- **Goal**: Supabase Edge Function that authenticates with Garmin on the server
-- **Flow**: User enters Garmin email/password once → stored encrypted in Supabase → Edge Function runs daily, pulls data, stores in user's row
-- **Benefit**: No Python script, no terminal, works from phone
-- **Status**: Planned but not started
-
-### Priority 2: Nutrition Completion
-- Barcode scanner (HTML5 camera API, needs HTTPS — use GitHub Pages URL)
-- Claude API OCR for nutritional labels
-- Better food search with Australian supermarket products
-- Net calorie tracking (eaten - burned)
-
-### Priority 3: Multi-User Polish
-- Better athlete sharing/viewing
-- Coach view (see multiple athletes)
-- Invite links
+| Bug | Root cause | Fix |
+|-----|-----------|-----|
+| All JS broken — history/dashboard/performance undefined | `problueprintpage.js:184` unescaped `I've` in single-quoted JS string | Escaped to `I\'ve` |
+| STRAVA_ACTS undefined everywhere | `dashboard.js` had literal newline inside activity name JSON string | Replaced `\n` with `\\n` in JSON |
+| Race predictor wildly inaccurate | CTL formula uncapped, ignoring PB data | Rewritten to anchor to CSS/FTP/HM PBs with hard caps |
+| Morning log missing 180 days | sync.py only saved "today" | Created garmin_backfill.py — 177 days added |
+| Performance tab only showed Feb 2026 | Output dashboard.js only had 20 activities | Ran sync.py --days 1825 to regenerate full 379-activity history |
+| Dashboard shows "Never synced" | Date guard in applySyncData() blocking static fallback | Removed date guard, SYNC_META updated |
 
 ---
 
-## Tech Stack Details
+## Deployment Workflow
 
-### Frontend
-- **Vanilla JS** — no framework, no build step
-- **Custom CSS** with CSS variables for theming
+```bash
+# Standard deploy:
+cd ~/Downloads/tricoach_deploy_v3
+git add <files> && git commit -m "message" && git push origin main
+# GitHub Pages auto-deploys in ~2 minutes. Hard refresh with Cmd+Shift+R.
+
+# Daily Garmin sync (run from tricoach_deploy_v3/):
+python3 sync.py
+# → Updates Garmin + Strava, pushes to Supabase, auto-pushes to GitHub
+
+# One-time or re-run historical backfill:
+python3 garmin_backfill.py --days 180
+# → Pulls 180 days of Garmin history into Supabase morning log
+```
+
+---
+
+## Tech Stack
+
+- **Frontend**: Vanilla JS, no framework, no build step
 - **Fonts**: Bebas Neue (headings), DM Sans (body), DM Mono (labels)
 - **Charts**: Custom canvas-based (no library)
 - **External deps**: Supabase JS SDK (CDN)
 
-### Data Model
-All user data stored as a single JSON blob in `user_data.data`:
+### Data Model — `user_data.data` JSON blob
 ```json
 {
-  "mornings": [...],      // Morning check entries
-  "checkins": [...],      // Weekly check-in entries
-  "pbs": {                // Personal bests by category
-    "swim": [...], "bike": [...], "run": [...], "tri": [...], "phys": [...]
-  },
-  "plans": {              // Weekly plans keyed by Monday date
-    "2026-03-03": {
-      "0": { "types": "...", "plan": "...", "completed": "...", "notes": "...", "quality": 4, "recovery": 3 },
-      ...
-    }
-  },
-  "foods": [...],         // Saved food library
-  "foodlog": {            // Daily food log keyed by date
-    "2026-03-07": {
-      "breakfast": [...], "lunch": [...], "dinner": [...], "snacks": [...]
-    }
-  },
-  "mealTemplates": [...], // Saved meal templates
-  "nutGoals": {}          // Nutrition goals (calories, protein, etc.)
+  "mornings": [...],
+  "checkins": [...],
+  "pbs": { "swim": [...], "bike": [...], "run": [...], "tri": [...], "phys": [...] },
+  "plans": { "2026-03-09": { "0": { "types": "", "plan": "", "completed": "", "notes": "", "quality": 4, "recovery": 3 } } },
+  "foods": [],
+  "foodlog": { "2026-03-07": { "breakfast": [], "lunch": [], "dinner": [], "snacks": [] } },
+  "mealTemplates": [],
+  "nutGoals": {}
 }
 ```
 
-### Strava Data Structure
-Activities stored in `STRAVA_ACTS.acts[]`:
+### Morning Log Entry
 ```json
 {
-  "d": "2026-03-07",     // Date
-  "s": "Run",            // Sport: Run, Bike, Swim
-  "n": "Morning Run",    // Activity name
-  "mm": 45,              // Duration in minutes
-  "dk": 8.5,             // Distance in km
-  "ef": "easy",          // Effort: easy, moderate, hard, max
-  "hr": 142,             // Avg heart rate
-  "iv": false,           // Intervals detected
-  "wu": false,           // Warm-up
-  "cd": false            // Cool-down
+  "date": "2026-03-12",
+  "hrv": 87, "hrv7": 81, "rhr": 48,
+  "sleepScore": 89, "sleep": 10.1, "gstress": 39,
+  "readinessScore": 86, "status": "green",
+  "timestamp": 1741737600000,
+  "legs": null, "stress": null, "readiness": null, "note": ""
 }
 ```
 
----
-
-## Key Design Decisions
-
-1. **Single-page app, no router** — all pages are `<div class="page">` toggled by `nav()` function
-2. **Data in localStorage + Supabase** — local-first for speed, cloud for sync
-3. **No build step** — edit files directly, push to GitHub, done
-4. **Readiness algorithm is custom** — 100-point weighted system, not a copy of any existing system
-5. **Australian-focused** — food search filters to AU products, locale set to en-AU
-
----
-
-## How to Deploy Updates
-
-1. Edit the relevant file(s) in the repo
-2. Push to `main` branch
-3. GitHub Pages auto-deploys in ~2 minutes
-4. Users get the update on next page refresh
-
-## How to Add New Features
-
-When starting a new Claude chat for a feature:
-1. Upload this `PROJECT.md` file
-2. Upload the specific file(s) you want to modify (e.g., `js/nutrition.js` for nutrition work)
-3. Describe what you want to build
-4. Claude will return the updated file(s) — upload them to GitHub
+### Strava Activity
+```json
+{
+  "id": 14086505118, "d": "2025-04-05", "s": "Run", "n": "Night Run",
+  "mm": 25.6, "dk": 4.574, "hr": 185, "tl": 103.0,
+  "p": 5.604, "rc": 81, "ef": "hard", "iv": false
+}
+```
 
 ---
 
 ## User Info
 - **GitHub**: MagicManiac407
+- **Supabase User ID**: `a4dd3dc4-19a4-4740-90f8-cef054cfab99`
 - **App URL**: https://MagicManiac407.github.io/tricoach/
 - **Location**: Brisbane, Queensland, Australia
-- **Sport**: Triathlon (Half Ironman focus)
-- **Garmin user**: Yes
-- **Strava user**: Yes
+- **Sport**: Triathlon (Half Ironman focus — Port Macquarie HIM completed)
+- **Garmin**: Yes | **Strava**: Yes (OAuth connected)
+- **Key PBs**: CSS ~1:44/100m | FTP ~230W | HM 1:39:46 | 5km 22:09 | LTHR 181bpm
+
+---
+
+## Planned Features
+
+### Priority 1: Garmin No-Terminal Solution
+- Supabase Edge Function authenticates with Garmin server-side
+- User enters credentials once → stored encrypted → auto-syncs daily
+- Eliminates need for terminal/Python script
+
+### Priority 2: Nutrition Completion
+- Barcode scanner (HTML5 camera API), Claude API OCR for nutritional labels
+- Net calorie tracking (eaten - burned from Strava), nutrition goals
+
+### Priority 3: Multi-User Polish
+- Better athlete sharing/viewing, coach view, invite links
