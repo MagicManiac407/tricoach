@@ -206,12 +206,23 @@ def strava_fetch(days=14):
 
         # Interval detection: multiple signals
         iv_keywords = ["interval","vo2","threshold","z4","z5","tempo","fartlek",
-                       "track","reps","repeats","efforts","hard effort"]
+                       "track","reps","repeats","efforts","hard effort","structured",
+                       "workout","w/u","c/d","warmup","cooldown"]
         # NxM pattern in name OR description e.g. "2x6km", "5 x 400m", "10x1min"
         import re as _re
         nx_pat = _re.compile(r'\d+\s*[x×]\s*\d', _re.IGNORECASE)
         # elapsed >> moving means lots of rest time (ratio > 1.25 strongly suggests intervals)
         elap_ratio = (elap_min / move_min) if move_min > 0 else 1.0
+        # Rouvy/virtual bike interval signals: Rouvy workout types are often structured
+        # High NP relative to duration is also a strong signal for intervals
+        nrm_w_val = a.get("weighted_average_watts") or 0
+        avg_w_val  = a.get("average_watts") or 0
+        is_virtual = bool(a.get("trainer") or "Virtual" in a.get("sport_type", a.get("type", "")))
+        # Rouvy often sets workout_type=12 for structured workouts; also detect by lap structure
+        is_rouvy_structured = is_virtual and (
+            a.get("workout_type") in [3, 12]
+            or laps_n >= 3
+        )
         has_interval = bool(
             a.get("workout_type") in [3, 12]                              # Strava workout type
             or any(w in name_lower for w in iv_keywords)                  # name keywords
@@ -220,6 +231,7 @@ def strava_fetch(days=14):
             or nx_pat.search(desc_lower)                                  # "5x1km" in description
             or (laps_n >= 4 and elap_ratio >= 1.20)                       # many laps + rest time
             or (elap_ratio >= 1.35 and move_min >= 20)                    # heavy rest in any session ≥20min
+            or is_rouvy_structured                                         # Rouvy structured workout
         )
         if has_interval:
             entry["ef"] = "hard"
@@ -266,6 +278,21 @@ def strava_fetch(days=14):
                             if pw and pw_min >= 3:
                                 entry["pw"]     = round(pw)      # best lap normalised power
                                 entry["pw_min"] = pw_min          # that lap duration (min)
+                            # ── Avg work lap stats ─────────────────────────────────
+                            # Exclude first/last lap (typically warmup/cooldown)
+                            inner_laps = work_laps[1:-1] if len(work_laps) > 2 else work_laps
+                            if inner_laps:
+                                avg_lap_w = round(sum(
+                                    l.get("weighted_average_watts") or l.get("average_watts") or 0
+                                    for l in inner_laps) / len(inner_laps))
+                                avg_lap_hr_vals = [l.get("average_heartrate") for l in inner_laps if l.get("average_heartrate")]
+                                avg_lap_km = round(sum((l.get("distance") or 0) for l in inner_laps) / len(inner_laps) / 1000, 3)
+                                avg_lap_min = round(sum((l.get("moving_time") or 0) for l in inner_laps) / len(inner_laps) / 60, 1)
+                                if avg_lap_w > 0: entry["alp_w"]  = avg_lap_w
+                                if avg_lap_km > 0: entry["alp_km"] = avg_lap_km
+                                if avg_lap_min > 0: entry["alp_min"] = avg_lap_min
+                                if avg_lap_hr_vals: entry["alp_hr"] = round(sum(avg_lap_hr_vals)/len(avg_lap_hr_vals))
+                                entry["alp_n"] = len(inner_laps)  # how many work laps averaged
                     elif sport == "Run":
                         # Find best work lap ≥400m by pace
                         work_laps = [
@@ -284,6 +311,18 @@ def strava_fetch(days=14):
                                 entry["lp"]     = lp_pace  # best lap pace (min/km)
                                 entry["lp_km"]  = lp_km    # best lap distance
                                 if lp_hr: entry["lp_hr"] = round(lp_hr)
+                            # ── Avg work lap stats ─────────────────────────────────
+                            # Use all work laps (≥400m) to compute averages
+                            if len(work_laps) >= 2:
+                                inner = work_laps[1:-1] if len(work_laps) > 2 else work_laps
+                                avg_spd = sum(l["distance"]/l["moving_time"] for l in inner) / len(inner)
+                                avg_lp_pace = round(1000 / avg_spd / 60, 3)
+                                avg_lp_km   = round(sum(l.get("distance",0) for l in inner) / len(inner) / 1000, 3)
+                                avg_lp_hr_v = [l.get("average_heartrate") for l in inner if l.get("average_heartrate")]
+                                if avg_lp_pace > 0: entry["alp_p"]  = avg_lp_pace
+                                if avg_lp_km > 0:   entry["alp_km"] = avg_lp_km
+                                if avg_lp_hr_v:     entry["alp_hr"] = round(sum(avg_lp_hr_v)/len(avg_lp_hr_v))
+                                entry["alp_n"] = len(inner)
                     elif sport == "Swim":
                         # Find best (fastest) work lap ≥50m for CSS estimate
                         swim_laps = [
@@ -299,6 +338,17 @@ def strava_fetch(days=14):
                             if slp_pace > 0 and slp_m >= 50:
                                 entry["lsp"]    = slp_pace  # best swim lap pace (min/100m)
                                 entry["lsp_m"]  = slp_m     # that lap's distance (m)
+                            # ── Avg work lap stats ─────────────────────────────────
+                            if len(swim_laps) >= 2:
+                                inner = swim_laps[1:-1] if len(swim_laps) > 2 else swim_laps
+                                avg_spd_s = sum(l["distance"]/l["moving_time"] for l in inner) / len(inner)
+                                avg_slp_pace = round(100 / avg_spd_s / 60, 3)
+                                avg_slp_m    = round(sum(l.get("distance",0) for l in inner) / len(inner))
+                                avg_slp_hr_v = [l.get("average_heartrate") for l in inner if l.get("average_heartrate")]
+                                if avg_slp_pace > 0: entry["alp_p"]  = avg_slp_pace
+                                if avg_slp_m > 0:    entry["alp_km"] = round(avg_slp_m / 1000, 3)
+                                if avg_slp_hr_v:     entry["alp_hr"] = round(sum(avg_slp_hr_v)/len(avg_slp_hr_v))
+                                entry["alp_n"] = len(inner)
             except Exception as e:
                 pass  # Lap fetch failed — session-level data still used
 

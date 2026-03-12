@@ -35,7 +35,7 @@ function stravaFormatLine(a) {
 }
 function stravaTypeTag(a) {
   if(a.wu || a.cd) return 'Warm-up';
-  if(a.s==='Run')  return a.iv?'Interval Run':(a.ef==='hard'||a.ef==='max'?'Hard Run':a.ef==='easy'?'Z2 Run':'Run');
+  if(a.s==='Run')  return a.iv?'Interval Run':isLongRun(a)?'Long Run':(a.ef==='hard'||a.ef==='max'?'Hard Run':a.ef==='easy'?'Z2 Run':'Run');
   if(a.s==='Bike') return a.ef==='hard'||a.ef==='max'?'Hard Ride':(a.vr?'Rouvy':'Outdoor Cycle');
   if(a.s==='Swim') return a.ef==='hard'||a.ef==='max'?'Hard Swim':'Swim';
   return a.s;
@@ -98,7 +98,7 @@ function stravaImportWeek(weekKey) {
 
 // ===== PERFORMANCE =====
 function switchPT(tab) {
-  ['overview','run','bike','swim','volume','trends','autopb','predictor'].forEach(t => {
+  ['overview','run','longrun','bike','swim','volume','trends','autopb','predictor'].forEach(t => {
     const pv = document.getElementById('pv-'+t);
     if(pv) pv.style.display = t===tab?'block':'none';
     const btn = document.getElementById('pt-'+t);
@@ -106,22 +106,18 @@ function switchPT(tab) {
     if(t==='predictor') {
       btn.style.background = t===tab ? 'var(--green)' : 'transparent';
       btn.style.color = t===tab ? '#000' : 'var(--green)';
-    } else if(t==='overview') {
-      btn.className = t===tab?'btn':'btn sec';
     } else {
       btn.className = t===tab?'btn':'btn sec';
     }
   });
   if(tab==='run')       renderRunCharts();
+  if(tab==='longrun')   renderLongRunCharts();
   if(tab==='bike')      renderBikeCharts();
   if(tab==='swim')      renderSwimCharts();
   if(tab==='volume')    renderVolumeCharts();
   if(tab==='autopb')    renderAutoPBs();
   if(tab==='predictor') renderRacePredictor();
-  if(tab==='trends') {
-    // Navigate to the dedicated Trends tab which has the full chart infrastructure
-    setTimeout(() => nav('trends'), 50);
-  }
+  if(tab==='trends')    setTimeout(() => nav('trends'), 50);
   if(tab==='overview')  renderAIOverview();
 }
 
@@ -149,6 +145,15 @@ function renderPerformance() {
 
 function daysAgo(n) { const d=new Date(); d.setDate(d.getDate()-n); return localDateStr(d); }
 
+const LONG_RUN_KM = 14;
+function isLongRun(a) {
+  if(a.s !== 'Run') return false;
+  if(a.lr === false) return false;
+  if(a.lr === true)  return true;
+  if(a.iv) return false;
+  return (a.dk || 0) >= LONG_RUN_KM;
+}
+
 function filterActs(sport, opts) {
   opts = opts || {};
   let acts = STRAVA_ACTS.acts.filter(a => a.s === sport);
@@ -157,6 +162,8 @@ function filterActs(sport, opts) {
   if(opts.minDist) acts = acts.filter(a => a.dk && a.dk >= opts.minDist);
   if(opts.minDur) acts = acts.filter(a => a.mm && a.mm >= opts.minDur);
   if(opts.noInterval) acts = acts.filter(a => !a.iv);
+  if(opts.longRunOnly) acts = acts.filter(a => isLongRun(a));
+  if(opts.noLongRun) acts = acts.filter(a => !isLongRun(a));
   if(opts.rideType === 'rouvy') acts = acts.filter(a => a.vr);
   if(opts.rideType === 'outdoor') acts = acts.filter(a => !a.vr);
   // Compute derived fields at runtime
@@ -579,7 +586,179 @@ function renderRunCharts() {
     iDiv.innerHTML='<div style="overflow-x:auto;"><table class="tbl"><thead><tr><th>Date</th><th>Session</th><th>Dist</th><th>Avg Pace</th><th>HR</th><th></th></tr></thead><tbody>'+
       recent.map(a=>`<tr><td style="white-space:nowrap;">${fmtDate(a.d)}</td><td style="font-size:10px;color:var(--text-dim);">${a.n}</td><td>${a.dk?a.dk.toFixed(1):'—'}km</td><td style="font-family:monospace;color:var(--red);">${a.p?fmtPace(a.p):'—'}/km</td><td>${a.hr?a.hr.toFixed(0):'—'}bpm</td><td><button class="btn sec sml" style="font-size:9px;padding:2px 6px;" onclick="editWorkout(${a.id})">✏️</button></td></tr>`).join('')+'</tbody></table></div>';
   }
+
+// ===== LONG RUN CHARTS =====
+function renderLongRunCharts() {
+  const range = (document.getElementById('lrf-range')||{value:'all'}).value;
+  const acts = filterActs('Run', {range, longRunOnly:true}).filter(a => a.p || a.hr || a.dk);
+
+  const fmtP = p => { const m=Math.floor(p),s=Math.round((p-m)*60); return m+':'+(s<10?'0':'')+s; };
+
+  // ── Stats summary ────────────────────────────────────────────────────
+  const sDiv = document.getElementById('lr-stats');
+  if(sDiv && acts.length) {
+    const recent = acts.slice(-6);
+    const avgPace = arr => arr.filter(a=>a.p).reduce((s,a)=>s+a.p,0)/(arr.filter(a=>a.p).length||1);
+    const avgHR   = arr => arr.filter(a=>a.hr).reduce((s,a)=>s+a.hr,0)/(arr.filter(a=>a.hr).length||1);
+    const rP = avgPace(recent), aP = avgPace(acts);
+    const rHR = avgHR(recent),  aHR = avgHR(acts);
+    const paceImprove = aP > 0 ? ((aP - rP) / aP * 100) : 0;
+    const hrImprove   = aHR > 0 ? ((aHR - rHR) / aHR * 100) : 0;
+    const longestRun  = acts.reduce((b,a) => (a.dk||0) > (b.dk||0) ? a : b, acts[0]);
+    const totalKm     = acts.reduce((s,a) => s + (a.dk||0), 0);
+    const avgDist     = totalKm / acts.length;
+    sDiv.innerHTML =
+      statCard('Long Runs', acts.length + ' sessions', `Avg dist: ${avgDist.toFixed(1)}km · Total: ${totalKm.toFixed(0)}km`, 'var(--green)') +
+      statCard('Avg Pace (recent 6)', fmtP(rP) + '/km',
+        paceImprove > 0.5 ? `↑ ${paceImprove.toFixed(1)}% faster than avg` : paceImprove < -0.5 ? `↓ ${Math.abs(paceImprove).toFixed(1)}% slower` : 'On average',
+        paceImprove > 0 ? 'var(--green)' : 'var(--text)') +
+      statCard('Avg HR (recent 6)', acts.filter(a=>a.hr).length ? Math.round(rHR) + 'bpm' : '—',
+        hrImprove > 0.5 ? `↓ ${hrImprove.toFixed(1)}% lower bpm` : hrImprove < -0.5 ? `↑ ${Math.abs(hrImprove).toFixed(1)}% higher bpm` : 'On average',
+        hrImprove > 0 ? 'var(--green)' : 'var(--text)') +
+      statCard('Longest Run', longestRun ? longestRun.dk.toFixed(1) + 'km' : '—',
+        longestRun ? longestRun.d + (longestRun.p ? ' · ' + fmtP(longestRun.p) + '/km' : '') : '',
+        'var(--orange)');
+  } else if(sDiv) {
+    sDiv.innerHTML = '<div style="color:var(--text-dim);font-size:12px;padding:12px;">No long runs found (≥14km, non-interval). Runs will appear here automatically once synced.</div>';
+  }
+
+  if(!acts.length) return;
+
+  // ── 1. Distance Progression ───────────────────────────────────────────
+  drawTrendChart('c-lr-dist', acts, {
+    getValue: a => a.dk || 0,
+    color: '#00e676', label: 'km', lowerIsBetter: false,
+    effortDots: false, rollingN: 4, H: 220,
+    yFmt: v => v.toFixed(1) + 'km',
+    zones: [
+      {min: 21.1, max: 30, color: 'rgba(255,152,0,0.06)'},  // HIM run territory
+    ],
+    refs: [
+      {value: 21.1, label: 'HIM run dist 21.1km', color: 'rgba(255,152,0,0.45)'},
+      {value: 14,   label: 'Long run threshold',   color: 'rgba(0,230,118,0.25)'},
+    ],
+    tipLines: (a,v) => [
+      `<span style="color:#aabbcc;font-size:10px;">${fmtDate(a.d)}</span>`,
+      `Distance: <b style="color:#00e676;">${v.toFixed(1)}km</b>`,
+      `Pace: ${a.p ? fmtP(a.p)+'/km' : '—'}  ·  Time: ${a.mm ? a.mm.toFixed(0)+'min' : '—'}`,
+      `HR: ${a.hr ? a.hr+'bpm' : '—'}  ·  <span style="font-size:10px;color:var(--text-dim);">${a.ef||''}</span>`
+    ]
+  });
+
+  // ── 2. Pace Trend ─────────────────────────────────────────────────────
+  const paceActs = acts.filter(a => a.p > 0);
+  drawTrendChart('c-lr-pace', paceActs, {
+    getValue: a => a.p,
+    color: '#69f0ae', label: 'min/km', lowerIsBetter: true,
+    effortDots: false, rollingN: 4, H: 220,
+    yFmt: v => fmtP(Math.max(0, v)),
+    refs: [
+      {value: 4.43, label: 'HM PB pace 4:43', color: 'rgba(255,215,0,0.45)'},
+      {value: 5.5,  label: 'Easy Z2 ceiling',  color: 'rgba(33,150,243,0.3)'},
+    ],
+    tipLines: (a,v) => [
+      `<span style="color:#aabbcc;font-size:10px;">${fmtDate(a.d)}</span>`,
+      `Pace: <b style="color:#69f0ae;">${fmtP(v)}/km</b>  ·  ${a.dk ? a.dk.toFixed(1)+'km' : '—'}`,
+      `HR: ${a.hr ? a.hr+'bpm' : '—'}  ·  ${a.mm ? a.mm.toFixed(0)+'min' : '—'}`,
+      `AE: ${a.ae ? a.ae.toFixed(2) : '—'}`
+    ]
+  });
+
+  // ── 3. Avg HR / Aerobic Efficiency ────────────────────────────────────
+  const hrActs = acts.filter(a => a.hr && a.ae);
+  drawTrendChart('c-lr-hr', hrActs, {
+    getValue: a => a.hr,
+    color: '#ef5350', label: 'bpm', lowerIsBetter: true,
+    effortDots: false, rollingN: 4, H: 220,
+    yFmt: v => Math.round(v) + '',
+    zones: [
+      {min: 144, max: 162, color: 'rgba(33,150,243,0.06)'},
+      {min: 162, max: 172, color: 'rgba(255,152,0,0.05)'},
+    ],
+    refs: [
+      {value: 162, label: 'Z2 ceiling 162bpm', color: 'rgba(33,150,243,0.5)'},
+      {value: 172, label: 'Z3/Z4 172bpm',      color: 'rgba(255,152,0,0.4)'},
+    ],
+    tipLines: (a,v) => [
+      `<span style="color:#aabbcc;font-size:10px;">${fmtDate(a.d)}</span>`,
+      `HR: <b style="color:#ef5350;">${v.toFixed(0)}bpm</b>  ·  AE: ${a.ae ? a.ae.toFixed(2) : '—'}`,
+      `Pace: ${a.p ? fmtP(a.p)+'/km' : '—'}  ·  ${a.dk ? a.dk.toFixed(1)+'km' : '—'}`
+    ]
+  });
+
+  drawTrendChart('c-lr-ae', hrActs, {
+    getValue: a => a.ae,
+    color: '#ce93d8', label: 'AE (speed/HR)', lowerIsBetter: false,
+    effortDots: false, rollingN: 4, H: 180,
+    yFmt: v => v.toFixed(2),
+    tipLines: (a,v) => [
+      `<span style="color:#aabbcc;font-size:10px;">${fmtDate(a.d)}</span>`,
+      `AE: <b style="color:#ce93d8;">${v.toFixed(3)}</b>`,
+      `Pace: ${a.p ? fmtP(a.p)+'/km' : '—'}  ·  HR: ${a.hr ? a.hr+'bpm' : '—'}`
+    ]
+  });
+
+  // ── 4. Time on feet ───────────────────────────────────────────────────
+  const durActs = acts.filter(a => a.mm > 0);
+  drawTrendChart('c-lr-tof', durActs, {
+    getValue: a => a.mm,
+    color: '#4dd0e1', label: 'minutes', lowerIsBetter: false,
+    effortDots: false, rollingN: 4, H: 200,
+    yFmt: v => Math.round(v) + 'min',
+    refs: [
+      {value: 90,  label: '90min', color: 'rgba(0,230,118,0.2)'},
+      {value: 120, label: '2hr',   color: 'rgba(255,152,0,0.3)'},
+    ],
+    tipLines: (a,v) => [
+      `<span style="color:#aabbcc;font-size:10px;">${fmtDate(a.d)}</span>`,
+      `Time on feet: <b style="color:#4dd0e1;">${v.toFixed(0)}min</b>`,
+      `Dist: ${a.dk ? a.dk.toFixed(1)+'km' : '—'}  ·  Pace: ${a.p ? fmtP(a.p)+'/km' : '—'}`
+    ]
+  });
+
+  // ── Session table ─────────────────────────────────────────────────────
+  const tDiv = document.getElementById('lr-table');
+  if(tDiv) {
+    const rows = [...acts].reverse().slice(0, 30);
+    tDiv.innerHTML = '<div style="overflow-x:auto;"><table class="tbl"><thead><tr>' +
+      '<th>Date</th><th>Session</th><th>Dist</th><th>Pace</th><th>HR</th><th>Time</th><th>AE</th><th>Label</th><th></th>' +
+      '</tr></thead><tbody>' +
+      rows.map(a => {
+        const lrFlag = a.lr === true ? '🏃 LR' : a.lr === false ? '<s style="color:var(--text-dim)">auto</s>' : '🔄 auto';
+        const ac = a.ae > 20 ? 'var(--green)' : a.ae > 17 ? 'var(--orange)' : 'var(--red)';
+        return `<tr>
+          <td style="white-space:nowrap;">${fmtDate(a.d)}</td>
+          <td style="font-size:10px;color:var(--text-dim);max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${a.n}">${a.n}</td>
+          <td>${a.dk ? a.dk.toFixed(1) : '—'}km</td>
+          <td style="font-family:monospace;">${a.p ? fmtP(a.p) : '—'}/km</td>
+          <td>${a.hr ? a.hr.toFixed(0) : '—'}bpm</td>
+          <td style="color:var(--text-dim);">${a.mm ? a.mm.toFixed(0) : '—'}min</td>
+          <td style="font-family:'Bebas Neue',sans-serif;font-size:15px;color:${ac};">${a.ae ? a.ae.toFixed(1) : '—'}</td>
+          <td style="font-size:10px;">${lrFlag}</td>
+          <td><button class="btn sec sml" style="font-size:9px;padding:2px 6px;" onclick="editWorkout(${a.id})">✏️</button></td>
+        </tr>`;
+      }).join('') + '</tbody></table></div>';
+  }
 }
+
+// ── Quick LR toggle from run table ───────────────────────────────────────
+function lrQuickToggle(actId, markAsLR) {
+  const idx = STRAVA_ACTS.acts.findIndex(a => String(a.id) === String(actId));
+  if(idx < 0) { showToast('Activity not found', true); return; }
+  const a = STRAVA_ACTS.acts[idx];
+  if(markAsLR) { a.lr = true; }
+  else { a.lr = false; }
+  try {
+    const edits = JSON.parse(localStorage.getItem('tc26_workout_edits') || '{}');
+    edits[actId] = {...a};
+    localStorage.setItem('tc26_workout_edits', JSON.stringify(edits));
+  } catch(e) {}
+  save();
+  window._predState = null;
+  renderLongRunCharts();
+  showToast(markAsLR ? '🏃 Marked as long run ✓' : 'Long run flag removed ✓');
+}
+
 
 // ===== BIKE CHARTS =====
 function renderBikeCharts() {
@@ -1175,20 +1354,33 @@ function buildBikeModel_pred() {
   // Strava activity data in P2 — manual entries override if they produce
   // a higher FTP estimate. This ensures hand-entered interval data is
   // always honoured.
-  const _bikeManuals = (D.ivManual||[]).filter(m => m.sport==='bike' && m.val && m.dur);
+  const _bikeManuals = (D.ivManual||[]).filter(m => m.sport==='bike');
   if(!ftp && _bikeManuals.length) {
     function _dS(d){return d>=150?.91:d>=120?.94:d>=90?.97:d>=60?1:d>=45?.98:d>=30?.97:.95;}
-    const best = _bikeManuals.reduce((b,a) => {
-      const ea = Math.round(parseFloat(a.val)*_dS(parseFloat(a.dur))*(a.vr?0.98:1));
-      const eb = Math.round(parseFloat(b.val)*_dS(parseFloat(b.dur))*(b.vr?0.98:1));
-      return ea > eb ? a : b;
+    const candidates = [];
+    _bikeManuals.forEach(m => {
+      if(m.sets && m.sets.length) {
+        // Multi-set: find best FTP-producing Z4/SS block
+        const ftpZones = ['Z4','SS','Z3'];
+        const eligible = m.sets.filter(s => ftpZones.includes(s.zone));
+        const pool     = eligible.length ? eligible : m.sets;
+        pool.forEach(s => {
+          const totalDur = s.reps * s.durMin;
+          const est = Math.round(s.watts * _dS(totalDur) * (m.vr ? 0.98 : 1));
+          candidates.push({ est, watts: s.watts, totalDur, zone: s.zone,
+            desc: `${s.reps}×${s.durMin}min @${s.watts}W ${s.zone}`, date: m.date, vr: m.vr });
+        });
+      } else if(m.val && m.dur) {
+        const watts = parseFloat(m.val), dur = parseFloat(m.dur);
+        const est = Math.round(watts * _dS(dur) * (m.vr ? 0.98 : 1));
+        candidates.push({ est, watts, totalDur: dur, zone: 'Z4',
+          desc: `${watts}W × ${dur}min`, date: m.date, vr: m.vr });
+      }
     });
-    const ftpM = Math.round(parseFloat(best.val)*_dS(parseFloat(best.dur))*(best.vr?0.98:1));
-    // Only use manual if no explicit PB set (P1 already fired above with PB)
-    // But store so P2 can compare — inject as synthetic activity
-    if(!ftp) {
-      ftp = ftpM;
-      ftpSource = `✓ Manual entry: ${best.val}W × ${_dS(parseFloat(best.dur))} (${best.dur}min${best.vr?' Rouvy':''}) on ${best.date}`;
+    if(candidates.length) {
+      const best = candidates.reduce((b, a) => a.est > b.est ? a : b);
+      ftp = best.est;
+      ftpSource = `✓ Manual: ${best.desc}${best.vr?' (Rouvy)':''} → ${ftp}W FTP (${best.date})`;
     }
   }
 
@@ -1415,9 +1607,36 @@ function buildRunModel_pred() {
     thresholdSource = `⚠ CTL estimate — add HM PB or interval sessions to improve`;
   }
 
+  // ── P6b: Long run aerobic efficiency cross-check ────────────────────
+  // If threshold is CTL-estimated (no real data), long run pace can provide
+  // a floor: marathon pace ≈ LT × 1.08 (Friel), so LT floor = LR pace × 0.926
+  // Also feeds back to CTL via a higher quality fitness signal than steady runs.
+  const lrRuns = runs.filter(a => isLongRun(a) && a.p > 0 && a.p < 7.5);
+  if(lrRuns.length) {
+    const cutoff90 = new Date(); cutoff90.setDate(cutoff90.getDate()-90);
+    const cut90s = cutoff90.toISOString().slice(0,10);
+    const recentLR = lrRuns.filter(a => a.d >= cut90s);
+    const pool = recentLR.length >= 2 ? recentLR : lrRuns;
+    const bestLR = pool.reduce((b,a) => a.p < b.p ? a : b);
+    // Long run pace → threshold floor (marathon pace / 1.08)
+    const lrThreshFloor = bestLR.p * 0.926;
+    // Also compute aerobic efficiency from long runs
+    const lrAE = pool.filter(a=>a.ae).map(a=>a.ae);
+    const avgLRAE = lrAE.length ? lrAE.reduce((s,v)=>s+v,0)/lrAE.length : null;
+    // Use as cross-check: if current threshold seems too slow vs long run data, note it
+    if(!threshold || (thresholdSource.includes('CTL estimate') && lrThreshFloor < threshold)) {
+      threshold = lrThreshFloor;
+      thresholdSource = `→ Long run floor: ${fmtPace(bestLR.p)}/km (${bestLR.d}) × 0.926 (marathon→LT)`;
+    }
+    // Store for display
+    model._lrBest = bestLR;
+    model._lrAE   = avgLRAE;
+    model._lrCount = pool.length;
+  }
+
   threshold = Math.max(3.2, Math.min(9.0, threshold));
   const vdot = threshold > 0 ? Math.round(Math.min(70,Math.max(25, 85-(threshold*8)))) : 40;
-  return {...model, lthr, threshold, thresholdSource, vdot, runs};
+  return {...model, lthr, threshold, thresholdSource, vdot, runs, lrRuns};
 }
 
 function buildSwimModel_pred() {
@@ -1438,29 +1657,43 @@ function buildSwimModel_pred() {
   }
 
   // ── P1b: Manual swim interval entries ────────────────────────────────
-  // User-entered CSS or rep paces. Parsed as min:ss/100m.
-  // Override calculated CSS if faster.
+  // Supports multi-set entries (sets[]) and legacy single-value entries.
+  // CSS sourced from CSS-effort sets only. Speed/Sprint/Drill ignored for CSS.
   if(!css) {
-    const _swimManuals = (D.ivManual||[]).filter(m => m.sport==='swim' && m.val);
+    const _swimManuals = (D.ivManual||[]).filter(m => m.sport==='swim');
     if(_swimManuals.length) {
-      function _parseSwimPace(v) {
-        const mm = String(v).match(/^(\d+):(\d{2})$/);
-        return mm ? parseInt(mm[1]) + parseInt(mm[2])/60 : null;
-      }
-      const valid = _swimManuals.map(m => ({ ...m, pace: _parseSwimPace(m.val) })).filter(m => m.pace && m.pace < 3);
-      if(valid.length) {
-        const cutoff90 = new Date(); cutoff90.setDate(cutoff90.getDate()-90);
-        const cut90 = cutoff90.toISOString().slice(0,10);
-        const recent = valid.filter(m => m.date >= cut90);
-        const pool = recent.length ? recent : valid;
-        const best = pool.reduce((b,a) => a.pace < b.pace ? a : b);
-        // Rep pace → CSS: scale by rep distance (shorter = faster than CSS)
-        // 400-500m rep ≈ CSS pace (almost same distance as CSS test), scale ×1.01
-        // 200-400m rep ≈ a bit faster, scale ×1.04
-        const repM = parseFloat(best.dk) || 400;
-        const scale = repM >= 400 ? 1.01 : 1.04;
-        css = best.pace * scale;
-        cssSource = `✓ Manual entry: ${best.val}/100m rep (${best.name||'interval'}) × ${scale} on ${best.date}`;
+      const cutoff90 = new Date(); cutoff90.setDate(cutoff90.getDate()-90);
+      const cut90 = cutoff90.toISOString().slice(0,10);
+      const candidates = [];
+      _swimManuals.forEach(m => {
+        if(m.sets && m.sets.length) {
+          // Multi-set: only CSS and Aerobic sets count for CSS estimation
+          const eligible = m.sets.filter(s => s.effort==='CSS' || s.effort==='Aerobic');
+          const pool = eligible.length ? eligible : m.sets.filter(s => s.effort!=='Sprint' && s.effort!=='Drill');
+          pool.forEach(s => {
+            if(!s.pace || s.pace >= 3) return;
+            // Pace → CSS scale: longer rep = closer to CSS pace
+            const scale = s.distM >= 400 ? 1.01 : s.distM >= 200 ? 1.04 : s.distM >= 100 ? 1.07 : 1.10;
+            candidates.push({ cssEst: s.pace * scale, pace: s.pace, distM: s.distM,
+              label: `${s.reps}×${s.distM}m @${_ivFmtPace(s.pace)}/100m (${s.effort})`,
+              date: m.date, recent: m.date >= cut90 });
+          });
+        } else if(m.val) {
+          const pace = _ivParsePace(m.val);
+          if(pace && pace < 3) {
+            const repM = parseFloat(m.dk) * 1000 || 400;
+            const scale = repM >= 400 ? 1.01 : 1.04;
+            candidates.push({ cssEst: pace * scale, pace, distM: repM,
+              label: `${m.val}/100m rep`, date: m.date, recent: m.date >= cut90 });
+          }
+        }
+      });
+      if(candidates.length) {
+        const recent = candidates.filter(x => x.recent);
+        const pool = recent.length ? recent : candidates;
+        const best = pool.reduce((b, a) => a.cssEst < b.cssEst ? a : b);
+        css = best.cssEst;
+        cssSource = `✓ Manual: ${best.label} (${best.date})`;
       }
     }
   }
@@ -2035,42 +2268,48 @@ function showIntervalReview(sport) {
   sport = sport || 'run';
 
   if(!D.ivExcluded) D.ivExcluded = [];
-  if(!D.ivManual)   D.ivManual   = [];   // [{sport,date,name,val,valB,dur,note}]
+  if(!D.ivManual)   D.ivManual   = [];
   const excluded = new Set(D.ivExcluded);
 
   function fmtP(p) { const m=Math.floor(p),s=Math.round((p-m)*60); return `${m}:${String(s).padStart(2,'0')}`; }
-  function getRepScale(name, dk) {
-    const n=(name||'').toLowerCase(), m=n.match(/(\d+)x(\d+\.?\d*)\s*(km|m)/);
-    if(m){ const r=m[3]==='km'?parseFloat(m[2]):parseFloat(m[2])/1000; return r>=2?1.02:r>=0.8?1.05:1.08; }
-    return (dk||0)>=8?1.05:1.08;
-  }
 
-  const ivPat = /\d+\s*x\s*\d/i;
   const allActs = STRAVA_ACTS.acts||[];
 
-  // ── Build per-sport data ──────────────────────────────────────────────
+  // ── Build per-sport candidate lists ──────────────────────────────────
+  // Show ALL sessions that could be intervals (hard/iv), not just auto-detected
+  // This lets the user mark or unmark any session
   const sportCfg = {
     run: {
       label:'🏃 Run', color:'var(--green)', unit:'min/km',
+      // All runs ≥3km that are hard, max, iv-flagged, or have interval patterns
       acts: allActs.filter(a => a.s==='Run' && a.p>0 && (a.dk||0)>=3 &&
-              (a.iv||ivPat.test(a.n||''))),
+              (a.iv || a.ef==='hard' || a.ef==='max' ||
+               /\d+\s*x\s*\d/i.test(a.n||'') || /\d+\s*x\s*\d/i.test(a.desc||''))),
       currentStat: R.threshold ? `${fmtP(R.threshold)}/km` : '—',
       currentSrc: R.thresholdSource||'CTL estimate',
       statLabel: 'Lactate Threshold',
-      cols: ['Date','Session','km','Avg Pace','Best Lap','Scale → LT est','HR','Status',''],
-      rowFn(a, isEx, isBest, badge, bestBadge, btn) {
-        const scale = getRepScale(a.n, a.dk);
+      cols: ['Date','Session','km','Avg Pace','Avg Lap','Avg Lap HR','→ LT est',''],
+      rowFn(a, isEx, isBest, isIv) {
         const pace = a.lp || a.p;
+        // Scale for LT estimate
+        const repKm = a.alp_km || a.lp_km || (a.dk||0);
+        const scale = repKm>=2?1.02:repKm>=0.8?1.05:1.08;
         const ltEst = fmtP(pace * scale);
-        const lapNote = a.lp ? `<div style="font-size:9px;color:var(--green);">${fmtP(a.lp)}/km · ${(a.lp_km||0).toFixed(2)}km</div>` : '—';
-        const paceDisp = `<div>${fmtP(a.p)}/km avg</div>`;
-        return `<td style="white-space:nowrap">${a.d}</td>
-          <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(a.n||'').replace(/"/g,"'")}">${a.n||'Run'}${bestBadge}</td>
-          <td>${(a.dk||0).toFixed(1)}</td>
-          <td>${paceDisp}</td>
-          <td>${lapNote}</td>
-          <td style="color:var(--orange);font-weight:700">${isEx?`<s>${ltEst}</s>`:ltEst}/km ${badge}</td>
-          <td style="color:var(--text-dim)">${a.lp_hr||a.hr||'—'}</td>`;
+        // Avg lap display (from sync or manual edit)
+        const avgLapPace = a.alp_p ? `<span style="color:var(--green);font-weight:600;">${fmtP(a.alp_p)}/km</span>` : (a.lp ? `<span style="color:var(--green);">${fmtP(a.lp)}/km</span><span style="font-size:9px;color:var(--text-dim)"> best</span>` : `<span style="color:var(--text-dim)">—</span>`);
+        const avgLapKmStr = a.alp_km ? `<span style="font-size:9px;color:var(--text-dim)"> · ${a.alp_km.toFixed(2)}km × ${a.alp_n||'?'}</span>` : (a.lp_km ? `<span style="font-size:9px;color:var(--text-dim)"> · ${a.lp_km.toFixed(2)}km</span>` : '');
+        const hrDisp = a.alp_hr || a.lp_hr || a.hr || '—';
+        const ivBadge = isIv
+          ? `<span style="background:rgba(0,230,118,.15);color:var(--green);padding:1px 6px;border-radius:3px;font-size:9px;font-weight:700;">⚡ IV</span>`
+          : `<span style="background:rgba(255,152,0,.1);color:var(--orange);padding:1px 6px;border-radius:3px;font-size:9px;">HARD</span>`;
+        const bestBadge = isBest ? ` <span style="color:var(--orange);font-size:10px">★</span>` : '';
+        return `<td style="white-space:nowrap;font-size:11px">${a.d}</td>
+          <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px" title="${(a.n||'').replace(/"/g,"'")}">${a.n||'Run'}${bestBadge} ${ivBadge}</td>
+          <td style="font-size:11px">${(a.dk||0).toFixed(1)}</td>
+          <td style="font-size:11px">${fmtP(a.p)}/km</td>
+          <td style="font-size:11px">${avgLapPace}${avgLapKmStr}</td>
+          <td style="font-size:11px;color:var(--text-dim)">${hrDisp}</td>
+          <td style="color:var(--orange);font-weight:700;font-size:11px">${isEx?`<s>${ltEst}</s>`:ltEst}/km</td>`;
       },
       addFields: `
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px;">
@@ -2085,139 +2324,229 @@ function showIntervalReview(sport) {
     },
     bike: {
       label:'🚴 Bike', color:'var(--orange)', unit:'W NP',
-      acts: allActs.filter(a => a.s==='Bike' && (a.nw||a.w||a.pw) &&
-              (a.iv||ivPat.test(a.n||'')) && (a.mm||0)>=15),
+      // All rides ≥15min with power that are hard/iv/structured — broad net to catch Rouvy
+      acts: allActs.filter(a => a.s==='Bike' && (a.mm||0)>=15 &&
+              (a.nw||a.w||a.pw||a.alp_w) &&
+              (a.iv || a.ef==='hard' || a.ef==='max' ||
+               /\d+\s*x\s*\d/i.test(a.n||'') || /\d+\s*x\s*\d/i.test(a.desc||''))),
       currentStat: B.ftp ? `${B.ftp}W` : '—',
       currentSrc: B.ftpSource||'CTL estimate',
       statLabel: 'FTP',
-      cols: ['Date','Session','min','Session NP','Best Lap','→ FTP est','HR','Status',''],
-      rowFn(a, isEx, isBest, badge, bestBadge, btn) {
-        const useLap = a.pw && a.pw_min && a.pw_min>=3;
-        const np = useLap ? a.pw : (a.nw||a.w||0);
-        const dur = useLap ? a.pw_min : (a.mm||60);
+      cols: ['Date','Session','min','Session NP','Avg Lap','Avg Lap HR','→ FTP est',''],
+      rowFn(a, isEx, isBest, isIv) {
         function dS(d){return d>=150?.91:d>=120?.94:d>=90?.97:d>=60?1:d>=45?.98:d>=30?.97:.95;}
-        const ftpEst = Math.round(np * dS(dur) * (a.vr?0.98:1));
-        const lapDisp = useLap ? `<div style="font-size:9px;color:var(--orange)">${a.pw}W · ${a.pw_min}min</div>` : '—';
-        const npDisp = `<div>${a.nw||a.w||'—'}W avg NP</div>`;
-        return `<td style="white-space:nowrap">${a.d}</td>
-          <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(a.n||'').replace(/"/g,"'")}">${a.n||'Ride'}${bestBadge}</td>
-          <td>${Math.round(a.mm||0)}</td>
-          <td>${npDisp}</td>
-          <td>${lapDisp}</td>
-          <td style="color:var(--orange);font-weight:700">${isEx?`<s>${ftpEst}W</s>`:`${ftpEst}W`} ${badge}</td>
-          <td style="color:var(--text-dim)">${a.hr||'—'}</td>`;
-      },
-      addFields: `
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px;">
-          <div><label>Date</label><input type="date" id="iv-add-date" value="${new Date().toISOString().slice(0,10)}"></div>
-          <div><label>Session name</label><input type="text" id="iv-add-name" placeholder="e.g. 3x10min Z4"></div>
-          <div><label>Interval NP / avg watts</label><input type="number" id="iv-add-val" placeholder="245"></div>
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px;">
-          <div><label>Interval duration (min)</label><input type="number" id="iv-add-dur" placeholder="45"></div>
-          <div><label>Virtual/Rouvy?</label><select id="iv-add-vr"><option value="0">No (outdoor)</option><option value="1">Yes (Rouvy)</option></select></div>
-          <div><label>Avg HR (optional)</label><input type="number" id="iv-add-hr" placeholder="160"></div>
-        </div>`
-    },
-    swim: {
+        // Prefer best-lap power (from sync.py) over session NP (diluted by warmup)
+        const useLap = a.pw && a.pw_min && a.pw_min >= 3;
+        const np  = useLap ? a.pw : (a.nw || a.w || 0);
+        const dur = useLap ? a.pw_min : (a.mm || 60);
+        const ftpEst = np ? Math.round(np * dS(dur) * (a.vr ? 0.98 : 1)) : null;
+
+        // Interval set display: show alp fields if present, otherwise nudge user to edit
+        let setDisp;
+        if(a.alp_w) {
+          const nLaps = a.alp_n ? ` × ${a.alp_n}` : '';
+          const lapDur = a.alp_min ? ` · ${a.alp_min}min each` : '';
+          setDisp = `<span style="color:var(--orange);font-weight:600;">${a.alp_w}W NP${nLaps}</span><span style="font-size:9px;color:var(--text-dim);">${lapDur}</span>`;
+        } else if(useLap) {
+          setDisp = `<span style="color:var(--orange);">${a.pw}W · ${a.pw_min}min</span><span style="font-size:9px;color:var(--text-dim);"> best lap</span>`;
+        } else {
+          setDisp = `<span style="color:var(--text-dim);font-size:10px;">✏️ Edit to add sets</span>`;
+        }
+        const hrDisp = a.alp_hr || a.hr || '—';
+        const ivBadge = isIv
+          ? `<span style="background:rgba(255,152,0,.2);color:var(--orange);padding:1px 6px;border-radius:3px;font-size:9px;font-weight:700;">⚡ IV</span>`
+          : `<span style="background:rgba(255,152,0,.1);color:var(--orange);padding:1px 6px;border-radius:3px;font-size:9px;">HARD</span>`;
+        const bestBadge = isBest ? ` <span style="color:var(--orange);font-size:10px">★</span>` : '';
+        const ftpCell = ftpEst ? (isEx ? `<s>${ftpEst}W</s>` : `${ftpEst}W`) : `<span style="color:var(--text-dim);font-size:10px;">—</span>`;
+        return `<td style="white-space:nowrap;font-size:11px">${a.d}</td>
+          <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px" title="${(a.n||'').replace(/"/g,"'")}">${a.n||'Ride'}${bestBadge} ${ivBadge}</td>
+          <td style="font-size:11px">${Math.round(a.mm||0)}</td>
+          <td style="font-size:11px">${a.nw||a.w||'—'}W avg</td>
+          <td style="font-size:11px">${setDisp}</td>
+          <td style="font-size:11px;color:var(--text-dim)">${hrDisp}</td>
+          <td style="color:var(--orange);font-weight:700;font-size:11px">${ftpCell}</td>`;
+      },    swim: {
       label:'🏊 Swim', color:'#2196f3', unit:'min/100m',
-      acts: allActs.filter(a => a.s==='Swim' && a.sp>0 &&
-              ((a.dk||0)*1000>=400) && (a.iv||ivPat.test(a.n||'')||a.ef==='hard'||a.ef==='max')),
+      // All swims ≥400m that are hard or any effort with meaningful distance
+      acts: allActs.filter(a => a.s==='Swim' && a.sp>0 && (a.dk||0)*1000>=400 &&
+              (a.iv || a.ef==='hard' || a.ef==='max' || a.ef==='moderate' ||
+               /\d+\s*x\s*\d/i.test(a.n||''))),
       currentStat: S.css ? `${fmtP(S.css)}/100m` : '—',
       currentSrc: S.cssSource||'CTL estimate',
       statLabel: 'CSS',
-      cols: ['Date','Session','m','Avg Pace','Best Lap','→ CSS est','HR','Status',''],
-      rowFn(a, isEx, isBest, badge, bestBadge, btn) {
+      cols: ['Date','Session','m','Avg Pace','Avg Lap','Avg Lap HR','→ CSS est',''],
+      rowFn(a, isEx, isBest, isIv) {
+        // Session avg pace and best lap pace for CSS estimation
         const sp = a.lsp || a.sp;
-        const ef = a.ef||'easy';
-        const scale = ef==='hard'||ef==='max'?1.01:ef==='moderate'?0.97:0.95;
-        const cssEst = fmtP(sp * scale);
-        const lapDisp = a.lsp ? `<div style="font-size:9px;color:#2196f3">${fmtP(a.lsp)}/100m</div>` : '—';
-        return `<td style="white-space:nowrap">${a.d}</td>
-          <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(a.n||'').replace(/"/g,"'")}">${a.n||'Swim'}${bestBadge}</td>
-          <td>${Math.round((a.dk||0)*1000)}</td>
-          <td><div>${fmtP(a.sp)}/100m avg</div></td>
-          <td>${lapDisp}</td>
-          <td style="color:#2196f3;font-weight:700">${isEx?`<s>${cssEst}</s>`:cssEst}/100m ${badge}</td>
-          <td style="color:var(--text-dim)">${a.hr||'—'}</td>`;
-      },
+        const ef = a.ef || 'easy';
+        const scale = ef==='hard'||ef==='max' ? 1.01 : ef==='moderate' ? 0.97 : 0.95;
+        const cssEst = sp ? sp * scale : null;
+        function fP(p){const m=Math.floor(p),s=Math.round((p-m)*60);return m+':'+(s<10?'0':'')+s;}
+
+        // Set/lap detail display
+        let setDisp;
+        if(a.alp_p) {
+          const nReps = a.alp_n ? ` × ${a.alp_n}` : '';
+          const repDist = a.alp_km ? ` · ${Math.round(a.alp_km*1000)}m each` : '';
+          setDisp = `<span style="color:#2196f3;font-weight:600;">${fP(a.alp_p)}/100m${nReps}</span><span style="font-size:9px;color:var(--text-dim);">${repDist}</span>`;
+        } else if(a.lsp) {
+          setDisp = `<span style="color:#2196f3;">${fP(a.lsp)}/100m</span><span style="font-size:9px;color:var(--text-dim);"> best lap</span>`;
+        } else {
+          setDisp = `<span style="color:var(--text-dim);font-size:10px;">✏️ Edit to add sets</span>`;
+        }
+        const hrDisp = a.alp_hr || a.hr || '—';
+        const ivBadge = isIv
+          ? `<span style="background:rgba(33,150,243,.2);color:#2196f3;padding:1px 6px;border-radius:3px;font-size:9px;font-weight:700;">⚡ IV</span>`
+          : `<span style="background:rgba(33,150,243,.1);color:#64b5f6;padding:1px 6px;border-radius:3px;font-size:9px;">SWIM</span>`;
+        const bestBadge = isBest ? ` <span style="color:var(--orange);font-size:10px">★</span>` : '';
+        const cssCell = cssEst ? (isEx ? `<s>${fP(cssEst)}</s>/100m` : `${fP(cssEst)}/100m`) : `<span style="color:var(--text-dim);font-size:10px;">—</span>`;
+        return `<td style="white-space:nowrap;font-size:11px">${a.d}</td>
+          <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px" title="${(a.n||'').replace(/"/g,"'")}">${a.n||'Swim'}${bestBadge} ${ivBadge}</td>
+          <td style="font-size:11px">${Math.round((a.dk||0)*1000)}</td>
+          <td style="font-size:11px">${a.sp ? fP(a.sp)+'/100m' : '—'} avg</td>
+          <td style="font-size:11px">${setDisp}</td>
+          <td style="font-size:11px;color:var(--text-dim)">${hrDisp}</td>
+          <td style="color:#2196f3;font-weight:700;font-size:11px">${cssCell}</td>`;
+      }
       addFields: `
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
           <div><label>Date</label><input type="date" id="iv-add-date" value="${new Date().toISOString().slice(0,10)}"></div>
-          <div><label>Session name</label><input type="text" id="iv-add-name" placeholder="e.g. 4x500m CSS test"></div>
-          <div><label>Rep pace (min:ss/100m)</label><input type="text" id="iv-add-val" placeholder="1:44"></div>
+          <div><label>Session name</label><input type="text" id="iv-add-name" placeholder="e.g. 4x500m CSS + 6x50m sprint"></div>
+        </div>
+        <div style="background:rgba(33,150,243,.05);border:1px solid rgba(33,150,243,.2);border-radius:8px;padding:12px;margin-bottom:10px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+            <span style="font-size:10px;font-weight:700;letter-spacing:1.5px;color:#2196f3;">INTERVAL SETS</span>
+            <span style="font-size:9px;color:var(--text-dim);">Add each set separately — e.g. 4×500m CSS, then 6×50m sprint</span>
+          </div>
+          <div style="display:grid;grid-template-columns:44px 64px 88px 100px 60px 28px;gap:5px;margin-bottom:4px;">
+            <span style="font-size:9px;color:var(--text-dim);">Reps</span>
+            <span style="font-size:9px;color:var(--text-dim);">Dist (m)</span>
+            <span style="font-size:9px;color:var(--text-dim);">Pace /100m</span>
+            <span style="font-size:9px;color:var(--text-dim);">Effort</span>
+            <span style="font-size:9px;color:var(--text-dim);">Rest (sec)</span>
+            <span></span>
+          </div>
+          <div id="iv-swim-sets">
+            <div class="iv-swim-set-row" style="display:grid;grid-template-columns:44px 64px 88px 100px 60px 28px;gap:5px;margin-bottom:5px;align-items:center;">
+              <input class="iv-set-reps" type="number" min="1" placeholder="4" style="width:100%;">
+              <input class="iv-set-dist" type="number" placeholder="500" style="width:100%;">
+              <input class="iv-set-pace" type="text" placeholder="1:46" style="width:100%;">
+              <select class="iv-set-effort" style="width:100%;">
+                <option value="CSS" selected>CSS threshold</option>
+                <option value="Speed">Speed / VO2</option>
+                <option value="Sprint">Sprint / max</option>
+                <option value="Drill">Drill / technique</option>
+                <option value="Aerobic">Aerobic / easy</option>
+              </select>
+              <input class="iv-set-rest" type="number" placeholder="30" style="width:100%;">
+              <button type="button" onclick="ivRemoveSwimSet(this)" style="background:rgba(244,67,54,.15);color:var(--red);border:none;border-radius:4px;padding:5px 0;cursor:pointer;font-size:13px;width:100%;line-height:1;">×</button>
+            </div>
+          </div>
+          <button type="button" onclick="ivAddSwimSet()" style="background:rgba(33,150,243,.1);color:#2196f3;border:1px solid rgba(33,150,243,.3);border-radius:5px;padding:4px 12px;cursor:pointer;font-size:10px;margin-top:2px;">+ Add set</button>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
-          <div><label>Rep distance (m)</label><input type="number" id="iv-add-dk" placeholder="500"></div>
-          <div><label>Avg HR (optional)</label><input type="number" id="iv-add-hr" placeholder="—"></div>
+          <div><label>Avg HR for session (optional)</label><input type="number" id="iv-add-hr" placeholder="—"></div>
+          <div style="font-size:10px;color:var(--text-dim);padding-top:20px;">CSS estimated from CSS-effort sets · Speed/Sprint sets stored but not used for CSS</div>
         </div>`
     }
   };
 
   const cfg = sportCfg[sport];
-
-  // Manual entries for this sport
   const manuals = (D.ivManual||[]).filter(m => m.sport===sport);
 
-  // Sort Strava acts: excluded last, then best first
-  function bestVal(a) {
-    if(sport==='run') return a.lp||a.p;
-    if(sport==='bike') { const useLap=a.pw&&a.pw_min>=3; return useLap?-a.pw:-(a.nw||a.w||0); }
-    return a.lsp||a.sp;
-  }
+  // Sort: date descending (most recent first), excluded pushed to bottom
   const sorted = [...cfg.acts].sort((a,b) => {
     const aEx=excluded.has(String(a.id)), bEx=excluded.has(String(b.id));
     if(aEx!==bEx) return aEx?1:-1;
-    return bestVal(a) - bestVal(b);
+    return b.d.localeCompare(a.d); // most recent first
   });
 
-  // Determine current best Strava session
-  const active = sorted.filter(a => !excluded.has(String(a.id)));
-  let bestAct = active.length ? active[0] : null;
+  // Best active session for ★ badge (for predictor)
+  const active = sorted.filter(a => !excluded.has(String(a.id)) && a.iv);
+  let bestAct = null;
+  if(active.length) {
+    if(sport==='run')  bestAct = active.reduce((b,a)=>(a.lp||a.p)<(b.lp||b.p)?a:b);
+    if(sport==='bike') bestAct = active.reduce((b,a)=>{
+      const aW=a.pw||(a.nw||a.w||0), bW=b.pw||(b.nw||b.w||0); return aW>bW?a:b; });
+    if(sport==='swim') bestAct = active.reduce((b,a)=>(a.lsp||a.sp)<(b.lsp||b.sp)?a:b);
+  }
 
   const tabs = ['run','bike','swim'].map(s =>
     `<button onclick="showIntervalReview('${s}')" style="padding:5px 14px;border-radius:6px;border:1px solid ${s===sport?sportCfg[s].color:'var(--border)'};background:${s===sport?`rgba(${s==='run'?'0,230,118':s==='bike'?'255,152,0':'33,150,243'},.12)`:'transparent'};color:${s===sport?sportCfg[s].color:'var(--text-dim)'};cursor:pointer;font-size:11px;font-weight:600;font-family:'DM Sans',sans-serif;">${sportCfg[s].label}</button>`
   ).join('');
 
   const stravaRows = sorted.map(a => {
-    const isEx = excluded.has(String(a.id));
-    const isBest = bestAct && a.id===bestAct.id && !isEx;
-    const isAuto = !!a.iv;
-    const rowStyle = isEx?'opacity:0.4;':isBest?`background:rgba(${sport==='run'?'0,230,118':sport==='bike'?'255,152,0':'33,150,243'},.05);`:'';
-    const badge = isAuto
-      ? `<span style="background:rgba(0,230,118,.12);color:var(--green);padding:1px 5px;border-radius:3px;font-size:9px">AUTO</span>`
-      : `<span style="background:rgba(33,150,243,.12);color:#2196f3;padding:1px 5px;border-radius:3px;font-size:9px">NAME</span>`;
-    const bestBadge = isBest?` <span style="color:var(--orange);font-size:9px">★</span>`:'';
-    const btn = isEx
+    const isEx  = excluded.has(String(a.id));
+    const isIv  = !!a.iv;
+  const isLr   = a.lr === true ? true : a.lr === false ? false : isLongRun(a);
+    const isBest= bestAct && a.id===bestAct.id && !isEx;
+    const rowBg = isEx?'opacity:0.4;':isBest?`background:rgba(${sport==='run'?'0,230,118':sport==='bike'?'255,152,0':'33,150,243'},.04);`:'';
+
+    // Action buttons: toggle IV + edit details + exclude
+    const ivToggleBtn = isIv
+      ? `<button class="btn sec sml" style="font-size:9px;padding:2px 8px;background:rgba(244,67,54,.1);color:var(--red);border-color:var(--red)" onclick="ivQuickToggle('${a.id}',false,'${sport}')">Remove IV</button>`
+      : `<button class="btn sml" style="font-size:9px;padding:2px 8px;background:rgba(0,230,118,.15);color:var(--green);border:1px solid var(--green)" onclick="ivQuickToggle('${a.id}',true,'${sport}')">⚡ Mark IV</button>`;
+    const editBtn = `<button class="btn sec sml" style="font-size:9px;padding:2px 8px" onclick="openIvEditModal('${a.id}','${sport}')">✏️ Edit</button>`;
+    const exBtn = isEx
       ? `<button class="btn sec sml" style="font-size:9px;padding:2px 8px" onclick="ivToggleExclude('${a.id}',false)">Restore</button>`
-      : `<button class="btn sec sml" style="font-size:9px;padding:2px 8px;background:rgba(244,67,54,.1);color:var(--red)" onclick="ivToggleExclude('${a.id}',true)">Exclude</button>`;
-    return `<tr style="${rowStyle}"><td colspan="0"></td>${cfg.rowFn(a,isEx,isBest,badge,bestBadge,btn)}<td>${isEx?'<span style="color:var(--red);font-size:10px">Excluded</span>':'<span style="color:var(--green);font-size:10px">Active</span>'}</td><td>${btn}</td></tr>`;
+      : `<button class="btn sec sml" style="font-size:9px;padding:2px 8px;color:var(--text-dim)" onclick="ivToggleExclude('${a.id}',true)">Excl</button>`;
+
+    return `<tr style="${rowBg}">
+      ${cfg.rowFn(a, isEx, isBest, isIv)}
+      <td><div style="display:flex;gap:4px;flex-wrap:nowrap">${ivToggleBtn}${editBtn}${exBtn}</div></td>
+    </tr>`;
   }).join('');
 
   const manualRows = manuals.map((m,i) => {
     const delBtn = `<button class="btn sec sml" style="font-size:9px;padding:2px 8px;background:rgba(244,67,54,.1);color:var(--red)" onclick="ivDeleteManual(${i},'${sport}')">Remove</button>`;
-    const badge = `<span style="background:rgba(206,147,216,.12);color:var(--purple);padding:1px 5px;border-radius:3px;font-size:9px">MANUAL</span>`;
     let valDisp='', ltDisp='';
+    function _dSr(d){return d>=150?.91:d>=120?.94:d>=90?.97:d>=60?1:d>=45?.98:d>=30?.97:.95;}
+    function _fP(p){const mn=Math.floor(p),sc=Math.round((p-mn)*60);return mn+':'+(sc<10?'0':'')+sc;}
     if(sport==='run'){
-      valDisp=`<b>${m.val}/km</b>`;
+      valDisp=`<b>${m.val}/km</b>${m.dk?` · ${m.dk}km`:''}`;
       ltDisp=`${m.val}/km`;
     } else if(sport==='bike'){
-      valDisp=`<b>${m.val}W · ${m.dur}min</b>`;
-      function dS(d){return d>=150?.91:d>=120?.94:d>=90?.97:d>=60?1:d>=45?.98:d>=30?.97:.95;}
-      const ftpE=Math.round(parseFloat(m.val)*dS(parseFloat(m.dur||60))*(m.vr?0.98:1));
-      ltDisp=`${ftpE}W`;
+      if(m.sets && m.sets.length) {
+        // Show each zone block as a badge
+        const badges = m.sets.map(s => {
+          const zCol = s.zone==='Z5'?'#e040fb':s.zone==='Z4'?'var(--orange)':s.zone==='SS'?'#ffd54f':'var(--text-mid)';
+          return `<span style="font-size:9px;background:rgba(255,152,0,.1);color:${zCol};padding:1px 6px;border-radius:3px;white-space:nowrap;">${s.reps}×${s.durMin}′ @${s.watts}W ${s.zone}</span>`;
+        }).join(' ');
+        const ftpE=Math.round(parseFloat(m.val)*_dSr(parseFloat(m.dur||60))*(m.vr?0.98:1));
+        valDisp=`<div style="display:flex;flex-wrap:wrap;gap:3px;">${badges}</div>`;
+        ltDisp=`${ftpE}W`;
+      } else {
+        const ftpE=Math.round(parseFloat(m.val)*_dSr(parseFloat(m.dur||60))*(m.vr?0.98:1));
+        valDisp=`<b>${m.val}W · ${m.dur}min</b>`;
+        ltDisp=`${ftpE}W`;
+      }
     } else {
-      valDisp=`<b>${m.val}/100m</b>`;
-      ltDisp=`${m.val}/100m`;
+      if(m.sets && m.sets.length) {
+        const badges = m.sets.map(s => {
+          const eCol = s.effort==='CSS'?'#2196f3':s.effort==='Speed'?'#00e676':s.effort==='Sprint'?'var(--red)':'var(--text-dim)';
+          return `<span style="font-size:9px;background:rgba(33,150,243,.1);color:${eCol};padding:1px 6px;border-radius:3px;white-space:nowrap;">${s.reps}×${s.distM}m @${_fP(s.pace)} ${s.effort}</span>`;
+        }).join(' ');
+        valDisp=`<div style="display:flex;flex-wrap:wrap;gap:3px;">${badges}</div>`;
+        ltDisp=`${m.val}/100m`;
+      } else {
+        valDisp=`<b>${m.val}/100m</b>${m.dk?` · ${Math.round(m.dk*1000)}m`:''}`;
+        ltDisp=`${m.val}/100m`;
+      }
     }
-    return `<tr style="background:rgba(206,147,216,.04)"><td style="white-space:nowrap">${m.date}</td>
-      <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.name||'Manual entry'} <span style="color:var(--orange);font-size:9px">★</span></td>
-      <td>—</td><td>${valDisp}</td><td>—</td>
-      <td style="color:var(--purple);font-weight:700">${ltDisp} ${badge}</td>
-      <td style="color:var(--text-dim)">${m.hr||'—'}</td>
-      <td><span style="color:var(--purple);font-size:10px">Manual</span></td>
-      <td>${delBtn}</td></tr>`;
+    return `<tr style="background:rgba(206,147,216,.04)">
+      <td style="white-space:nowrap;font-size:11px">${m.date}</td>
+      <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px">${m.name||'Manual entry'} <span style="color:var(--orange);font-size:9px">★</span> <span style="background:rgba(206,147,216,.12);color:var(--purple);padding:1px 5px;border-radius:3px;font-size:9px">MANUAL</span></td>
+      <td style="font-size:11px">—</td>
+      <td style="font-size:11px">${valDisp}</td>
+      <td style="font-size:11px">—</td>
+      <td style="font-size:11px;color:var(--text-dim)">${m.hr||'—'}</td>
+      <td style="color:var(--purple);font-weight:700;font-size:11px">${ltDisp}</td>
+      <td>${delBtn}</td>
+    </tr>`;
   }).join('');
+
+  const ivCount = sorted.filter(a=>a.iv&&!excluded.has(String(a.id))).length;
+  const hardCount = sorted.filter(a=>!a.iv&&!excluded.has(String(a.id))).length;
 
   extra.innerHTML = `<div class="card" style="margin-top:10px;">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
@@ -2225,18 +2554,34 @@ function showIntervalReview(sport) {
       <div style="display:flex;gap:6px">${tabs}</div>
     </div>
 
-    <div style="background:var(--surface2);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:11px;line-height:1.8;">
-      <b style="color:${cfg.color}">${cfg.statLabel}:</b>
-      <span style="color:${cfg.color};font-weight:700;margin:0 6px">${cfg.currentStat}</span>
-      <span style="color:var(--text-dim);font-size:10px">from ${cfg.currentSrc}</span>
+    <div style="background:var(--surface2);border-radius:8px;padding:10px 14px;margin-bottom:10px;font-size:11px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;">
+      <div>
+        <b style="color:${cfg.color}">${cfg.statLabel}:</b>
+        <span style="color:${cfg.color};font-weight:700;margin:0 6px">${cfg.currentStat}</span>
+        <span style="color:var(--text-dim);font-size:10px">from ${cfg.currentSrc}</span>
+      </div>
+      <div style="font-size:10px;color:var(--text-dim);">
+        <span style="color:var(--green);">⚡ ${ivCount} marked as intervals</span>
+        · ${hardCount} hard/candidate sessions
+        · ${manuals.length} manual entries
+      </div>
+    </div>
+
+    <div style="font-size:10px;color:var(--text-dim);background:rgba(255,152,0,.06);border-radius:6px;padding:8px 12px;margin-bottom:10px;border-left:3px solid var(--orange);">
+      <b style="color:var(--orange);">How this works:</b>
+      Showing all hard sessions as candidates.
+      <b>⚡ Mark IV</b> = tells the race predictor this session's data should feed your ${cfg.statLabel}.
+      <b>✏️ Edit</b> = correct the session's name, distances, lap pace, and HR.
+      Only <span style="color:var(--green);">⚡ IV</span>-marked sessions affect the predictor.
+      ★ = session currently setting your ${cfg.statLabel}.
     </div>
 
     <div style="overflow-x:auto;margin-bottom:14px;">
-      <table class="tbl" style="font-size:11px;">
-        <thead><tr>${cfg.cols.map(c=>`<th>${c}</th>`).join('')}</tr></thead>
+      <table class="tbl" style="font-size:11px;min-width:680px;">
+        <thead><tr>${cfg.cols.map(c=>`<th style="font-size:10px;white-space:nowrap">${c}</th>`).join('')}</tr></thead>
         <tbody>
           ${manualRows}
-          ${stravaRows || `<tr><td colspan="9" style="text-align:center;color:var(--text-dim);padding:16px">No interval sessions detected. Add one manually below or rename sessions to include patterns like "5x1km" or "3x10min".</td></tr>`}
+          ${stravaRows || `<tr><td colspan="8" style="text-align:center;color:var(--text-dim);padding:16px">No sessions found. Try syncing Strava or adding a manual entry below.</td></tr>`}
         </tbody>
       </table>
     </div>
@@ -2249,53 +2594,429 @@ function showIntervalReview(sport) {
     </div>
 
     <div style="font-size:10px;color:var(--text-dim);line-height:1.8;">
-      <b>AUTO</b> = Strava iv=true flag · <b>NAME</b> = matched NxM pattern · <b>MANUAL</b> = your entry (always wins if faster)<br>
-      ${sport==='run'?'Rep scale: ×1.02 for 2km+ · ×1.05 for 0.8-2km · ×1.08 for 400-500m reps':
+      ${sport==='run'?'Rep scale for LT est: 2km+ × 1.02 · 800m-2km × 1.05 · 400-500m × 1.08':
         sport==='bike'?'FTP scale: 60min×1.0 · 45min×0.98 · 90min×0.97 · 120min×0.94 · Rouvy ×0.98':
         'CSS scale: hard×1.01 · moderate×0.97 · easy×0.95'}<br>
-      ★ = session currently setting your ${cfg.statLabel} · Changes take effect instantly
+      ★ = session currently setting your ${cfg.statLabel} · Avg lap data auto-filled by sync.py on next sync
     </div>
   </div>`;
 }
 
+// ── Quick toggle IV flag directly from the interval review table ──────────
+function ivQuickToggle(actId, markAsIv, sport) {
+  const idx = STRAVA_ACTS.acts.findIndex(a => String(a.id) === String(actId));
+  if(idx < 0) { showToast('Activity not found', true); return; }
+  const a = STRAVA_ACTS.acts[idx];
+  if(markAsIv) {
+    a.iv = true;
+    if(a.ef === 'easy') a.ef = 'hard'; // upgrade effort if needed
+  } else {
+    delete a.iv;
+    // Also clear any interval detail fields
+    delete a.lp; delete a.lp_km; delete a.lp_hr;
+    delete a.pw; delete a.pw_min;
+    delete a.lsp; delete a.lsp_m;
+    delete a.alp_p; delete a.alp_km; delete a.alp_hr; delete a.alp_n; delete a.alp_w; delete a.alp_min;
+  }
+  // Persist
+  try {
+    const edits = JSON.parse(localStorage.getItem('tc26_workout_edits') || '{}');
+    edits[actId] = {...a};
+    localStorage.setItem('tc26_workout_edits', JSON.stringify(edits));
+  } catch(e) {}
+  save();
+  window._predState = null;
+  renderRacePredictor();
+  setTimeout(() => showIntervalReview(sport), 100);
+  showToast(markAsIv ? '⚡ Marked as interval — predictor updated ✓' : 'Interval flag removed ✓');
+}
+
+// ── Inline edit modal for interval session details ────────────────────────
+function openIvEditModal(actId, sport) {
+  const act = STRAVA_ACTS.acts.find(a => String(a.id) === String(actId));
+  if(!act) { showToast('Activity not found', true); return; }
+
+  const fP = p => { if(!p) return ''; const m=Math.floor(p),s=Math.round((p-m)*60); return m+':'+(s<10?'0':'')+s; };
+  const IS = 'background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:8px 10px;font-size:12px;width:100%;box-sizing:border-box;';
+  const LBL = 'font-size:10px;color:var(--text-dim);display:block;margin-bottom:4px;font-weight:600;letter-spacing:.5px;';
+
+  // Sport-specific lap fields
+  let lapFields = '';
+  if(act.s === 'Run') {
+    lapFields = `
+      <div style="background:rgba(0,230,118,.05);border:1px solid rgba(0,230,118,.2);border-radius:8px;padding:14px;margin-top:8px;">
+        <div style="font-size:10px;font-weight:700;letter-spacing:1.5px;color:var(--green);margin-bottom:10px">🏃 RUN INTERVAL DETAILS</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+          <div>
+            <label style="${LBL}">AVG LAP PACE (min:ss/km)</label>
+            <input type="text" id="ive-alp-p" value="${fP(act.alp_p||act.lp)}" placeholder="4:39" style="${IS}">
+            <div style="font-size:9px;color:var(--text-dim);margin-top:2px;">Avg across all work reps (not best)</div>
+          </div>
+          <div>
+            <label style="${LBL}">AVG LAP DISTANCE (km)</label>
+            <input type="number" id="ive-alp-km" step="0.01" value="${act.alp_km||act.lp_km||''}" placeholder="e.g. 1.0 for 1km reps" style="${IS}">
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <div>
+            <label style="${LBL}">AVG LAP HR (bpm)</label>
+            <input type="number" id="ive-alp-hr" value="${act.alp_hr||act.lp_hr||''}" placeholder="172" style="${IS}">
+          </div>
+          <div>
+            <label style="${LBL}">NUMBER OF REPS</label>
+            <input type="number" id="ive-alp-n" value="${act.alp_n||''}" placeholder="e.g. 5" style="${IS}">
+            <div style="font-size:9px;color:var(--text-dim);margin-top:2px;">How many work reps</div>
+          </div>
+        </div>
+      </div>`;
+  } else if(act.s === 'Bike') {
+    lapFields = `
+      <div style="background:rgba(255,152,0,.05);border:1px solid rgba(255,152,0,.2);border-radius:8px;padding:14px;margin-top:8px;">
+        <div style="font-size:10px;font-weight:700;letter-spacing:1.5px;color:var(--orange);margin-bottom:10px">🚴 BIKE INTERVAL DETAILS</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+          <div>
+            <label style="${LBL}">AVG LAP WATTS (NP)</label>
+            <input type="number" id="ive-alp-w" value="${act.alp_w||act.pw||''}" placeholder="e.g. 265" style="${IS}">
+            <div style="font-size:9px;color:var(--text-dim);margin-top:2px;">Avg NP across all work intervals</div>
+          </div>
+          <div>
+            <label style="${LBL}">AVG LAP DURATION (min)</label>
+            <input type="number" id="ive-alp-min" step="0.5" value="${act.alp_min||act.pw_min||''}" placeholder="e.g. 10" style="${IS}">
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <div>
+            <label style="${LBL}">AVG LAP HR (bpm)</label>
+            <input type="number" id="ive-alp-hr" value="${act.alp_hr||act.hr||''}" placeholder="165" style="${IS}">
+          </div>
+          <div>
+            <label style="${LBL}">NUMBER OF INTERVALS</label>
+            <input type="number" id="ive-alp-n" value="${act.alp_n||''}" placeholder="e.g. 3" style="${IS}">
+          </div>
+        </div>
+      </div>`;
+  } else if(act.s === 'Swim') {
+    lapFields = `
+      <div style="background:rgba(33,150,243,.05);border:1px solid rgba(33,150,243,.2);border-radius:8px;padding:14px;margin-top:8px;">
+        <div style="font-size:10px;font-weight:700;letter-spacing:1.5px;color:#2196f3;margin-bottom:10px">🏊 SWIM INTERVAL DETAILS</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+          <div>
+            <label style="${LBL}">AVG LAP PACE (min:ss/100m)</label>
+            <input type="text" id="ive-alp-p" value="${fP(act.alp_p||act.lsp)}" placeholder="1:46" style="${IS}">
+            <div style="font-size:9px;color:var(--text-dim);margin-top:2px;">Avg across all reps (not best)</div>
+          </div>
+          <div>
+            <label style="${LBL}">AVG REP DISTANCE (m)</label>
+            <input type="number" id="ive-alp-km" step="1" value="${act.alp_km ? Math.round(act.alp_km*1000) : (act.lsp_m||'')}" placeholder="e.g. 100" style="${IS}">
+            <div style="font-size:9px;color:var(--text-dim);margin-top:2px;">Enter in metres</div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <div>
+            <label style="${LBL}">AVG LAP HR (bpm)</label>
+            <input type="number" id="ive-alp-hr" value="${act.alp_hr||act.hr||''}" placeholder="—" style="${IS}">
+          </div>
+          <div>
+            <label style="${LBL}">NUMBER OF REPS</label>
+            <input type="number" id="ive-alp-n" value="${act.alp_n||''}" placeholder="e.g. 8" style="${IS}">
+          </div>
+        </div>
+      </div>`;
+  }
+
+  const descHint = act.desc
+    ? `<div style="background:var(--surface2);border-radius:6px;padding:8px 10px;margin-bottom:12px;font-size:11px;color:var(--text-mid);border-left:3px solid var(--orange);">
+        <span style="font-size:9px;color:var(--text-dim);display:block;margin-bottom:2px;">📋 STRAVA DESCRIPTION</span>
+        ${act.desc.replace(/</g,'&lt;')}
+       </div>` : '';
+
+  const html = `
+    <div id="iv-edit-modal-bg" onclick="closeIvEditModal()" style="position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:10000;display:flex;align-items:center;justify-content:center;padding:12px;">
+      <div onclick="event.stopPropagation()" style="background:var(--card);border-radius:14px;padding:24px;width:min(540px,98vw);max-height:94vh;overflow-y:auto;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:20px;color:${act.s==='Run'?'var(--green)':act.s==='Bike'?'var(--orange)':'#2196f3'};">EDIT INTERVAL — ${act.d}</div>
+          <button class="btn sec" style="padding:4px 10px;font-size:12px;" onclick="closeIvEditModal()">✕</button>
+        </div>
+
+        ${descHint}
+
+        <!-- 1. Session Name -->
+        <div style="margin-bottom:12px;">
+          <label style="${LBL}">1. SESSION NAME</label>
+          <input type="text" id="ive-name" value="${(act.n||'').replace(/"/g,'&quot;')}" style="${IS}">
+        </div>
+
+        <!-- 2. Total KMs -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+          <div>
+            <label style="${LBL}">2. TOTAL KM${act.s==='Swim'?' (km)':''}</label>
+            <input type="number" id="ive-dk" step="0.01" value="${act.dk||''}" style="${IS}">
+          </div>
+          <div>
+            <label style="${LBL}">DURATION (min)</label>
+            <input type="number" id="ive-mm" step="0.1" value="${act.mm||''}" style="${IS}">
+          </div>
+        </div>
+
+        <!-- IV checkbox -->
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;background:${act.iv?'rgba(0,230,118,.06)':'var(--surface2)'};border:1px solid ${act.iv?'var(--green)':'var(--border)'};border-radius:8px;padding:10px 14px;">
+          <input type="checkbox" id="ive-iv" ${act.iv?'checked':''} style="width:16px;height:16px;accent-color:var(--green);cursor:pointer;">
+          <label for="ive-iv" style="font-size:12px;font-weight:700;cursor:pointer;">⚡ Mark as Interval Session (feeds Race Predictor)</label>
+        </div>
+
+        <!-- 3-5. Lap details (sport-specific) -->
+        <div style="font-size:10px;font-weight:700;letter-spacing:1px;color:var(--text-dim);margin-bottom:6px;">3–5. LAP DETAILS <span style="font-weight:400;color:var(--text-dim);font-size:9px">— edit if Strava auto-detection was wrong or missing</span></div>
+        ${lapFields}
+
+        <div style="font-size:10px;color:var(--text-dim);margin-top:12px;margin-bottom:14px;">
+          ⚠️ These edits are stored locally and will survive page reloads, but a full Strava re-sync may overwrite them. Re-run sync.py to pull latest lap data from Strava.
+        </div>
+
+        <div style="display:flex;gap:10px;justify-content:flex-end;">
+          <button class="btn sec" onclick="closeIvEditModal()">Cancel</button>
+          <button class="btn" style="background:${act.s==='Run'?'var(--green)':act.s==='Bike'?'var(--orange)':'#2196f3'};color:#000;font-weight:700;" onclick="saveIvEdit('${actId}','${sport}')">💾 Save Interval Data</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.insertAdjacentHTML('beforeend', html);
+}
+
+function closeIvEditModal() {
+  const el = document.getElementById('iv-edit-modal-bg');
+  if(el) el.remove();
+}
+
+function saveIvEdit(actId, sport) {
+  const idx = STRAVA_ACTS.acts.findIndex(a => String(a.id) === String(actId));
+  if(idx < 0) { showToast('Activity not found', true); return; }
+  const a = STRAVA_ACTS.acts[idx];
+
+  const getNum = id => { const el=document.getElementById(id); return el&&el.value?parseFloat(el.value)||null:null; };
+  const getStr = id => { const el=document.getElementById(id); return el?el.value.trim():null; };
+  const parsePace = str => {
+    if(!str) return null;
+    const m = str.match(/(\d+):(\d+)/);
+    return m ? parseInt(m[1]) + parseInt(m[2])/60 : null;
+  };
+
+  // 1. Name
+  const name = getStr('ive-name');
+  if(name) a.n = name;
+
+  // 2. Total KM + duration
+  const dk = getNum('ive-dk');
+  const mm = getNum('ive-mm');
+  if(dk) a.dk = dk;
+  if(mm) a.mm = mm;
+
+  // IV flag
+  const ivCb = document.getElementById('ive-iv');
+  if(ivCb) {
+    if(ivCb.checked) {
+      a.iv = true;
+      if(a.ef==='easy') a.ef = 'hard';
+    } else {
+      delete a.iv;
+    }
+  }
+
+  // 3-5. Sport-specific lap details
+  if(a.s === 'Run') {
+    const alpP  = parsePace(getStr('ive-alp-p'));
+    const alpKm = getNum('ive-alp-km');
+    const alpHr = getNum('ive-alp-hr');
+    const alpN  = getNum('ive-alp-n');
+    if(alpP)  { a.alp_p = alpP;  if(!a.lp) a.lp = alpP; }  // also set lp if not set
+    if(alpKm) { a.alp_km = alpKm; if(!a.lp_km) a.lp_km = alpKm; }
+    if(alpHr) { a.alp_hr = alpHr; if(!a.lp_hr) a.lp_hr = alpHr; }
+    if(alpN)  a.alp_n = alpN;
+  } else if(a.s === 'Bike') {
+    const alpW   = getNum('ive-alp-w');
+    const alpMin = getNum('ive-alp-min');
+    const alpHr  = getNum('ive-alp-hr');
+    const alpN   = getNum('ive-alp-n');
+    if(alpW)   { a.alp_w = alpW;   if(!a.pw) a.pw = alpW; }
+    if(alpMin) { a.alp_min = alpMin; if(!a.pw_min) a.pw_min = alpMin; }
+    if(alpHr)  a.alp_hr = alpHr;
+    if(alpN)   a.alp_n = alpN;
+  } else if(a.s === 'Swim') {
+    const alpP  = parsePace(getStr('ive-alp-p'));
+    const alpM  = getNum('ive-alp-km');  // entered as metres in the form
+    const alpHr = getNum('ive-alp-hr');
+    const alpN  = getNum('ive-alp-n');
+    if(alpP)  { a.alp_p = alpP;  if(!a.lsp) a.lsp = alpP; }
+    if(alpM)  { a.alp_km = alpM/1000; if(!a.lsp_m) a.lsp_m = alpM; }  // store in km, convert
+    if(alpHr) a.alp_hr = alpHr;
+    if(alpN)  a.alp_n = alpN;
+  }
+
+  // Persist edits
+  try {
+    const edits = JSON.parse(localStorage.getItem('tc26_workout_edits') || '{}');
+    edits[actId] = {...a};
+    localStorage.setItem('tc26_workout_edits', JSON.stringify(edits));
+  } catch(e) {}
+
+  save();
+  window._predState = null;
+  closeIvEditModal();
+  renderRacePredictor();
+  setTimeout(() => showIntervalReview(sport), 100);
+  showToast('Interval data saved ✓ — predictor updated');
+}
+
+
+
+
+// ── Pace store format helper (p in min/unit → "M:SS") ─────────────────
+function _ivFmtPace(p) {
+  if(!p || isNaN(p)) return '0:00';
+  const m = Math.floor(p), s = Math.round((p - m) * 60);
+  return m + ':' + (s < 10 ? '0' : '') + s;
+}
+function _ivParsePace(str) {
+  const m = String(str||'').match(/(\d+):(\d{2})/);
+  return m ? parseInt(m[1]) + parseInt(m[2]) / 60 : null;
+}
+
+// ── Collect bike sets from the dynamic form ────────────────────────────
+function ivCollectBikeSets() {
+  return Array.from(document.querySelectorAll('.iv-bike-set-row')).map(row => {
+    const reps   = parseInt(row.querySelector('.iv-set-reps')?.value || 0);
+    const watts  = parseInt(row.querySelector('.iv-set-watts')?.value || 0);
+    const durMin = parseFloat(row.querySelector('.iv-set-dur')?.value || 0);
+    const zone   = row.querySelector('.iv-set-zone')?.value || 'Z4';
+    const rest   = parseFloat(row.querySelector('.iv-set-rest')?.value || 0) || null;
+    return (reps > 0 && watts > 0 && durMin > 0) ? { reps, watts, durMin, zone, rest } : null;
+  }).filter(Boolean);
+}
+
+// ── Collect swim sets from the dynamic form ────────────────────────────
+function ivCollectSwimSets() {
+  return Array.from(document.querySelectorAll('.iv-swim-set-row')).map(row => {
+    const reps   = parseInt(row.querySelector('.iv-set-reps')?.value || 0);
+    const distM  = parseInt(row.querySelector('.iv-set-dist')?.value || 0);
+    const pace   = _ivParsePace(row.querySelector('.iv-set-pace')?.value || '');
+    const effort = row.querySelector('.iv-set-effort')?.value || 'CSS';
+    const rest   = parseInt(row.querySelector('.iv-set-rest')?.value || 0) || null;
+    return (reps > 0 && distM > 0 && pace) ? { reps, distM, pace, effort, rest } : null;
+  }).filter(Boolean);
+}
+
+// ── Dynamic row add/remove helpers ────────────────────────────────────
+function ivAddBikeSet() {
+  const box = document.getElementById('iv-bike-sets');
+  if(!box) return;
+  const row = document.createElement('div');
+  row.className = 'iv-bike-set-row';
+  row.style.cssText = 'display:grid;grid-template-columns:44px 72px 64px 100px 60px 28px;gap:5px;margin-bottom:5px;align-items:center;';
+  row.innerHTML = `
+    <input class="iv-set-reps" type="number" min="1" placeholder="3" style="width:100%;">
+    <input class="iv-set-watts" type="number" placeholder="270" style="width:100%;">
+    <input class="iv-set-dur" type="number" step="0.5" placeholder="25" style="width:100%;">
+    <select class="iv-set-zone" style="width:100%;">
+      <option value="Z5">Z5 VO2max</option>
+      <option value="Z4" selected>Z4 Threshold</option>
+      <option value="SS">Sweet Spot</option>
+      <option value="Z3">Z3 Tempo</option>
+      <option value="Z2">Z2 Endurance</option>
+    </select>
+    <input class="iv-set-rest" type="number" step="0.5" placeholder="5" style="width:100%;">
+    <button type="button" onclick="ivRemoveBikeSet(this)" style="background:rgba(244,67,54,.15);color:var(--red);border:none;border-radius:4px;padding:5px 0;cursor:pointer;font-size:13px;width:100%;line-height:1;">×</button>`;
+  box.appendChild(row);
+}
+function ivRemoveBikeSet(btn) {
+  const row = btn.closest('.iv-bike-set-row');
+  if(row && row.parentElement.querySelectorAll('.iv-bike-set-row').length > 1) row.remove();
+}
+
+function ivAddSwimSet() {
+  const box = document.getElementById('iv-swim-sets');
+  if(!box) return;
+  const row = document.createElement('div');
+  row.className = 'iv-swim-set-row';
+  row.style.cssText = 'display:grid;grid-template-columns:44px 64px 88px 100px 60px 28px;gap:5px;margin-bottom:5px;align-items:center;';
+  row.innerHTML = `
+    <input class="iv-set-reps" type="number" min="1" placeholder="4" style="width:100%;">
+    <input class="iv-set-dist" type="number" placeholder="200" style="width:100%;">
+    <input class="iv-set-pace" type="text" placeholder="1:40" style="width:100%;">
+    <select class="iv-set-effort" style="width:100%;">
+      <option value="CSS" selected>CSS threshold</option>
+      <option value="Speed">Speed / VO2</option>
+      <option value="Sprint">Sprint / max</option>
+      <option value="Drill">Drill / technique</option>
+      <option value="Aerobic">Aerobic / easy</option>
+    </select>
+    <input class="iv-set-rest" type="number" placeholder="30" style="width:100%;">
+    <button type="button" onclick="ivRemoveSwimSet(this)" style="background:rgba(244,67,54,.15);color:var(--red);border:none;border-radius:4px;padding:5px 0;cursor:pointer;font-size:13px;width:100%;line-height:1;">×</button>`;
+  box.appendChild(row);
+}
+function ivRemoveSwimSet(btn) {
+  const row = btn.closest('.iv-swim-set-row');
+  if(row && row.parentElement.querySelectorAll('.iv-swim-set-row').length > 1) row.remove();
+}
 
 function ivAddManual(sport) {
   if(!D.ivManual) D.ivManual = [];
   const date = document.getElementById('iv-add-date')?.value || '';
   const name = document.getElementById('iv-add-name')?.value?.trim() || '';
-  const val  = document.getElementById('iv-add-val')?.value?.trim()  || '';
   const msg  = document.getElementById('iv-add-msg');
+  if(!date) { if(msg) { msg.style.color='var(--red)'; msg.textContent='Date required'; } return; }
 
-  if(!date || !val) { if(msg) { msg.style.color='var(--red)'; msg.textContent='Date and value required'; } return; }
+  // ── BIKE: collect structured sets ───────────────────────────────────
+  if(sport === 'bike') {
+    const sets = ivCollectBikeSets();
+    if(!sets.length) { if(msg) { msg.style.color='var(--red)'; msg.textContent='Add at least one set with reps, watts and duration'; } return; }
+    const vr = document.getElementById('iv-add-vr')?.value === '1';
+    const hr = parseInt(document.getElementById('iv-add-hr')?.value || 0) || null;
+    // For FTP: extract best Z4/SS block (total duration of that zone)
+    const ftpZones = ['Z4','SS','Z3'];
+    const ftpSets  = sets.filter(s => ftpZones.includes(s.zone));
+    const base     = ftpSets.length ? ftpSets : sets;
+    function dSc(d){return d>=150?.91:d>=120?.94:d>=90?.97:d>=60?1:d>=45?.98:d>=30?.97:.95;}
+    const best = base.reduce((b, s) => {
+      const aTot = s.reps * s.durMin;
+      const bTot = b.reps * b.durMin;
+      const aEst = s.watts * dSc(aTot) * (vr ? 0.98 : 1);
+      const bEst = b.watts * dSc(bTot) * (vr ? 0.98 : 1);
+      return aEst > bEst ? s : b;
+    });
+    const totalDur = best.reps * best.durMin;
+    D.ivManual.push({ sport, date, name, vr, hr, sets,
+      val: String(best.watts),
+      dur: totalDur });
 
-  const entry = { sport, date, name, val };
-  if(sport==='bike') {
-    const dur = document.getElementById('iv-add-dur')?.value;
-    const vr  = document.getElementById('iv-add-vr')?.value;
-    if(!dur) { if(msg) { msg.style.color='var(--red)'; msg.textContent='Duration required for bike'; } return; }
-    entry.dur = parseFloat(dur);
-    entry.vr  = vr==='1';
-  }
-  if(sport==='run' || sport==='swim') {
-    const dk = document.getElementById('iv-add-dk')?.value;
-    if(dk) entry.dk = parseFloat(dk);
-  }
-  const hr = document.getElementById('iv-add-hr')?.value;
-  if(hr) entry.hr = parseInt(hr);
+  // ── SWIM: collect structured sets ───────────────────────────────────
+  } else if(sport === 'swim') {
+    const sets = ivCollectSwimSets();
+    if(!sets.length) { if(msg) { msg.style.color='var(--red)'; msg.textContent='Add at least one set with reps, distance and pace'; } return; }
+    const hr = parseInt(document.getElementById('iv-add-hr')?.value || 0) || null;
+    // Find best CSS-effort set for predictor (CSS > Aerobic > Speed, bigger volume wins ties)
+    const order = ['CSS','Aerobic','Speed','Sprint','Drill'];
+    const sorted = [...sets].sort((a,b) => {
+      const ao = order.indexOf(a.effort), bo = order.indexOf(b.effort);
+      if(ao !== bo) return ao - bo;
+      return (b.reps * b.distM) - (a.reps * a.distM);
+    });
+    const cssSet = sorted[0];
+    const dk = sets.reduce((s, x) => s + x.reps * x.distM / 1000, 0);
+    D.ivManual.push({ sport, date, name, hr, sets,
+      val: _ivFmtPace(cssSet.pace),
+      dk:  Math.round(dk * 1000) / 1000 });
 
-  // Validate val format
-  if(sport==='run' || sport==='swim') {
-    if(!/^\d+:\d{2}$/.test(val)) { if(msg) { msg.style.color='var(--red)'; msg.textContent='Pace must be M:SS format (e.g. 4:05)'; } return; }
-  }
-  if(sport==='bike') {
-    if(!/^\d+$/.test(val)) { if(msg) { msg.style.color='var(--red)'; msg.textContent='Enter watts as a whole number (e.g. 245)'; } return; }
+  // ── RUN: unchanged simple format ────────────────────────────────────
+  } else {
+    const val = document.getElementById('iv-add-val')?.value?.trim() || '';
+    if(!val || !/^\d+:\d{2}$/.test(val)) { if(msg) { msg.style.color='var(--red)'; msg.textContent='Pace must be M:SS (e.g. 4:05)'; } return; }
+    const dk = parseFloat(document.getElementById('iv-add-dk')?.value || 0) || null;
+    const hr = parseInt(document.getElementById('iv-add-hr')?.value || 0) || null;
+    D.ivManual.push({ sport, date, name, val, dk, hr });
   }
 
-  D.ivManual.push(entry);
   save();
   window._predState = null;
   renderRacePredictor();
-  if(msg) { msg.style.color='var(--green)'; msg.textContent='✓ Added'; setTimeout(()=>{ msg.textContent=''; },2000); }
+  if(msg) { msg.style.color='var(--green)'; msg.textContent='✓ Saved'; setTimeout(()=>{ msg.textContent=''; }, 2500); }
   setTimeout(() => showIntervalReview(sport), 120);
 }
 
@@ -2527,6 +3248,19 @@ function editWorkout(actId) {
           </div>
         </div>
 
+        ${a.s==='Run' ? `
+        <!-- LONG RUN TOGGLE -->
+        <div style="border:1px solid ${isLr?'rgba(0,230,118,.4)':'var(--border)'};border-radius:8px;padding:12px;margin-bottom:14px;background:${isLr?'rgba(0,230,118,.04)':'transparent'};">
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;margin-bottom:4px;">
+            <input type="checkbox" id="ew-lr" ${isLr?'checked':''}
+              style="width:16px;height:16px;accent-color:var(--green);cursor:pointer;">
+            <span style="font-weight:700;font-size:13px;">🏃 Long Run</span>
+          </label>
+          <div style="font-size:10px;color:var(--text-dim);margin-left:26px;">
+            Auto-detected if ≥14km and not an interval. Tick to force-include, untick to exclude from the Long Run tab. Feeds aerobic efficiency into the race predictor.
+          </div>
+        </div>` : ''}
+
         <div style="font-size:10px;color:var(--text-dim);margin-bottom:12px;">⚠️ Changes apply to local data only. Re-syncing from Strava will overwrite manual edits.</div>
         <div style="display:flex;gap:10px;justify-content:flex-end;">
           <button class="btn sec" onclick="closeEditModal()">Cancel</button>
@@ -2564,6 +3298,17 @@ function saveWorkoutEdit(actId) {
   a.hr = getNum('ew-hr') || a.hr;
   a.tl = getNum('ew-tl') || a.tl;
   a.ef = getStr('ew-ef') || a.ef;
+
+  // Long run flag — three-state: true (manually on), false (manually off), undefined (auto)
+  if(a.s === 'Run') {
+    const lrCb = document.getElementById('ew-lr');
+    if(lrCb) {
+      const autoWouldBe = !a.iv && (a.dk||0) >= LONG_RUN_KM;
+      if(lrCb.checked && !autoWouldBe) a.lr = true;       // force ON
+      else if(!lrCb.checked && autoWouldBe) a.lr = false;  // force OFF
+      else delete a.lr;                                     // let auto decide
+    }
+  }
   if(a.s === 'Run')  a.p  = parsePace(getStr('ew-p'))  || a.p;
   if(a.s === 'Bike') { a.nw=getNum('ew-nw')||a.nw; a.w=getNum('ew-w')||a.w; a.cad=getNum('ew-cad')||a.cad; }
   if(a.s === 'Swim') a.sp = parsePace(getStr('ew-sp')) || a.sp;

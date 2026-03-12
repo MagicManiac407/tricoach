@@ -849,6 +849,7 @@
   <div style="display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap;">
     <button class="btn sec" id="pt-overview" onclick="switchPT('overview')">🧠 AI Overview</button>
     <button class="btn" id="pt-run" onclick="switchPT('run')">🏃 Run</button>
+    <button class="btn sec" id="pt-longrun" onclick="switchPT('longrun')">🏃 Long Run</button>
     <button class="btn sec" id="pt-bike" onclick="switchPT('bike')">🚴 Bike</button>
     <button class="btn sec" id="pt-swim" onclick="switchPT('swim')">🏊 Swim</button>
     <button class="btn sec" id="pt-volume" onclick="switchPT('volume')">📊 Volume</button>
@@ -939,6 +940,67 @@
     <div class="card">
       <div class="sl">Interval Sessions</div>
       <div id="interval-table"></div>
+    </div>
+  </div>
+
+
+  <!-- LONG RUN -->
+  <div id="pv-longrun" style="display:none;">
+    <div class="card" style="padding:14px 18px;margin-bottom:12px;">
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
+        <div><label>Date Range</label>
+          <select id="lrf-range" onchange="renderLongRunCharts()">
+            <option value="all" selected>All time</option>
+            <option value="365">Last 12 months</option>
+            <option value="180">Last 6 months</option>
+            <option value="90">Last 90 days</option>
+          </select>
+        </div>
+        <div style="font-size:11px;color:var(--text-dim);padding-bottom:4px;">
+          Auto-detected: runs &#x2265;14km that aren't intervals &middot; Use &#x270F;&#xFE0F; edit to manually override any session
+        </div>
+      </div>
+    </div>
+    <div id="lr-stats" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px;"></div>
+    <div class="card" style="margin-bottom:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+        <div class="sl" style="margin:0;">&#x1F4CF; Distance Progression</div>
+        <div style="font-size:10px;color:var(--text-dim);">4-session rolling avg &middot; orange dashed = HIM run dist 21.1km</div>
+      </div>
+      <canvas id="c-lr-dist" height="220" style="width:100%;display:block;"></canvas>
+    </div>
+    <div class="card" style="margin-bottom:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+        <div class="sl" style="margin:0;">&#x26A1; Pace Trend</div>
+        <div style="font-size:10px;color:var(--text-dim);">Lower = faster &middot; gold = HM PB pace &middot; blue = Z2 ceiling</div>
+      </div>
+      <canvas id="c-lr-pace" height="220" style="width:100%;display:block;"></canvas>
+    </div>
+    <div class="g2" style="margin-bottom:12px;">
+      <div class="card" style="margin:0;">
+        <div class="sl">&#x2764;&#xFE0F; Avg HR &mdash; Cardiac Drift</div>
+        <div style="font-size:10px;color:var(--text-dim);margin-bottom:8px;">Same pace, HR going down = aerobic adaptation &#x2713;</div>
+        <canvas id="c-lr-hr" height="220" style="width:100%;display:block;"></canvas>
+      </div>
+      <div class="card" style="margin:0;">
+        <div class="sl">&#x1F4C8; Aerobic Efficiency (Speed&#xF7;HR)</div>
+        <div style="font-size:10px;color:var(--text-dim);margin-bottom:8px;">Trending up = base building working &middot; feeds race predictor</div>
+        <canvas id="c-lr-ae" height="180" style="width:100%;display:block;"></canvas>
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+        <div class="sl" style="margin:0;">&#x23F1;&#xFE0F; Time on Feet</div>
+        <div style="font-size:10px;color:var(--text-dim);">Building time on feet is the key HIM run prep signal &middot; orange = 2hr mark</div>
+      </div>
+      <canvas id="c-lr-tof" height="200" style="width:100%;display:block;"></canvas>
+    </div>
+    <div class="card">
+      <div class="sl">Long Run Log &mdash; Most Recent First</div>
+      <div style="font-size:10px;color:var(--text-dim);margin-bottom:8px;">
+        &#x1F504; auto = detected by distance (&#x2265;14km, non-interval) &middot; &#x1F3C3; LR = manually marked &middot; Use &#x270F;&#xFE0F; to force-include or exclude any session
+      </div>
+      <div id="lr-table"></div>
     </div>
   </div>
 
