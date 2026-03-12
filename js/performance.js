@@ -1128,32 +1128,89 @@ function _getLTHR() {
 
 function buildRunModel_pred() {
   const lthr=_getLTHR();
-  const runs=filterActs('Run',{range:'all',minDist:2}).filter(a=>a.p&&a.hr&&a.p>0&&a.hr>0);
+  const runs=filterActs('Run',{range:'all',minDist:2}).filter(a=>a.p&&a.p>0);
   const model=buildDualComponentModel(runs,a=>{
-    const speed=1000/a.p, hrR=Math.min(a.hr/lthr,1.15), ae=speed/(a.hr*hrR);
+    const speed=1000/a.p;
+    const hrR=a.hr&&lthr>0?Math.min(a.hr/lthr,1.15):1.0;
+    const ae=a.hr&&lthr>0?speed/(a.hr*hrR):speed/150;
     const vol=Math.min(Math.sqrt((a.dk||5)/10),1.5);
-    let ef=a.iv?1.35:a.ef==='hard'||a.ef==='max'?1.2:a.ef==='easy'?0.9:1.0;
+    let ef=a.iv?1.25:a.ef==='hard'||a.ef==='max'?1.1:a.ef==='easy'?0.9:1.0;
     return ae*vol*ef;
   });
-  let threshold=Math.max(3.5,7.5-model.ctl*12);
-  const hmPb=(D.pbs?.run||[]).find(p=>p.n&&p.n.includes('Half'));
-  if(hmPb&&hmPb.v){ const s=_parseTime(hmPb.v); if(s){ threshold=(s/60/21.1)*1.05; } }
-  return {...model,lthr,threshold,vdot:30+model.ctl*80,runs};
+
+  // Anchor threshold to real PBs — priority order:
+  // 1) LTHR run pace (most accurate aerobic threshold)
+  // 2) Half marathon PB (race-proven)
+  // 3) Best recent interval pace + fatigue factor
+  // 4) CTL formula as last resort (capped to realistic range)
+  let threshold = null;
+
+  // 1) LTHR pace from PBs
+  const lthrPb = (D.pbs?.run||[]).find(p=>p.n&&p.n.toLowerCase().includes('lthr'));
+  if(lthrPb&&lthrPb.note){ const m=lthrPb.note.match(/(\d+\.\d+|\d+):(\d{2})\/km/); if(m) threshold=parseFloat(m[1])+parseFloat(m[2])/60; }
+  if(!threshold&&lthrPb&&lthrPb.v){ const m=String(lthrPb.v).match(/(\d+\.\d+|\d+):(\d{2})\/km/); if(m) threshold=parseFloat(m[1])+parseFloat(m[2])/60; }
+
+  // 2) Half marathon PB → threshold is ~HM pace * 0.98 (HM is ~lactate threshold effort)
+  if(!threshold){
+    const hmPb=(D.pbs?.run||[]).find(p=>p.n&&p.n.includes('Half'));
+    if(hmPb&&hmPb.v){ const s=_parseTime(hmPb.v); if(s){ threshold=(s/60/21.1)*0.98; } }
+  }
+
+  // 3) Best interval pace from Strava (intervals flagged as iv:true) + 8% fatigue buffer
+  if(!threshold){
+    const ivRuns=runs.filter(a=>a.iv&&a.p>0&&a.dk>=3);
+    if(ivRuns.length){ const bestIv=Math.min(...ivRuns.map(a=>a.p)); threshold=bestIv*1.08; }
+  }
+
+  // 4) CTL formula capped to [3.8, 6.5] min/km (realistic triathlete range)
+  if(!threshold){ threshold=Math.max(3.8,Math.min(6.5,7.0-model.ctl*10)); }
+
+  // VDOT from threshold (Jack Daniels approximation)
+  const vdot = threshold>0 ? Math.round(Math.min(70,Math.max(25, 85-(threshold*8)))) : 40;
+
+  return {...model,lthr,threshold,vdot,runs};
 }
 
 function buildBikeModel_pred() {
   const lthr=_getLTHR();
-  const bikes=filterActs('Bike',{range:'all',minDur:15}).filter(a=>(a.nw||a.w||a.dk)&&a.hr&&a.hr>0);
+  const bikes=filterActs('Bike',{range:'all',minDur:15}).filter(a=>(a.nw||a.w||a.dk));
   const model=buildDualComponentModel(bikes,a=>{
     const watts=a.nw||a.w; let eff;
-    if(watts&&watts>0){ const hrR=Math.min(a.hr/lthr,1.1); eff=(watts/a.hr/hrR)*(a.nw&&a.w&&a.nw>a.w?1+(a.nw-a.w)/a.w*0.3:1); }
-    else if(a.dk&&a.mm){ eff=(a.dk/a.mm*60)/(a.hr*1.5); }
+    if(watts&&watts>0){
+      const hrR=a.hr&&lthr>0?Math.min(a.hr/lthr,1.1):1.0;
+      eff=(watts/(a.hr||150)/hrR)*(a.nw&&a.w&&a.nw>a.w?1+(a.nw-a.w)/a.w*0.3:1);
+    } else if(a.dk&&a.mm){ eff=(a.dk/a.mm*60)/((a.hr||150)*1.5); }
     else return 0;
-    return eff*Math.min(Math.sqrt((a.mm||30)/60/1.5),1.6)*(a.ef==='hard'||a.ef==='max'?1.2:a.ef==='easy'?0.85:1.0);
+    return eff*Math.min(Math.sqrt((a.mm||30)/60/1.5),1.6)*(a.ef==='hard'||a.ef==='max'?1.1:a.ef==='easy'?0.85:1.0);
   });
-  let ftp=80+model.ctl*520;
+
+  // Anchor FTP to real PBs — NEVER let CTL formula exceed what power data shows
+  // Your power curve: 10min=283W, 20min=248W, 1hr=232W → FTP ~230W
+  let ftpFromPbs = null;
+
+  // 1) Explicit FTP PB
   const ftpPb=(D.pbs?.phys||[]).concat(D.pbs?.bike||[]).find(p=>p.n&&p.n.toLowerCase().includes('ftp'));
-  if(ftpPb&&ftpPb.v){ const m=String(ftpPb.v).match(/(\d+)/); if(m) ftp=Math.max(ftp,parseInt(m[1])*0.85); }
+  if(ftpPb&&ftpPb.v){ const m=String(ftpPb.v).match(/(\d+)/); if(m) ftpFromPbs=parseInt(m[1]); }
+
+  // 2) Derive from 20min power PB (FTP = 20min * 0.95)
+  if(!ftpFromPbs){
+    const pb20=(D.pbs?.bike||[]).find(p=>p.n&&p.n.includes('20 min'));
+    if(pb20&&pb20.v){ const m=String(pb20.v).match(/(\d+)/); if(m) ftpFromPbs=Math.round(parseInt(m[1])*0.95); }
+  }
+
+  // 3) Derive from 60min power PB (FTP ≈ 60min power)
+  if(!ftpFromPbs){
+    const pb60=(D.pbs?.bike||[]).find(p=>p.n&&(p.n.includes('1 hr')||p.n.includes('60')));
+    if(pb60&&pb60.v){ const m=String(pb60.v).match(/(\d+)/); if(m) ftpFromPbs=parseInt(m[1]); }
+  }
+
+  // 4) CTL formula — HARD CAP at 300W (no fantasy numbers)
+  const ftpFromCtl = Math.min(300, Math.max(100, 80+model.ctl*400));
+
+  // Use PB-derived FTP if available, else CTL estimate. Never exceed 110% of PB.
+  let ftp = ftpFromPbs ? ftpFromPbs : ftpFromCtl;
+  if(ftpFromPbs) ftp = Math.min(ftp, ftpFromPbs * 1.05); // allow tiny 5% CTL boost max
+
   // Rouvy power-speed model (log regression)
   const rouvy=bikes.filter(a=>a.vr&&(a.nw||a.w)&&a.dk&&a.mm);
   let speedModel={type:'default'};
@@ -1174,13 +1231,42 @@ function buildSwimModel_pred() {
   const swims=filterActs('Swim',{range:'all'}).filter(a=>a.sp&&a.sp>0&&(a.dk||0)*1000>=300);
   const model=buildDualComponentModel(swims,a=>{
     const q=2.167/a.sp, dist=Math.min(Math.sqrt((a.dk||0)*1000/1500),1.5);
-    return q*dist*(a.ef==='hard'||a.ef==='max'?1.2:a.ef==='easy'?0.9:1.0)*(a.hr&&a.hr>0?Math.min((1000/a.sp)/a.hr/0.06,1.2):1.0);
+    return q*dist*(a.ef==='hard'||a.ef==='max'?1.15:a.ef==='easy'?0.9:1.0);
   });
-  let css=Math.max(1.3,2.5-model.ctl*2.8);
+
+  // Anchor CSS to real PBs — priority order:
+  // 1) Explicit CSS PB (most accurate)
+  // 2) Best 500m PB + CSS estimation (CSS ≈ 500m pace + ~4s/100m)
+  // 3) Best long swim pace * 1.02
+  // 4) CTL formula capped to realistic range [1:30-2:30/100m]
+  let css = null;
+
+  // 1) Explicit CSS PB
   const cssPb=(D.pbs?.swim||[]).concat(D.pbs?.phys||[]).find(p=>p.n&&p.n.toLowerCase().includes('css'));
-  if(cssPb&&cssPb.v){ const m=String(cssPb.v).match(/(\d+):(\d+)/); if(m) css=Math.min(css,(parseInt(m[1])+parseInt(m[2])/60)*1.02); }
-  const longSwims=swims.filter(a=>(a.dk||0)*1000>=1000&&a.sp);
-  if(longSwims.length){ const best=Math.min(...longSwims.map(a=>a.sp)); css=Math.min(css,best*1.02); }
+  if(cssPb&&cssPb.v){
+    const raw=String(cssPb.v).replace('~','').trim();
+    const m=raw.match(/(\d+):(\d+)/); if(m) css=parseInt(m[1])+parseInt(m[2])/60;
+  }
+
+  // 2) 500m PB → CSS = 500m pace + ~4s/100m (CSS is slightly slower than 500m best)
+  if(!css){
+    const pb500=(D.pbs?.swim||[]).find(p=>p.n&&p.n.includes('500'));
+    if(pb500&&pb500.v){ const m=String(pb500.v).match(/(\d+):(\d+)/); if(m){ const pace500=parseInt(m[1])+parseInt(m[2])/60; css=pace500+(4/60); } }
+  }
+
+  // 3) Best long swim pace (1000m+) * 1.02 buffer
+  if(!css){
+    const longSwims=swims.filter(a=>(a.dk||0)*1000>=1000&&a.sp);
+    if(longSwims.length){ css=Math.min(...longSwims.map(a=>a.sp))*1.02; }
+  }
+
+  // 4) CTL formula — capped to [1:30, 2:30] per 100m (realistic range)
+  if(!css){ css=Math.max(1.5,Math.min(2.5,2.4-model.ctl*1.5)); }
+
+  // Hard sanity cap: CSS cannot be faster than best 500m pace
+  const pb500=(D.pbs?.swim||[]).find(p=>p.n&&p.n.includes('500'));
+  if(pb500&&pb500.v){ const m=String(pb500.v).match(/(\d+):(\d+)/); if(m){ const pace500=parseInt(m[1])+parseInt(m[2])/60; css=Math.max(css,pace500); } }
+
   return {...model,css,swims};
 }
 
