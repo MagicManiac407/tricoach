@@ -181,7 +181,7 @@ const PRO_ATHLETES = [
     recovery: {
       sleep: '9–10h target. After IMWC Nice win: 2.5 weeks sleep disrupted by media — openly cited as challenge heading into Marbella.',
       tools: 'Altitude camp Pyrenees pre-Nice. Course recon rides on Marbella bike course. Aero testing (calf sleeves alone saved ~3min at IMWC — 30s in T1, ~3min saved on bike). Pinarello road frame for Nice (lighter than TT for climbing).',
-      philosophy: 'Self-coaching in collaborative trio. "I've learned to know my body way more — especially with recovery and making good decisions for myself." Full rest days still include an easy swim.',
+      philosophy: 'Self-coaching in collaborative trio. "I\'ve learned to know my body way more — especially with recovery and making good decisions for myself." Full rest days still include an easy swim.',
       taper: 'Significant volume drop. Keeps one longer bike (3–3.5h + 1h run). Tests different taper protocols each season. Key pre-race day: long bike + 1h run + 1h swim. Race day –1: short easy run + bike check.',
     },
     physiology: {
