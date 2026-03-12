@@ -556,6 +556,22 @@ def run_sync(do_garmin=True, do_strava=True, days=14):
         except Exception as e:
             messages.append(f"  ⚠  Supabase push failed: {e}")
 
+    # Auto git push — keeps live site Garmin data fresh without manual push
+    messages.append("[GitHub]")
+    try:
+        import subprocess
+        repo = Path(__file__).parent
+        subprocess.run(["git", "add", "js/strava.js", "js/dashboard.js"], cwd=repo, check=True, capture_output=True)
+        diff = subprocess.run(["git", "diff", "--cached", "--quiet"], cwd=repo, capture_output=True)
+        if diff.returncode != 0:
+            subprocess.run(["git", "commit", "-m", f"Sync {datetime.now().strftime('%Y-%m-%d %H:%M')} — Garmin + {len(strava_acts)} activities"], cwd=repo, check=True, capture_output=True)
+            subprocess.run(["git", "push", "origin", "main"], cwd=repo, check=True, capture_output=True)
+            messages.append("  ✅ Pushed to GitHub — live site updated")
+        else:
+            messages.append("  ✅ No changes to push")
+    except Exception as e:
+        messages.append(f"  ⚠  Git push failed: {e}")
+
     return {"ok": ok, "messages": messages, "garmin": garmin_data, "strava_count": len(strava_acts)}
 
 
