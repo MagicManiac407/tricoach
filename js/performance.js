@@ -2407,7 +2407,7 @@ function showIntervalReview(sport) {
           <td style="font-size:11px">${setDisp}</td>
           <td style="font-size:11px;color:var(--text-dim)">${hrDisp}</td>
           <td style="color:#2196f3;font-weight:700;font-size:11px">${cssCell}</td>`;
-      }
+      },
       addFields: `
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
           <div><label>Date</label><input type="date" id="iv-add-date" value="${new Date().toISOString().slice(0,10)}"></div>
