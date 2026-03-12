@@ -1296,7 +1296,8 @@ function _calcPrediction(dk, R, B, S) {
   const swimP   = S.css*1.06;
   const swimMins= (dk.swim*1000/100)*swimP;
   const raceW   = B.ftp*intPct;
-  const spd     = Math.max(22,Math.min(50,_bikeSpd(raceW,B.speedModel)));
+  // Always use physics model for race prediction — Rouvy virtual speed is meaningless outdoors
+  const spd     = Math.max(22,Math.min(50,_bikeSpd(raceW,{type:'default'})));
   const bikeMins= (dk.bike/spd)*60;
   let runP = R.threshold*fatMult;
   if(distKey==='ironman') runP*=Math.pow(42.2/21.1,0.06);
