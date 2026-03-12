@@ -522,6 +522,31 @@ def ensure_supabase_table():
     """Create strava_acts table if it doesn't exist via RPC (best-effort)."""
     pass  # Table must be created manually in Supabase dashboard — see setup instructions
 
+def push_garmin_to_supabase(garmin_data):
+    """Push today's Garmin data to Supabase garmin_today table (single row, always upserted)."""
+    if not garmin_data:
+        return
+    try:
+        import requests as req
+        headers = {
+            "apikey": SUPABASE_KEY,
+            "Authorization": f"Bearer {SUPABASE_KEY}",
+            "Content-Type": "application/json",
+            "Prefer": "resolution=merge-duplicates"
+        }
+        row = {"id": "latest", "data": garmin_data}
+        r = req.post(
+            f"{SUPABASE_URL}/rest/v1/garmin_today",
+            headers=headers,
+            json=row
+        )
+        if r.status_code in (200, 201):
+            print(f"  ✅ Garmin data pushed to Supabase")
+        else:
+            print(f"  ⚠  Supabase Garmin push error: {r.status_code} {r.text[:200]}")
+    except Exception as e:
+        print(f"  ⚠  Supabase Garmin push failed: {e}")
+
 # ─────────────────────────────────────────────────────────────────
 # STRUCTURED SYNC — returns result dict for server mode
 # ─────────────────────────────────────────────────────────────────
@@ -548,13 +573,19 @@ def run_sync(do_garmin=True, do_strava=True, days=14):
     ok = inject_into_html(garmin_data, strava_acts)
     messages.append("  ✅ HTML updated" if ok else "  ❌ HTML update failed")
 
+    messages.append("[Supabase]")
+    if do_garmin and garmin_data:
+        try:
+            push_garmin_to_supabase(garmin_data)
+            messages.append(f"  ✅ Garmin data pushed to Supabase")
+        except Exception as e:
+            messages.append(f"  ⚠  Supabase Garmin push failed: {e}")
     if do_strava and strava_acts:
-        messages.append("[Supabase]")
         try:
             push_to_supabase(strava_acts)
             messages.append(f"  ✅ {len(strava_acts)} activities pushed to Supabase")
         except Exception as e:
-            messages.append(f"  ⚠  Supabase push failed: {e}")
+            messages.append(f"  ⚠  Supabase Strava push failed: {e}")
 
     # Auto git push — keeps live site Garmin data fresh without manual push
     messages.append("[GitHub]")

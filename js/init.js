@@ -426,7 +426,8 @@ document.addEventListener('DOMContentLoaded',()=>{
   applySyncData();
   refreshPlannerFromStrava();
   checkSyncServer(); // ping local server — updates button status if running
-  // Load fresh Strava activities from Supabase (overrides static STRAVA_ACTS)
+  // Load fresh Garmin + Strava data from Supabase (overrides static injected data)
+  loadGarminFromSupabase();
   loadStravaFromSupabase();
   window.addEventListener('resize',()=>{if(document.getElementById('page-trends').classList.contains('active'))renderChart();});
 });
