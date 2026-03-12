@@ -209,6 +209,75 @@ def strava_fetch(days=14):
         else:
             entry["ef"] = "moderate"
 
+        # ── Fetch per-lap detail for structured workouts (bike+run) ──────
+        # The activity list endpoint only gives session-level avg/NP.
+        # For interval sessions, the warmup/cooldown drags those numbers down,
+        # hiding the actual work interval power. We fetch laps for:
+        #   - Any activity flagged iv=True
+        #   - Any bike activity with workout_type in [3,12]
+        # We store pw (best work-lap NP) and pw_min (that lap's duration).
+        # FTP algorithm can then use pw/pw_min to estimate FTP from the interval
+        # segment alone, without warmup/cooldown contamination.
+        if entry.get("iv") and sport in ("Bike", "Run", "Swim") and token:
+            try:
+                det = requests.get(
+                    f"https://www.strava.com/api/v3/activities/{a['id']}",
+                    headers={"Authorization": f"Bearer {token}"},
+                    timeout=10
+                ).json()
+                laps = det.get("laps") or []
+                if laps:
+                    if sport == "Bike":
+                        # Find the best (highest NP or avg watts) work lap ≥3min
+                        work_laps = [
+                            l for l in laps
+                            if (l.get("weighted_average_watts") or l.get("average_watts") or 0) > 0
+                            and (l.get("moving_time") or 0) >= 180  # ≥3min
+                        ]
+                        if work_laps:
+                            best_lap = max(work_laps,
+                                key=lambda l: l.get("weighted_average_watts") or l.get("average_watts") or 0)
+                            pw = best_lap.get("weighted_average_watts") or best_lap.get("average_watts")
+                            pw_min = round((best_lap.get("moving_time") or 0) / 60, 1)
+                            if pw and pw_min >= 3:
+                                entry["pw"]     = round(pw)      # best lap normalised power
+                                entry["pw_min"] = pw_min          # that lap duration (min)
+                    elif sport == "Run":
+                        # Find best work lap ≥400m by pace
+                        work_laps = [
+                            l for l in laps
+                            if (l.get("distance") or 0) >= 400
+                            and (l.get("moving_time") or 0) > 0
+                            and (l.get("average_speed") or 0) > 0
+                        ]
+                        if work_laps:
+                            best_lap = min(work_laps, key=lambda l: l["moving_time"] / l["distance"])
+                            lp_ms = best_lap["distance"] / best_lap["moving_time"]  # m/s
+                            lp_pace = round(1000 / lp_ms / 60, 3)  # min/km
+                            lp_km = round((best_lap.get("distance") or 0) / 1000, 3)
+                            lp_hr  = best_lap.get("average_heartrate")
+                            if lp_pace > 0 and lp_km >= 0.4:
+                                entry["lp"]     = lp_pace  # best lap pace (min/km)
+                                entry["lp_km"]  = lp_km    # best lap distance
+                                if lp_hr: entry["lp_hr"] = round(lp_hr)
+                    elif sport == "Swim":
+                        # Find best (fastest) work lap ≥50m for CSS estimate
+                        swim_laps = [
+                            l for l in laps
+                            if (l.get("distance") or 0) >= 50
+                            and (l.get("moving_time") or 0) > 0
+                        ]
+                        if swim_laps:
+                            best_lap = min(swim_laps, key=lambda l: l["moving_time"] / max(l["distance"], 1))
+                            slp_ms  = best_lap["distance"] / best_lap["moving_time"]  # m/s
+                            slp_pace = round(100 / slp_ms / 60, 3)  # min/100m
+                            slp_m   = round(best_lap.get("distance") or 0)
+                            if slp_pace > 0 and slp_m >= 50:
+                                entry["lsp"]    = slp_pace  # best swim lap pace (min/100m)
+                                entry["lsp_m"]  = slp_m     # that lap's distance (m)
+            except Exception as e:
+                pass  # Lap fetch failed — session-level data still used
+
         parsed.append(entry)
 
     print(f"  ✅ Got {len(parsed)} Strava activities")

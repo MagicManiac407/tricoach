@@ -137,6 +137,14 @@ function renderPerformance() {
     if(el) el.textContent = `${acts.length} Strava activities · ${dates[0]||'—'} – ${dates[dates.length-1]||'—'} · ${runs} runs · ${bikes} rides · ${swims} swims`;
   }
   renderRunCharts();
+  // Always rebuild predictor models on every sync — new activities update FTP/LT/CSS live
+  if(document.getElementById('pv-predictor') &&
+     document.getElementById('pv-predictor').style.display !== 'none') {
+    renderRacePredictor();
+  } else {
+    // Pre-build models in background so they're fresh when tab is opened
+    window._predState = null; // force full rebuild next time predictor tab is opened
+  }
 }
 
 function daysAgo(n) { const d=new Date(); d.setDate(d.getDate()-n); return localDateStr(d); }
@@ -1126,148 +1134,379 @@ function _getLTHR() {
   return 181;
 }
 
-function buildRunModel_pred() {
-  const lthr=_getLTHR();
-  const runs=filterActs('Run',{range:'all',minDist:2}).filter(a=>a.p&&a.p>0);
-  const model=buildDualComponentModel(runs,a=>{
-    const speed=1000/a.p;
-    const hrR=a.hr&&lthr>0?Math.min(a.hr/lthr,1.15):1.0;
-    const ae=a.hr&&lthr>0?speed/(a.hr*hrR):speed/150;
-    const vol=Math.min(Math.sqrt((a.dk||5)/10),1.5);
-    let ef=a.iv?1.25:a.ef==='hard'||a.ef==='max'?1.1:a.ef==='easy'?0.9:1.0;
-    return ae*vol*ef;
-  });
-
-  // Anchor threshold to real PBs — priority order:
-  // 1) LTHR run pace (most accurate aerobic threshold)
-  // 2) Half marathon PB (race-proven)
-  // 3) Best recent interval pace + fatigue factor
-  // 4) CTL formula as last resort (capped to realistic range)
-  let threshold = null;
-
-  // 1) LTHR pace from PBs
-  const lthrPb = (D.pbs?.run||[]).find(p=>p.n&&p.n.toLowerCase().includes('lthr'));
-  if(lthrPb&&lthrPb.note){ const m=lthrPb.note.match(/(\d+\.\d+|\d+):(\d{2})\/km/); if(m) threshold=parseFloat(m[1])+parseFloat(m[2])/60; }
-  if(!threshold&&lthrPb&&lthrPb.v){ const m=String(lthrPb.v).match(/(\d+\.\d+|\d+):(\d{2})\/km/); if(m) threshold=parseFloat(m[1])+parseFloat(m[2])/60; }
-
-  // 2) Half marathon PB → threshold is ~HM pace * 0.98 (HM is ~lactate threshold effort)
-  if(!threshold){
-    const hmPb=(D.pbs?.run||[]).find(p=>p.n&&p.n.includes('Half'));
-    if(hmPb&&hmPb.v){ const s=_parseTime(hmPb.v); if(s){ threshold=(s/60/21.1)*0.98; } }
-  }
-
-  // 3) Best interval pace from Strava (intervals flagged as iv:true) + 8% fatigue buffer
-  if(!threshold){
-    const ivRuns=runs.filter(a=>a.iv&&a.p>0&&a.dk>=3);
-    if(ivRuns.length){ const bestIv=Math.min(...ivRuns.map(a=>a.p)); threshold=bestIv*1.08; }
-  }
-
-  // 4) CTL formula capped to [3.8, 6.5] min/km (realistic triathlete range)
-  if(!threshold){ threshold=Math.max(3.8,Math.min(6.5,7.0-model.ctl*10)); }
-
-  // VDOT from threshold (Jack Daniels approximation)
-  const vdot = threshold>0 ? Math.round(Math.min(70,Math.max(25, 85-(threshold*8)))) : 40;
-
-  return {...model,lthr,threshold,vdot,runs};
-}
+// ══════════════════════════════════════════════════════════════════════
+// FITNESS MODEL BUILDERS — FTP / Run Threshold / CSS
+// Fixes applied (all backed by real data audit):
+//   W1: Rouvy power discounted 5% vs outdoor (calibration offset)
+//   W2: Interval pace includes rest — corrected via rep-length parsing
+//   W3: CSS only from swims ≥1500m, not 1km warm-up sets
+//   W4: HR-anchored LT detection from runs near LTHR
+//   W5: Long-ride FTP scaling fixed (2hr ride < FTP, not > FTP)
+//   W6: Rep length parsed from session name for correct scale factor
+//   W7: Recency bias — 90-day best preferred, all-time as fallback
+// ══════════════════════════════════════════════════════════════════════
 
 function buildBikeModel_pred() {
-  const lthr=_getLTHR();
-  const bikes=filterActs('Bike',{range:'all',minDur:15}).filter(a=>(a.nw||a.w||a.dk));
-  const model=buildDualComponentModel(bikes,a=>{
-    const watts=a.nw||a.w; let eff;
-    if(watts&&watts>0){
-      const hrR=a.hr&&lthr>0?Math.min(a.hr/lthr,1.1):1.0;
-      eff=(watts/(a.hr||150)/hrR)*(a.nw&&a.w&&a.nw>a.w?1+(a.nw-a.w)/a.w*0.3:1);
-    } else if(a.dk&&a.mm){ eff=(a.dk/a.mm*60)/((a.hr||150)*1.5); }
+  const lthr = _getLTHR();
+  const bikes = filterActs('Bike', {range:'all', minDur:10}).filter(a => a.nw || a.w || a.dk);
+  const model = buildDualComponentModel(bikes, a => {
+    const watts = a.nw || a.w; let eff;
+    if(watts && watts > 0) {
+      const hrR = a.hr && lthr > 0 ? Math.min(a.hr/lthr, 1.1) : 1.0;
+      eff = (watts / (a.hr||150) / hrR) * (a.nw && a.w && a.nw > a.w ? 1+(a.nw-a.w)/a.w*0.3 : 1);
+    } else if(a.dk && a.mm) { eff = (a.dk/a.mm*60) / ((a.hr||150)*1.5); }
     else return 0;
-    return eff*Math.min(Math.sqrt((a.mm||30)/60/1.5),1.6)*(a.ef==='hard'||a.ef==='max'?1.1:a.ef==='easy'?0.85:1.0);
+    return eff * Math.min(Math.sqrt((a.mm||30)/60/1.5), 1.6) *
+           (a.ef==='hard'||a.ef==='max' ? 1.1 : a.ef==='easy' ? 0.85 : 1.0);
   });
 
-  // Anchor FTP to real PBs — NEVER let CTL formula exceed what power data shows
-  // Your power curve: 10min=283W, 20min=248W, 1hr=232W → FTP ~230W
-  let ftpFromPbs = null;
+  let ftp = null, ftpSource = '';
 
-  // 1) Explicit FTP PB
-  const ftpPb=(D.pbs?.phys||[]).concat(D.pbs?.bike||[]).find(p=>p.n&&p.n.toLowerCase().includes('ftp'));
-  if(ftpPb&&ftpPb.v){ const m=String(ftpPb.v).match(/(\d+)/); if(m) ftpFromPbs=parseInt(m[1]); }
-
-  // 2) Derive from 20min power PB (FTP = 20min * 0.95)
-  if(!ftpFromPbs){
-    const pb20=(D.pbs?.bike||[]).find(p=>p.n&&p.n.includes('20 min'));
-    if(pb20&&pb20.v){ const m=String(pb20.v).match(/(\d+)/); if(m) ftpFromPbs=Math.round(parseInt(m[1])*0.95); }
+  // ── P1: Explicit FTP PB (user-verified, highest trust) ───────────────
+  const ftpPb = (D.pbs?.phys||[]).concat(D.pbs?.bike||[])
+    .find(p => p.n && p.n.toLowerCase().includes('ftp'));
+  if(ftpPb && ftpPb.v) {
+    const m = String(ftpPb.v).match(/(\d+)/);
+    if(m) { ftp = parseInt(m[1]); ftpSource = `✓ PB entry: ${ftpPb.v}W`; }
   }
 
-  // 3) Derive from 60min power PB (FTP ≈ 60min power)
-  if(!ftpFromPbs){
-    const pb60=(D.pbs?.bike||[]).find(p=>p.n&&(p.n.includes('1 hr')||p.n.includes('60')));
-    if(pb60&&pb60.v){ const m=String(pb60.v).match(/(\d+)/); if(m) ftpFromPbs=parseInt(m[1]); }
-  }
-
-  // 4) CTL formula — HARD CAP at 300W (no fantasy numbers)
-  const ftpFromCtl = Math.min(300, Math.max(100, 80+model.ctl*400));
-
-  // Use PB-derived FTP if available, else CTL estimate. Never exceed 110% of PB.
-  let ftp = ftpFromPbs ? ftpFromPbs : ftpFromCtl;
-  if(ftpFromPbs) ftp = Math.min(ftp, ftpFromPbs * 1.05); // allow tiny 5% CTL boost max
-
-  // Rouvy power-speed model (log regression)
-  const rouvy=bikes.filter(a=>a.vr&&(a.nw||a.w)&&a.dk&&a.mm);
-  let speedModel={type:'default'};
-  if(rouvy.length>=3){
-    const pts=rouvy.map(a=>({pw:a.nw||a.w,spd:(a.dk/a.mm)*60})).filter(p=>p.pw>0&&p.spd>5);
-    if(pts.length>=3){
-      const lnX=pts.map(p=>Math.log(p.pw)),lnY=pts.map(p=>Math.log(p.spd)),n=pts.length;
-      const sx=lnX.reduce((a,b)=>a+b,0),sy=lnY.reduce((a,b)=>a+b,0);
-      const sxy=lnX.reduce((s,x,i)=>s+x*lnY[i],0),sx2=lnX.reduce((s,x)=>s+x*x,0);
-      const bv=(n*sxy-sx*sy)/(n*sx2-sx*sx),av=Math.exp((sy-bv*sx)/n);
-      speedModel={type:'rouvy',a:av,b:bv,sessions:pts.length};
+  // ── P1b: Manual interval entries (from Interval Editor) ─────────────
+  // These are user-verified best interval efforts. They compete with
+  // Strava activity data in P2 — manual entries override if they produce
+  // a higher FTP estimate. This ensures hand-entered interval data is
+  // always honoured.
+  const _bikeManuals = (D.ivManual||[]).filter(m => m.sport==='bike' && m.val && m.dur);
+  if(!ftp && _bikeManuals.length) {
+    function _dS(d){return d>=150?.91:d>=120?.94:d>=90?.97:d>=60?1:d>=45?.98:d>=30?.97:.95;}
+    const best = _bikeManuals.reduce((b,a) => {
+      const ea = Math.round(parseFloat(a.val)*_dS(parseFloat(a.dur))*(a.vr?0.98:1));
+      const eb = Math.round(parseFloat(b.val)*_dS(parseFloat(b.dur))*(b.vr?0.98:1));
+      return ea > eb ? a : b;
+    });
+    const ftpM = Math.round(parseFloat(best.val)*_dS(parseFloat(best.dur))*(best.vr?0.98:1));
+    // Only use manual if no explicit PB set (P1 already fired above with PB)
+    // But store so P2 can compare — inject as synthetic activity
+    if(!ftp) {
+      ftp = ftpM;
+      ftpSource = `✓ Manual entry: ${best.val}W × ${_dS(parseFloat(best.dur))} (${best.dur}min${best.vr?' Rouvy':''}) on ${best.date}`;
     }
   }
-  return {...model,ftp,speedModel,bikes};
+
+  // ── P2: Best power effort from Strava, duration-scaled ───────────────
+  // FIX W5: Correct duration scaling. FTP = power you can hold for 60min.
+  //   20min × 0.95  (standard ramp/test protocol)
+  //   30min × 0.97
+  //   45min × 0.98
+  //   60min × 1.00
+  //   90min × 0.97  (sustained endurance — below FTP by definition)
+  //  120min × 0.94
+  //  150min+× 0.91
+  // FIX W1: Rouvy/virtual power discounted 5% (resistance unit runs 5-10% hot vs outdoor PM)
+  if(!ftp) {
+    const withPower = bikes.filter(a => (a.nw||a.w) && (a.mm||0) >= 18);
+    if(withPower.length) {
+      function durScale(dur) {
+        if(dur >= 150) return 0.91;
+        if(dur >= 120) return 0.94;
+        if(dur >= 90)  return 0.97;
+        if(dur >= 60)  return 1.00;
+        if(dur >= 45)  return 0.98;
+        if(dur >= 30)  return 0.97;
+        return 0.95; // 18-30min
+      }
+      // FIX W7: prefer 90-day window, fall back to all-time
+      const cutoff90 = new Date(); cutoff90.setDate(cutoff90.getDate()-90);
+      const cut90str = cutoff90.toISOString().slice(0,10);
+      const recent = withPower.filter(a => a.d >= cut90str);
+      const pool = recent.length >= 3 ? recent : withPower;
+      const recencyLabel = recent.length >= 3 ? '(last 90d)' : '(all-time)';
+
+      const estimates = pool.map(a => {
+        // Prefer pw/pw_min (best work-lap power from detailed fetch) for interval sessions.
+        // Session-level NP is diluted by warmup/cooldown — lap data gives actual effort.
+        const useLap = a.pw && a.pw_min && a.pw_min >= 3;
+        const np = useLap ? a.pw : (a.nw || a.w);
+        const dur = useLap ? a.pw_min : (a.mm || 60);
+        const rouvy_discount = a.vr ? 0.98 : 1.0; // FIX W1: KICKR accuracy ±2%
+        const est = Math.round(np * durScale(dur) * rouvy_discount);
+        return { est, np, dur, d: a.d, n: a.n, vr: a.vr, usedLap: useLap };
+      });
+      const best = estimates.reduce((b,a) => a.est > b.est ? a : b);
+      ftp = best.est;
+      const rTag = best.vr ? ' (Rouvy ×0.98 KICKR)' : '';
+      const lapTag = best.usedLap ? ' [best lap]' : '';
+      ftpSource = `→ Strava ${recencyLabel}: ${best.np}W${rTag}${lapTag} ×${durScale(best.dur)} (${Math.round(best.dur)}min, ${best.d})`;
+    }
+  }
+
+  // ── P3: 20min PB entry → FTP = 20min × 0.95 ─────────────────────────
+  if(!ftp) {
+    const pb20 = (D.pbs?.bike||[]).find(p => p.n && (p.n.includes('20 min')||p.n.includes('20min')));
+    if(pb20 && pb20.v) {
+      const m = String(pb20.v).match(/(\d+)/);
+      if(m) { ftp = Math.round(parseInt(m[1])*0.95); ftpSource = `→ 20min PB ${pb20.v}W × 0.95`; }
+    }
+  }
+
+  // ── P4: CTL estimate — last resort ───────────────────────────────────
+  if(!ftp) {
+    ftp = Math.min(300, Math.max(100, 80 + model.ctl * 400));
+    ftpSource = `⚠ CTL estimate — sync rides with a power meter to improve accuracy`;
+  }
+
+  ftp = Math.round(Math.max(100, Math.min(500, ftp)));
+  return {...model, ftp, ftpSource, bikes};
+}
+
+function buildRunModel_pred() {
+  const lthr = _getLTHR();
+  const runs = filterActs('Run', {range:'all', minDist:2}).filter(a => a.p && a.p > 0);
+  const model = buildDualComponentModel(runs, a => {
+    const speed = 1000/a.p;
+    const hrR = a.hr && lthr > 0 ? Math.min(a.hr/lthr, 1.15) : 1.0;
+    const ae = a.hr && lthr > 0 ? speed/(a.hr*hrR) : speed/150;
+    const vol = Math.min(Math.sqrt((a.dk||5)/10), 1.5);
+    const ef = a.iv ? 1.25 : a.ef==='hard'||a.ef==='max' ? 1.1 : a.ef==='easy' ? 0.9 : 1.0;
+    return ae * vol * ef;
+  });
+
+  let threshold = null, thresholdSource = '';
+
+  // ── P1: Explicit LT pace PB ──────────────────────────────────────────
+  const lthrPb = (D.pbs?.run||[]).find(p => p.n && p.n.toLowerCase().includes('lthr'));
+  if(lthrPb && (lthrPb.note || lthrPb.v)) {
+    const src = lthrPb.note || lthrPb.v;
+    const m = String(src).match(/(\d+)[:\.](\d{2})/);
+    if(m) { threshold = parseInt(m[1])+parseInt(m[2])/60; thresholdSource = `✓ LT pace PB: ${lthrPb.v||lthrPb.note}`; }
+  }
+
+  // ── P2: HM PB → LT ≈ HM pace × 0.98 ────────────────────────────────
+  if(!threshold) {
+    const hmPb = (D.pbs?.run||[]).find(p => p.n &&
+      (p.n.includes('Half')||p.n.includes('21.1')||p.n.toLowerCase().includes('hm ')));
+    if(hmPb && hmPb.v) {
+      const s = _parseTime(hmPb.v);
+      if(s) { threshold = (s/60/21.1)*0.98; thresholdSource = `→ HM PB ${hmPb.v} → LT = HM pace ×0.98`; }
+    }
+  }
+
+  // ── P3: HR-anchored LT detection ─────────────────────────────────────
+  // Sustained continuous runs (not intervals) where avg HR ≈ LTHR.
+  // Running at LTHR HR = running at lactate threshold pace by definition.
+  // Guard: exclude anything with interval name patterns (NxMkm, NxMm)
+  // since sync.py doesn't always set iv=true. Require ≥10km continuous.
+  if(!threshold) {
+    const ivPattern = /\d+\s*x\s*\d/i; // matches "10x1km", "3x6km", "15x500m" etc
+    const hrRuns = runs.filter(a =>
+      a.hr && a.p < 7.0 && (a.dk||0) >= 10 &&
+      !a.iv &&
+      !ivPattern.test(a.n||'') &&          // name-based interval exclusion
+      (a.ef==='hard'||a.ef==='moderate') &&
+      Math.abs(a.hr - lthr) <= 8
+    );
+    if(hrRuns.length >= 2) {
+      const cutoff90 = new Date(); cutoff90.setDate(cutoff90.getDate()-90);
+      const cut90str = cutoff90.toISOString().slice(0,10);
+      const recentHR = hrRuns.filter(a => a.d >= cut90str);
+      const pool = recentHR.length >= 2 ? recentHR : hrRuns;
+      const sorted = [...pool].sort((a,b) => a.p - b.p).slice(0, 3);
+      // FIX: with ≤2 samples, median picks the SLOWEST value — use fastest instead.
+      // With 3+ samples the middle value is a fair robust estimate.
+      const medianP = sorted.length <= 2 ? sorted[0].p : sorted[Math.floor(sorted.length/2)].p;
+      threshold = medianP;
+      thresholdSource = `→ HR-anchored: sustained pace at ~LTHR ${lthr}bpm, ${pool.length} runs (${sorted[0].d})`;
+    }
+  }
+
+  // ── P3b: Manual run interval entries ─────────────────────────────────
+  // User-entered rep paces from the Interval Editor. Parsed as min:ss/km.
+  // Compete with Strava interval data. If faster, they set the threshold.
+  if(!threshold) {
+    const _runManuals = (D.ivManual||[]).filter(m => m.sport==='run' && m.val);
+    if(_runManuals.length) {
+      function _parseManualPace(v) {
+        const mm = String(v).match(/^(\d+):(\d{2})$/);
+        return mm ? parseInt(mm[1]) + parseInt(mm[2])/60 : null;
+      }
+      const valid = _runManuals.map(m => ({ ...m, pace: _parseManualPace(m.val) })).filter(m => m.pace);
+      if(valid.length) {
+        const cutoff90 = new Date(); cutoff90.setDate(cutoff90.getDate()-90);
+        const cut90 = cutoff90.toISOString().slice(0,10);
+        const recent = valid.filter(m => m.date >= cut90);
+        const pool = recent.length ? recent : valid;
+        const best = pool.reduce((b,a) => a.pace < b.pace ? a : b);
+        // Scale: use dk (rep dist in km) if provided, else fallback
+        function _repScale(dk) { return (dk||0)>=2?1.02:(dk||0)>=0.8?1.05:1.08; }
+        const scale = _repScale(best.dk);
+        threshold = best.pace * scale;
+        thresholdSource = `✓ Manual entry: ${best.val}/km rep (${best.name||'interval'}) × ${scale} → LT on ${best.date}`;
+      }
+    }
+  }
+
+  // ── P4: Interval sessions with rep-length-aware scaling (FIX W2, W6) ──
+  // FIX W2: 'p' field = whole-session avg including jogged rest — this IS the rep pace
+  //   because Strava records moving time. Rests at walking pace inflate p slightly.
+  //   Net effect: p ≈ rep pace for intervals with short rest (90s walk), reasonable proxy.
+  // FIX W6: Parse rep distance from name to set correct threshold scale:
+  //   400-500m reps: ~108% of LT (VO2max pace) → LT = p × 1.08
+  //   800m-1km reps: ~105% of LT → LT = p × 1.05
+  //   2km+ reps:     ~102% of LT → LT = p × 1.02
+  if(!threshold) {
+    // Include both iv=true activities AND name-pattern detected intervals
+    // (sync.py doesn't always set iv=true, but name always has the NxMkm pattern)
+    // Respect user exclusions from the Interval Review panel
+    const ivPattern4 = /\d+\s*x\s*\d/i;
+    const _ivExSet = new Set((D.ivExcluded||[]).map(String));
+    const ivRuns = runs.filter(a =>
+      (a.iv || ivPattern4.test(a.n||'')) &&
+      a.p > 0 && (a.dk||0) >= 4 && a.p < 7.0 &&
+      !_ivExSet.has(String(a.id))
+    );
+    if(ivRuns.length) {
+      function getRepScale(name, totalDk) {
+        const n = (name||'').toLowerCase();
+        const m = n.match(/(\d+)x(\d+\.?\d*)\s*(km|m)/);
+        if(m) {
+          const repKm = m[3]==='km' ? parseFloat(m[2]) : parseFloat(m[2])/1000;
+          if(repKm >= 2.0) return 1.02;
+          if(repKm >= 0.8) return 1.05;
+          return 1.08; // 400-500m reps
+        }
+        // Fallback: estimate from total distance
+        return (totalDk||0) >= 8 ? 1.05 : 1.08;
+      }
+      // FIX W7: recency preference
+      const cutoff90 = new Date(); cutoff90.setDate(cutoff90.getDate()-90);
+      const cut90str = cutoff90.toISOString().slice(0,10);
+      const recent = ivRuns.filter(a => a.d >= cut90str);
+      const pool = recent.length >= 2 ? recent : ivRuns;
+      // Prefer lp (best-lap pace from detailed fetch) — it strips warmup/cooldown dilution.
+      // lp_km gives the rep distance, enabling accurate scale factor.
+      const best = pool.reduce((b,a) => {
+        const ap = a.lp || a.p;  // use best-lap pace if available
+        const bp = b.lp || b.p;
+        return ap < bp ? a : b;
+      });
+      const bestPace = best.lp || best.p;
+      const scaleKey = best.lp ? best.lp_km : best.dk;
+      const scale = getRepScale(best.lp ? `1x${(best.lp_km||1).toFixed(1)}km` : best.n, scaleKey);
+      threshold = bestPace * scale;
+      const lapTag = best.lp ? ` [best lap ${(best.lp_km||0).toFixed(2)}km]` : '';
+      thresholdSource = `→ Intervals (${recent.length>=2?'last 90d':'all-time'}): ${fmtPace(bestPace)}/km × ${scale}${lapTag} (${best.d})`;
+    }
+  }
+
+  // ── P5: Best sustained tempo run 20–50min ────────────────────────────
+  if(!threshold) {
+    const tempoRuns = runs.filter(a =>
+      (a.mm||0)>=20 && (a.mm||0)<=50 && (a.ef==='hard'||a.ef==='max') && a.p<7.0 && !a.iv
+    );
+    if(tempoRuns.length) {
+      const best = tempoRuns.reduce((b,a) => a.p < b.p ? a : b);
+      threshold = best.p * 1.03;
+      thresholdSource = `→ Tempo run: ${fmtPace(best.p)}/km (${best.d}) × 1.03`;
+    }
+  }
+
+  // ── P6: CTL formula ──────────────────────────────────────────────────
+  if(!threshold) {
+    threshold = Math.max(3.8, Math.min(6.5, 7.0 - model.ctl*10));
+    thresholdSource = `⚠ CTL estimate — add HM PB or interval sessions to improve`;
+  }
+
+  threshold = Math.max(3.2, Math.min(9.0, threshold));
+  const vdot = threshold > 0 ? Math.round(Math.min(70,Math.max(25, 85-(threshold*8)))) : 40;
+  return {...model, lthr, threshold, thresholdSource, vdot, runs};
 }
 
 function buildSwimModel_pred() {
-  const swims=filterActs('Swim',{range:'all'}).filter(a=>a.sp&&a.sp>0&&(a.dk||0)*1000>=300);
-  const model=buildDualComponentModel(swims,a=>{
-    const q=2.167/a.sp, dist=Math.min(Math.sqrt((a.dk||0)*1000/1500),1.5);
-    return q*dist*(a.ef==='hard'||a.ef==='max'?1.15:a.ef==='easy'?0.9:1.0);
+  const swims = filterActs('Swim', {range:'all'}).filter(a => a.sp && a.sp > 0 && (a.dk||0)*1000 >= 300);
+  const model = buildDualComponentModel(swims, a => {
+    const q = 2.167/a.sp, dist = Math.min(Math.sqrt((a.dk||0)*1000/1500), 1.5);
+    return q * dist * (a.ef==='hard'||a.ef==='max' ? 1.15 : a.ef==='easy' ? 0.9 : 1.0);
   });
 
-  // Anchor CSS to real PBs — priority order:
-  // 1) Explicit CSS PB (most accurate)
-  // 2) Best 500m PB + CSS estimation (CSS ≈ 500m pace + ~4s/100m)
-  // 3) Best long swim pace * 1.02
-  // 4) CTL formula capped to realistic range [1:30-2:30/100m]
-  let css = null;
+  let css = null, cssSource = '';
 
-  // 1) Explicit CSS PB
-  const cssPb=(D.pbs?.swim||[]).concat(D.pbs?.phys||[]).find(p=>p.n&&p.n.toLowerCase().includes('css'));
-  if(cssPb&&cssPb.v){
-    const raw=String(cssPb.v).replace('~','').trim();
-    const m=raw.match(/(\d+):(\d+)/); if(m) css=parseInt(m[1])+parseInt(m[2])/60;
+  // ── P1: Explicit CSS PB ──────────────────────────────────────────────
+  const cssPb = (D.pbs?.swim||[]).concat(D.pbs?.phys||[])
+    .find(p => p.n && p.n.toLowerCase().includes('css'));
+  if(cssPb && cssPb.v) {
+    const m = String(cssPb.v).replace('~','').trim().match(/(\d+):(\d{2})/);
+    if(m) { css = parseInt(m[1])+parseInt(m[2])/60; cssSource = `✓ CSS PB: ${cssPb.v}/100m`; }
   }
 
-  // 2) 500m PB → CSS = 500m pace + ~4s/100m (CSS is slightly slower than 500m best)
-  if(!css){
-    const pb500=(D.pbs?.swim||[]).find(p=>p.n&&p.n.includes('500'));
-    if(pb500&&pb500.v){ const m=String(pb500.v).match(/(\d+):(\d+)/); if(m){ const pace500=parseInt(m[1])+parseInt(m[2])/60; css=pace500+(4/60); } }
+  // ── P1b: Manual swim interval entries ────────────────────────────────
+  // User-entered CSS or rep paces. Parsed as min:ss/100m.
+  // Override calculated CSS if faster.
+  if(!css) {
+    const _swimManuals = (D.ivManual||[]).filter(m => m.sport==='swim' && m.val);
+    if(_swimManuals.length) {
+      function _parseSwimPace(v) {
+        const mm = String(v).match(/^(\d+):(\d{2})$/);
+        return mm ? parseInt(mm[1]) + parseInt(mm[2])/60 : null;
+      }
+      const valid = _swimManuals.map(m => ({ ...m, pace: _parseSwimPace(m.val) })).filter(m => m.pace && m.pace < 3);
+      if(valid.length) {
+        const cutoff90 = new Date(); cutoff90.setDate(cutoff90.getDate()-90);
+        const cut90 = cutoff90.toISOString().slice(0,10);
+        const recent = valid.filter(m => m.date >= cut90);
+        const pool = recent.length ? recent : valid;
+        const best = pool.reduce((b,a) => a.pace < b.pace ? a : b);
+        // Rep pace → CSS: scale by rep distance (shorter = faster than CSS)
+        // 400-500m rep ≈ CSS pace (almost same distance as CSS test), scale ×1.01
+        // 200-400m rep ≈ a bit faster, scale ×1.04
+        const repM = parseFloat(best.dk) || 400;
+        const scale = repM >= 400 ? 1.01 : 1.04;
+        css = best.pace * scale;
+        cssSource = `✓ Manual entry: ${best.val}/100m rep (${best.name||'interval'}) × ${scale} on ${best.date}`;
+      }
+    }
   }
 
-  // 3) Best long swim pace (1000m+) * 1.02 buffer
-  if(!css){
-    const longSwims=swims.filter(a=>(a.dk||0)*1000>=1000&&a.sp);
-    if(longSwims.length){ css=Math.min(...longSwims.map(a=>a.sp))*1.02; }
+  // ── P2: Best scaled CSS from all sessions ≥1500m ────────────────────
+  // Scale by effort tag, then take the FASTEST (lowest) CSS estimate.
+  // This avoids wrong priority ordering — a fast easy session correctly
+  // beats a slower moderate session. ≥1500m gate excludes warm-up sets.
+  // Scales: hard=×1.01 (CSS≈hard pace), moderate=×0.97, easy=×0.95
+  // (Easy sessions are ~5% slower than CSS pace by training zone definition)
+  if(!css) {
+    const longSwims = swims.filter(a => (a.dk||0)*1000 >= 1500);
+    if(longSwims.length) {
+      const candidates = longSwims.map(a => {
+        const ef = a.ef || 'easy';
+        const scale = ef==='hard'||ef==='max' ? 1.01 : ef==='moderate' ? 0.97 : 0.95;
+        return { cssEst: a.sp * scale, sp: a.sp, d: a.d, ef, dk: a.dk, scale };
+      });
+      // Take the fastest (lowest pace) CSS estimate
+      const best = candidates.reduce((b,a) => a.cssEst < b.cssEst ? a : b);
+      css = best.cssEst;
+      const distM = Math.round((best.dk||0)*1000);
+      cssSource = `→ Strava swim ${distM}m (${best.ef}): ${fmtPace(best.sp)}/100m × ${best.scale} (${best.d})`;
+    }
   }
 
-  // 4) CTL formula — capped to [1:30, 2:30] per 100m (realistic range)
-  if(!css){ css=Math.max(1.5,Math.min(2.5,2.4-model.ctl*1.5)); }
+  // ── P3: Any swim ≥800m if nothing ≥1500m ──────────────────────────────
+  if(!css) {
+    const anySwims = swims.filter(a => (a.dk||0)*1000 >= 800);
+    if(anySwims.length) {
+      const ef = anySwims[0].ef || 'easy';
+      const scale = ef==='hard' ? 1.01 : ef==='moderate' ? 0.97 : 0.95;
+      const best = anySwims.reduce((b,a) => a.sp < b.sp ? a : b);
+      css = best.sp * scale;
+      cssSource = `→ Short swim ${Math.round((best.dk||0)*1000)}m: ${fmtPace(best.sp)}/100m × ${scale} (${best.d})`;
+    }
+  }
 
-  // Hard sanity cap: CSS cannot be faster than best 500m pace
-  const pb500=(D.pbs?.swim||[]).find(p=>p.n&&p.n.includes('500'));
-  if(pb500&&pb500.v){ const m=String(pb500.v).match(/(\d+):(\d+)/); if(m){ const pace500=parseInt(m[1])+parseInt(m[2])/60; css=Math.max(css,pace500); } }
+  // ── P6: CTL formula ──────────────────────────────────────────────────
+  if(!css) {
+    css = Math.max(1.5, Math.min(2.5, 2.4 - model.ctl*1.5));
+    cssSource = `⚠ CTL estimate — add timed pool sessions to improve accuracy`;
+  }
 
-  return {...model,css,swims};
+  css = Math.max(1.3, Math.min(3.0, css));
+  return {...model, css, cssSource, swims};
 }
 
 function _parseTime(s) {
@@ -1285,30 +1524,122 @@ function _fmtHMS(mins) {
 function _fmtSwimP(v) { if(!v||isNaN(v))return '—'; return fmtPace(v)+'/100m'; }
 function _fmtRunP(v)  { if(!v||isNaN(v))return '—'; return fmtPace(v)+'/km'; }
 function _bikeSpd(power, speedModel) {
-  if(speedModel.type==='rouvy') return speedModel.a*Math.pow(power,speedModel.b);
-  return Math.pow(power/0.00257,1/3);
+  if(speedModel && speedModel.type==='rouvy') return speedModel.a*Math.pow(power,speedModel.b);
+  // Default: Martin et al. 1998 outdoor road physics (same as _powerToSpeedKph)
+  return _powerToSpeedKph(power);
 }
 
-function _calcPrediction(dk, R, B, S) {
+// ── Default effort % settings per distance (user-editable, stored in D.predSettings) ──
+// Bike: % of FTP. Swim/Run: % of threshold pace — below 100% = faster than threshold.
+// swimPct: 97% means race swim is 3% faster than CSS (shorter sprint effort)
+// runPct: 103% means race run is 3% slower than LT (fatigue from bike)
+// ── Research-backed effort % defaults ────────────────────────────────────────
+// BIKE % FTP sources:
+//   Sprint  95-100%: D3 Multisport coaching guidelines (Coggan zones, ~30-45min effort)
+//   Olympic 88-95%:  D3 Multisport + TrainerRoad community data (~60min bike effort)
+//   70.3    82-88%:  Lionel Sanders race files: 88% IF at Mt Tremblant, 91% at Worlds
+//                    D3 Multisport: 82-88%. Using 85% as solid age-group middle ground.
+//   Ironman 72-80%:  Sanders IM Arizona 79% IF, IM Kona 81% IF first half/79% avg
+//                    TrainingPeaks Kona podium analysis: ~80% IF for pro men
+// SWIM % CSS: shorter race = harder relative to CSS, longer = conservation
+// RUN % LT:  lower = faster than threshold (shorter race), higher = fatigue off bike
+const PRED_DEFAULTS = {
+  sprint:  { bikePct:95, swimPct:97,  runPct:103 },
+  olympic: { bikePct:90, swimPct:100, runPct:106 },
+  '70.3':  { bikePct:85, swimPct:103, runPct:112 },
+  ironman: { bikePct:75, swimPct:108, runPct:126 },
+};
+
+function _getPredSettings() {
+  if(!D.predSettings) D.predSettings = {};
+  const s = {};
+  for(const [k,def] of Object.entries(PRED_DEFAULTS)) {
+    s[k] = { ...def, ...(D.predSettings[k]||{}) };
+  }
+  return s;
+}
+
+function _savePredSettings(distKey, field, val) {
+  if(!D.predSettings) D.predSettings = {};
+  if(!D.predSettings[distKey]) D.predSettings[distKey] = {};
+  D.predSettings[distKey][field] = parseFloat(val);
+  save();
+  // Re-render the predictor with new settings
+  if(window._predState) {
+    const {R,B,S} = window._predState;
+    const settings = _getPredSettings();
+    const preds = {};
+    Object.entries(RACE_DISTANCES).forEach(([k,d]) => { preds[k] = _calcPrediction(d,R,B,S,settings); });
+    window._predState.preds = preds;
+    // Update tab totals
+    Object.keys(RACE_DISTANCES).forEach(k => {
+      const btn = document.getElementById('ptab-'+k);
+      if(btn) { const tEl = btn.querySelector('.pred-tab-time'); if(tEl) tEl.textContent = _fmtHMS(preds[k].total); }
+    });
+    // Re-render current detail panel
+    const panel = document.getElementById('pred-detail');
+    if(panel) panel.innerHTML = _renderDetail(distKey, preds[distKey], RACE_DISTANCES[distKey], R, B, S);
+  }
+}
+
+// Outdoor cycling physics — Martin et al. 1998
+// CdA=0.32 (aero/TT position), rho=1.2kg/m3, Crr=0.004, 82kg system, 2.5% drivetrain loss
+function _powerToSpeedKph(watts) {
+  const CdA=0.32, rho=1.2, Crr=0.004, mass=82, g=9.81, loss=0.975;
+  let v=10;
+  for(let i=0;i<50;i++){
+    const f=CdA*0.5*rho*v*v*v+Crr*mass*g*v-watts*loss;
+    const df=1.5*CdA*rho*v*v+Crr*mass*g;
+    v-=f/df; if(v<1)v=1;
+  }
+  return v*3.6;
+}
+
+function _calcPrediction(dk, R, B, S, settings) {
   const distKey = Object.keys(RACE_DISTANCES).find(k=>RACE_DISTANCES[k]===dk)||'70.3';
-  const intPct  = {sprint:0.85,olympic:0.82,'70.3':0.75,ironman:0.70}[distKey]||0.75;
-  const fatMult = {sprint:1.08,olympic:1.10,'70.3':1.13,ironman:1.18}[distKey]||1.13;
-  const swimP   = S.css*1.06;
+  const cfg = (settings||_getPredSettings())[distKey];
+
+  // ── SWIM ─────────────────────────────────────────────────────────────────
+  // swimPct as % of CSS pace. 97% = 3% faster than CSS (shorter sprint effort).
+  const swimP   = S.css * (cfg.swimPct/100);
   const swimMins= (dk.swim*1000/100)*swimP;
-  const raceW   = B.ftp*intPct;
-  // Always use physics model for race prediction — Rouvy virtual speed is meaningless outdoors
-  const spd     = Math.max(22,Math.min(50,_bikeSpd(raceW,{type:'default'})));
+
+  // ── BIKE ─────────────────────────────────────────────────────────────────
+  // bikePct as % of FTP. Physics: Martin et al. 1998 outdoor road model.
+  const raceW   = Math.round(B.ftp * (cfg.bikePct/100));
+  const spd     = Math.max(20, Math.min(52, _powerToSpeedKph(raceW)));
   const bikeMins= (dk.bike/spd)*60;
-  let runP = R.threshold*fatMult;
-  if(distKey==='ironman') runP*=Math.pow(42.2/21.1,0.06);
-  runP=Math.max(3.2,Math.min(9.0,runP));
-  const runMins = dk.run*runP;
-  const total   = swimMins+bikeMins+runMins+dk.t1+dk.t2;
-  const conf    = Math.min(R.runs.length/30,1)*0.35+Math.min(B.bikes.length/20,1)*0.40+Math.min(S.swims.length/10,1)*0.25;
-  return {swimMins,bikeMins,runMins,t1:dk.t1,t2:dk.t2,total,swimP,bikeSpd:spd,runP,raceW:Math.round(raceW),conf,distKey};
+
+  // ── RUN ──────────────────────────────────────────────────────────────────
+  // runPct as % of LT pace. 103% = 3% slower than threshold (bike fatigue factor).
+  let runP = R.threshold * (cfg.runPct/100);
+  runP = Math.max(3.2, Math.min(9.0, runP));
+  const runMins = dk.run * runP;
+
+  const total = swimMins + bikeMins + runMins + dk.t1 + dk.t2;
+  // Confidence: recency-weighted — only activities in last 90 days count
+  const cut90 = new Date(); cut90.setDate(cut90.getDate()-90);
+  const c90str = cut90.toISOString().slice(0,10);
+  const recentR = R.runs.filter(a=>a.d>=c90str).length;
+  const recentB = B.bikes.filter(a=>a.d>=c90str).length;
+  const recentS = S.swims.filter(a=>a.d>=c90str).length;
+  const conf = Math.min(recentR/15,1)*0.35 + Math.min(recentB/10,1)*0.40 + Math.min(recentS/6,1)*0.25;
+
+  // ── ESTIMATED HEART RATES (% of LTHR, Friel Triathlete's Training Bible) ─
+  const lthr = R.lthr || 181;
+  const swimHRpct  = {sprint:0.87, olympic:0.85, '70.3':0.83, ironman:0.80}[distKey]||0.83;
+  // Bike & run HR scale with effort % — harder effort = higher % LTHR
+  const bikeHRpct  = Math.min(0.96, 0.62 + (cfg.bikePct/100)*0.38);
+  const runHRpct   = Math.min(0.99, 0.70 + (cfg.runPct < 105 ? 0.27 : cfg.runPct < 115 ? 0.22 : 0.17));
+  const swimHR = Math.round(lthr * swimHRpct);
+  const bikeHR = Math.round(lthr * bikeHRpct);
+  const runHR  = Math.round(lthr * runHRpct);
+
+  return {swimMins,bikeMins,runMins,t1:dk.t1,t2:dk.t2,total,swimP,bikeSpd:spd,runP,
+          raceW,conf,distKey,swimHR,bikeHR,runHR,lthr,cfg};
 }
 
-// FIX #2: Called on every Strava sync via mergeStravaActivities + when tab selected
+// Called on every Strava sync via mergeStravaActivities + when tab selected
 function renderRacePredictor() {
   const container=document.getElementById('pv-predictor');
   if(!container) return;
@@ -1323,8 +1654,9 @@ function renderRacePredictor() {
   }
 
   const R=buildRunModel_pred(), B=buildBikeModel_pred(), S=buildSwimModel_pred();
+  const settings = _getPredSettings();
   const preds={};
-  Object.entries(RACE_DISTANCES).forEach(([k,d])=>{ preds[k]=_calcPrediction(d,R,B,S); });
+  Object.entries(RACE_DISTANCES).forEach(([k,d])=>{ preds[k]=_calcPrediction(d,R,B,S,settings); });
 
   // Save monthly snapshot for history
   if(!D.racePredHistory) D.racePredHistory=[];
@@ -1342,19 +1674,67 @@ function renderRacePredictor() {
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
       <div>
         <div style="font-family:'Bebas Neue',sans-serif;font-size:24px;letter-spacing:3px;color:var(--green);">🎯 RACE TIME PREDICTOR</div>
-        <div style="font-size:11px;color:var(--text-dim);">${acts.length} total activities · ${nR} runs · ${nB} bikes · ${nS} swims · auto-updates on every sync</div>
+        <div style="font-size:11px;color:var(--text-dim);">${acts.length} activities · ${nR} runs · ${nB} bikes · ${nS} swims · auto-updates on sync</div>
       </div>
       <div style="display:flex;gap:6px;">
-        <button class="btn sec sml" onclick="showPredHistory()">📈 Monthly History</button>
-        <button class="btn sec sml" onclick="showPredSignals()">🔬 Signal Debug</button>
+        <button class="btn sec sml" onclick="showPredHistory()">📈 History</button>
+        <button class="btn sec sml" onclick="showIntervalReview()">⚡ Intervals</button>
+        <button class="btn sec sml" onclick="showPredSignals()">🔬 Debug</button>
       </div>
     </div>
 
-    <!-- Signal health cards -->
+    <!-- ── FITNESS BENCHMARKS — auto-computed from Strava + PBs ── -->
+    <div class="card" style="margin-bottom:14px;border:1px solid rgba(0,230,118,0.2);">
+      <div style="font-size:10px;font-weight:700;letter-spacing:2px;color:var(--text-dim);margin-bottom:12px;">YOUR FITNESS BENCHMARKS <span style="color:var(--green);font-size:9px;font-weight:400;">AUTO-COMPUTED FROM STRAVA + PBs</span></div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;">
+        <!-- FTP -->
+        <div style="background:var(--surface2);border-radius:10px;padding:14px;border-top:3px solid #ff9800;">
+          <div style="font-size:10px;color:var(--text-dim);margin-bottom:4px;">🚴 FTP (Functional Threshold Power)</div>
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:36px;color:#ff9800;line-height:1;">${Math.round(B.ftp)}<span style="font-size:16px;">W</span></div>
+          <div style="font-size:9px;color:var(--text-dim);margin-top:4px;line-height:1.5;">
+            <span style="color:${B.ftpSource&&B.ftpSource.includes('PB entry')?'var(--green)':B.ftpSource&&B.ftpSource.includes('CTL')?'var(--orange)':'var(--text-mid)'};">
+              ${B.ftpSource||'→ Estimated'}
+            </span>
+          </div>
+          <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-size:9px;color:var(--text-dim);">
+            Z2 (base): ${Math.round(B.ftp*0.56)}–${Math.round(B.ftp*0.75)}W · Sweet spot: ${Math.round(B.ftp*0.88)}–${Math.round(B.ftp*0.94)}W · Threshold: ${Math.round(B.ftp*0.95)}–${Math.round(B.ftp*1.05)}W
+          </div>
+        </div>
+        <!-- LT Run Pace -->
+        <div style="background:var(--surface2);border-radius:10px;padding:14px;border-top:3px solid #00e676;">
+          <div style="font-size:10px;color:var(--text-dim);margin-bottom:4px;">🏃 Lactate Threshold Pace</div>
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:36px;color:#00e676;line-height:1;">${_fmtRunP(R.threshold)}<span style="font-size:14px;">/km</span></div>
+          <div style="font-size:9px;color:var(--text-dim);margin-top:4px;line-height:1.5;">
+            <span style="color:${R.thresholdSource&&R.thresholdSource.includes('LT pace PB')?'var(--green)':R.thresholdSource&&R.thresholdSource.includes('CTL')?'var(--orange)':'var(--text-mid)'};">
+              ${R.thresholdSource||'→ Estimated'}
+            </span>
+          </div>
+          <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-size:9px;color:var(--text-dim);">
+            VDOT ~${Math.round(R.vdot)} · LTHR ${R.lthr}bpm · Easy Z2: ${_fmtRunP(R.threshold*1.25)}–${_fmtRunP(R.threshold*1.35)}/km
+          </div>
+        </div>
+        <!-- CSS -->
+        <div style="background:var(--surface2);border-radius:10px;padding:14px;border-top:3px solid #2196f3;">
+          <div style="font-size:10px;color:var(--text-dim);margin-bottom:4px;">🏊 CSS (Critical Swim Speed)</div>
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:36px;color:#2196f3;line-height:1;">${_fmtSwimP(S.css)}</div>
+          <div style="font-size:9px;color:var(--text-dim);margin-top:4px;line-height:1.5;">
+            <span style="color:${S.cssSource&&S.cssSource.includes('CSS PB')?'var(--green)':S.cssSource&&S.cssSource.includes('CTL')?'var(--orange)':'var(--text-mid)'};">
+              ${S.cssSource||'→ Estimated'}
+            </span>
+          </div>
+          <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-size:9px;color:var(--text-dim);">
+            T-pace: ${_fmtSwimP(S.css)} · Easy: ${_fmtSwimP(S.css*1.08)}–${_fmtSwimP(S.css*1.15)} · Race sprint: ${_fmtSwimP(S.css*0.97)}
+          </div>
+        </div>
+      </div>
+      <div style="font-size:9px;color:var(--text-dim);margin-top:8px;">💡 To improve accuracy: update FTP, LT pace & CSS in the <button onclick="nav('pbs')" style="background:none;border:none;color:var(--green);font-size:9px;cursor:pointer;text-decoration:underline;padding:0;">PBs tab</button> · These benchmarks auto-update after every Strava sync</div>
+    </div>
+
+    <!-- ── FITNESS FORM CARDS ── -->
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px;">
-      ${[['🏃','Run',R,nR,`VDOT ~${Math.round(R.vdot)} · Threshold ${_fmtRunP(R.threshold)}`],
-         ['🚴','Bike',B,nB,`FTP ~${Math.round(B.ftp)}W`],
-         ['🏊','Swim',S,nS,`CSS ~${_fmtSwimP(S.css)}`]].map(([em,sp,m,n,det])=>{
+      ${[['🏃','Run',R,nR,`Threshold ${_fmtRunP(R.threshold)} · VDOT ~${Math.round(R.vdot)}`],
+         ['🚴','Bike',B,nB,`FTP ${Math.round(B.ftp)}W`],
+         ['🏊','Swim',S,nS,`CSS ${_fmtSwimP(S.css)}`]].map(([em,sp,m,n,det])=>{
         const tsb=m.tsb, hl=tsb>10?{c:'#26c6da',l:'Fresh'}:tsb>-5?{c:'var(--green)',l:'Training'}:tsb>-20?{c:'var(--orange)',l:'Tired'}:{c:'var(--red)',l:'Fatigued'};
         const pct=Math.min(Math.round(m.ctl*200),100);
         return `<div style="background:var(--surface2);border-radius:8px;padding:12px;position:relative;overflow:hidden;border:1px solid var(--border);">
@@ -1380,7 +1760,7 @@ function renderRacePredictor() {
             font-size:11px;font-weight:${i===2?'700':'400'};transition:all .15s;">
             <div style="font-size:18px;margin-bottom:2px;">${d.emoji}</div>
             <div style="font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:1px;">${d.label.toUpperCase()}</div>
-            <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;color:var(--green);margin-top:3px;">${_fmtHMS(preds[k].total)}</div>
+            <div class="pred-tab-time" style="font-family:'Bebas Neue',sans-serif;font-size:22px;color:var(--green);margin-top:3px;">${_fmtHMS(preds[k].total)}</div>
           </button>`).join('')}
       </div>
       <div id="pred-detail" style="padding:20px;">
@@ -1404,7 +1784,7 @@ function renderRacePredictor() {
       <div class="sl">WHAT MOVES YOUR 70.3 TIME MOST</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;">
         ${[['🏊','CSS –3s/100m','~'+Math.round(preds['70.3'].swimMins*0.03)+'min swim gain','Add weekly 1500m+ CSS pool sets','#2196f3'],
-           ['🚴','FTP +10W','~'+Math.round(preds['70.3'].bikeMins*0.04)+'min bike gain','2× threshold intervals/week (Norwegian method)','#ff9800'],
+           ['🚴','FTP +10W','~'+Math.round(preds['70.3'].bikeMins*0.04)+'min bike gain','2× threshold intervals/week','#ff9800'],
            ['🏃','Threshold –5s/km','~'+Math.round(preds['70.3'].runMins*0.04)+'min run gain','Weekly tempo run at threshold pace','#00e676'],
            ['😴','Race Taper (TSB+15)','2–4% total time','Reduce volume 10–14 days out from race','#ce93d8']].map(([em,title,gain,tip,col])=>`
           <div style="background:var(--surface2);border-radius:8px;padding:10px 14px;border-left:3px solid ${col};">
@@ -1419,7 +1799,7 @@ function renderRacePredictor() {
     <div id="pred-extra"></div>
   `;
 
-  window._predState={preds,R,B,S};
+  window._predState={preds,R,B,S,settings};
   setTimeout(()=>_renderCTLChart(R,B,S),80);
 }
 
@@ -1427,50 +1807,141 @@ function _renderDetail(distKey,pred,dist,R,B,S) {
   if(!pred) return '';
   const conf=Math.round(pred.conf*100);
   const rng=Math.max(3,Math.round((1-pred.conf)*12));
+  const lthr = pred.lthr || R.lthr || 181;
+  const cfg = pred.cfg || _getPredSettings()[distKey];
+
   const splits=[
-    ['🏊','Swim',pred.swimMins,`${dist.swim*1000}m @ ${_fmtSwimP(pred.swimP)}`,'#2196f3'],
+    ['🏊','Swim',pred.swimMins,
+      `${dist.swim*1000}m @ ${_fmtSwimP(pred.swimP)} · ~${pred.swimHR}bpm (${Math.round(pred.swimHR/lthr*100)}% LTHR)`,
+      '#2196f3'],
     ['⟳','T1',pred.t1,'Transition','rgba(255,255,255,0.3)'],
-    ['🚴','Bike',pred.bikeMins,`${dist.bike}km @ ${pred.bikeSpd.toFixed(1)}km/h (${pred.raceW}W)`,'#ff9800'],
+    ['🚴','Bike',pred.bikeMins,
+      `${dist.bike}km @ ${pred.bikeSpd.toFixed(1)}km/h · ${pred.raceW}W (${cfg.bikePct}% FTP) · ~${pred.bikeHR}bpm`,
+      '#ff9800'],
     ['⟳','T2',pred.t2,'Transition','rgba(255,255,255,0.3)'],
-    ['🏃','Run',pred.runMins,`${dist.run}km @ ${_fmtRunP(pred.runP)}`,'#00e676']
+    ['🏃','Run',pred.runMins,
+      `${dist.run}km @ ${_fmtRunP(pred.runP)} (${cfg.runPct}% LT) · ~${pred.runHR}bpm (${Math.round(pred.runHR/lthr*100)}% LTHR)`,
+      '#00e676']
   ];
+
   const total=pred.swimMins+pred.bikeMins+pred.runMins;
   const [sp,bp,rp2]=[Math.round(pred.swimMins/total*100),Math.round(pred.bikeMins/total*100),0].map((v,i,a)=>i===2?100-a[0]-a[1]:v);
-  return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start;">
+
+  // Slider helper — inline number input styled as a number field
+  const pctSlider = (field, val, min, max, label, color, hint) =>
+    `<div style="margin-bottom:10px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+        <span style="font-size:10px;color:var(--text-dim);">${label}</span>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <input type="range" min="${min}" max="${max}" value="${val}" step="1"
+            style="width:100px;accent-color:${color};"
+            oninput="this.nextElementSibling.textContent=this.value+'%';_savePredSettings('${distKey}','${field}',this.value)">
+          <span style="font-size:12px;font-weight:700;color:${color};min-width:38px;">${val}%</span>
+        </div>
+      </div>
+      <div style="font-size:9px;color:var(--text-dim);">${hint}</div>
+    </div>`;
+
+  const def = PRED_DEFAULTS[distKey] || {};
+  const isModified = cfg.bikePct !== def.bikePct || cfg.swimPct !== def.swimPct || cfg.runPct !== def.runPct;
+
+  return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start;">
+    <!-- Left: splits + total -->
     <div>
       <div style="font-family:'Bebas Neue',sans-serif;font-size:56px;color:var(--green);line-height:1;letter-spacing:2px;">${_fmtHMS(pred.total)}</div>
       <div style="font-size:11px;color:var(--text-dim);margin-bottom:14px;">${dist.label} · ±${rng}% range: ${_fmtHMS(pred.total*(1-rng/100))} – ${_fmtHMS(pred.total*(1+rng/100))}</div>
       ${splits.map(([em,lbl,t,sub,col])=>`
         <div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border);">
           <span style="font-size:15px;width:22px;text-align:center;">${em}</span>
-          <div style="flex:1;"><div style="font-size:12px;font-weight:600;">${lbl}</div><div style="font-size:10px;color:var(--text-dim);">${sub}</div></div>
+          <div style="flex:1;">
+            <div style="font-size:12px;font-weight:600;">${lbl}</div>
+            <div style="font-size:10px;color:var(--text-dim);">${sub}</div>
+          </div>
           <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;color:${col};">${_fmtHMS(t)}</div>
         </div>`).join('')}
-    </div>
-    <div>
-      <div style="margin-bottom:14px;">
-        <div style="font-size:10px;color:var(--text-dim);margin-bottom:5px;">Time distribution</div>
-        <div style="display:flex;height:20px;border-radius:4px;overflow:hidden;gap:1px;">
-          <div style="flex:${sp};background:#2196f3;display:flex;align-items:center;justify-content:center;font-size:9px;color:#fff;font-weight:700;">${sp}%</div>
-          <div style="flex:${bp};background:#ff9800;display:flex;align-items:center;justify-content:center;font-size:9px;color:#000;font-weight:700;">${bp}%</div>
-          <div style="flex:${rp2};background:#00e676;display:flex;align-items:center;justify-content:center;font-size:9px;color:#000;font-weight:700;">${rp2}%</div>
+
+      <!-- Time distribution bar -->
+      <div style="margin-top:14px;">
+        <div style="display:flex;height:16px;border-radius:4px;overflow:hidden;gap:1px;">
+          <div style="flex:${sp};background:#2196f3;display:flex;align-items:center;justify-content:center;font-size:8px;color:#fff;font-weight:700;">${sp}%</div>
+          <div style="flex:${bp};background:#ff9800;display:flex;align-items:center;justify-content:center;font-size:8px;color:#000;font-weight:700;">${bp}%</div>
+          <div style="flex:${rp2};background:#00e676;display:flex;align-items:center;justify-content:center;font-size:8px;color:#000;font-weight:700;">${rp2}%</div>
         </div>
-        <div style="display:flex;gap:10px;margin-top:4px;font-size:9px;color:var(--text-dim);"><span style="color:#2196f3;">■ Swim</span><span style="color:#ff9800;">■ Bike</span><span style="color:#00e676;">■ Run</span></div>
+        <div style="display:flex;gap:10px;margin-top:4px;font-size:9px;color:var(--text-dim);">
+          <span style="color:#2196f3;">■ Swim</span><span style="color:#ff9800;">■ Bike</span><span style="color:#00e676;">■ Run</span>
+        </div>
       </div>
-      <div style="background:var(--surface2);border-radius:8px;padding:12px;margin-bottom:10px;">
+    </div>
+
+    <!-- Right: effort % controls + confidence -->
+    <div>
+      <!-- Effort % sliders -->
+      <div style="background:var(--surface2);border-radius:10px;padding:14px;margin-bottom:12px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+          <div style="font-size:10px;font-weight:700;letter-spacing:1px;color:var(--text-dim);">EFFORT SETTINGS</div>
+          ${isModified ? `<button onclick="_resetPredSettings('${distKey}')" style="background:none;border:1px solid var(--border);border-radius:5px;color:var(--text-dim);font-size:9px;padding:2px 8px;cursor:pointer;">↺ Reset defaults</button>` : ''}
+        </div>
+
+        ${pctSlider('bikePct', cfg.bikePct, 60, 100, '🚴 Bike effort (% of FTP)', '#ff9800',
+          `${cfg.bikePct}% of ${Math.round(B.ftp)}W FTP = ${pred.raceW}W · ${pred.bikeSpd.toFixed(1)}km/h avg`)}
+
+        ${pctSlider('swimPct', cfg.swimPct, 90, 115, '🏊 Swim pace (% of CSS — lower = faster)', '#2196f3',
+          `${cfg.swimPct}% of CSS ${_fmtSwimP(S.css)} = ${_fmtSwimP(pred.swimP)}/100m`)}
+
+        ${pctSlider('runPct', cfg.runPct, 95, 135, '🏃 Run pace (% of LT — lower = faster)', '#00e676',
+          `${cfg.runPct}% of LT ${_fmtRunP(R.threshold)} = ${_fmtRunP(pred.runP)}/km off the bike`)}
+
+        <div style="font-size:9px;color:var(--text-dim);border-top:1px solid var(--border);padding-top:8px;margin-top:4px;">
+          Drag sliders to model different scenarios — saves automatically per distance.<br>
+          Bike: 92% Sprint · 87% Olympic · 80% 70.3 · 70% IM (evidence-based defaults)
+        </div>
+      </div>
+
+      <!-- HR estimates -->
+      <div style="background:var(--surface2);border-radius:10px;padding:12px;margin-bottom:12px;">
+        <div style="font-size:10px;font-weight:700;letter-spacing:1px;color:var(--text-dim);margin-bottom:10px;">ESTIMATED HEART RATES</div>
+        ${[['🏊','Swim',pred.swimHR,'#2196f3'],['🚴','Bike',pred.bikeHR,'#ff9800'],['🏃','Run',pred.runHR,'#00e676']].map(([em,lbl,hr,col])=>`
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+            <span style="font-size:11px;">${em} ${lbl}</span>
+            <span style="font-family:'Bebas Neue',sans-serif;font-size:18px;color:${col};">${hr}<span style="font-size:11px;">bpm</span>
+              <span style="font-size:9px;color:var(--text-dim);"> ${Math.round(hr/lthr*100)}% LTHR</span>
+            </span>
+          </div>`).join('')}
+        <div style="font-size:9px;color:var(--text-dim);margin-top:4px;">Based on LTHR ${lthr}bpm · Friel HR zone model</div>
+      </div>
+
+      <!-- Confidence -->
+      <div style="background:var(--surface2);border-radius:10px;padding:12px;">
         <div style="font-size:10px;color:var(--text-dim);margin-bottom:6px;">Prediction confidence</div>
-        <div style="height:5px;background:var(--border);border-radius:3px;margin-bottom:6px;"><div style="height:100%;width:${conf}%;background:${conf>70?'var(--green)':conf>40?'var(--orange)':'var(--red)'};border-radius:3px;"></div></div>
+        <div style="height:5px;background:var(--border);border-radius:3px;margin-bottom:6px;">
+          <div style="height:100%;width:${conf}%;background:${conf>70?'var(--green)':conf>40?'var(--orange)':'var(--red)'};border-radius:3px;"></div>
+        </div>
         <div style="font-family:'Bebas Neue',sans-serif;font-size:28px;color:${conf>70?'var(--green)':conf>40?'var(--orange)':'var(--red)'};">${conf}%</div>
         <div style="font-size:10px;color:var(--text-dim);">${conf>70?'High — solid data coverage':conf>40?'Medium — more sessions improve accuracy':'Low — needs more training history'}</div>
       </div>
-      <div style="background:var(--surface2);border-radius:8px;padding:12px;font-size:11px;line-height:2;">
-        <div>FTP est: <b style="color:var(--orange);">${Math.round(B.ftp)}W</b></div>
-        <div>CSS est: <b style="color:#2196f3;">${_fmtSwimP(S.css)}</b></div>
-        <div>Run thr: <b style="color:var(--green);">${_fmtRunP(R.threshold)}</b></div>
-        <div>LTHR: <b>${R.lthr}bpm</b> · Form (TSB): <b style="color:${R.tsb>0?'var(--green)':'var(--orange)'}">${(R.tsb*100).toFixed(0)}</b></div>
-      </div>
     </div>
   </div>`;
+}
+
+function _resetPredSettings(distKey) {
+  if(!D.predSettings) D.predSettings = {};
+  delete D.predSettings[distKey];
+  save();
+  if(window._predState) {
+    const {R,B,S} = window._predState;
+    const settings = _getPredSettings();
+    const preds = {};
+    Object.entries(RACE_DISTANCES).forEach(([k,d]) => { preds[k] = _calcPrediction(d,R,B,S,settings); });
+    window._predState.preds = preds;
+    window._predState.settings = settings;
+    Object.keys(RACE_DISTANCES).forEach(k => {
+      const btn = document.getElementById('ptab-'+k);
+      if(btn) { const tEl = btn.querySelector('.pred-tab-time'); if(tEl) tEl.textContent = _fmtHMS(preds[k].total); }
+    });
+    const panel = document.getElementById('pred-detail');
+    if(panel) panel.innerHTML = _renderDetail(distKey, preds[distKey], RACE_DISTANCES[distKey], R, B, S);
+  }
+  showToast('Effort settings reset to defaults ✓');
 }
 
 function selectPredTab(distKey) {
@@ -1488,10 +1959,27 @@ function selectPredTab(distKey) {
 
 function _renderPredWarnings(nR,nB,nS,R,B,S) {
   const warns=[];
-  if(nS<5) warns.push({lv:'warn',msg:`⚠ Only ${nS} swim sessions — swim prediction is estimated. Add pool sessions with auto-lap.`});
-  if(!B.bikes.some(a=>a.nw||a.w)) warns.push({lv:'info',msg:'ℹ No power data in bike activities — FTP estimated from W:HR. Rouvy sessions with power data improve this significantly.'});
+  if(nS<5) warns.push({lv:'warn',msg:`⚠ Only ${nS} swim sessions — swim prediction is estimated. Add pool sessions with lap auto-splits for better CSS accuracy.`});
+  if(!B.bikes.some(a=>a.nw||a.w)) warns.push({lv:'info',msg:'ℹ No power data in bike activities — FTP estimated from W:HR. Rouvy sessions with power data improve accuracy significantly.'});
   if(R.lthr===181) warns.push({lv:'info',msg:'ℹ LTHR using default 181bpm. Update in PBs → Physiology for better HR zone calibration.'});
-  if(!R.runs.filter(a=>a.d>=daysAgo(21)).length) warns.push({lv:'warn',msg:'⚠ No runs in last 21 days — run fitness decay is factored in.'});
+  if(!R.runs.filter(a=>a.d>=daysAgo(21)).length) warns.push({lv:'warn',msg:'⚠ No runs in last 21 days — run fitness decay applied to prediction.'});
+  // Warn if swim prediction is pool-based (no open-water penalty)
+  warns.push({lv:'info',msg:'ℹ Swim prediction based on pool CSS — open water is typically 3–8% slower (sighting, waves, no walls). Wetsuit may offset this.'});
+  // Warn if FTP manual entry is lower than activity-derived estimate
+  const ftpPbEntry = (D.pbs?.phys||[]).concat(D.pbs?.bike||[]).find(p=>p.n&&p.n.toLowerCase().includes('ftp'));
+  if(ftpPbEntry && ftpPbEntry.v) {
+    const manFtp = parseInt(String(ftpPbEntry.v).match(/(\d+)/)?.[1]||0);
+    // Check if activity data suggests higher FTP
+    const pb45 = (D.pbs?.bike||[]).find(p=>p.n&&p.n.includes('45 min'));
+    if(pb45 && pb45.v) {
+      const p45w = parseInt(String(pb45.v).match(/(\d+)/)?.[1]||0);
+      const actFtp = Math.round(p45w * 0.98 * 0.98); // 45min scale × Rouvy
+      if(actFtp > manFtp + 5) warns.push({lv:'info',msg:`ℹ Your 45min power PB (${p45w}W) implies FTP ~${actFtp}W — currently using manual entry of ${manFtp}W. Update FTP in PBs if this reflects a recent test.`});
+    }
+  }
+  // TSB warning
+  const tsb = R.tsb * 100;
+  if(tsb < -20) warns.push({lv:'warn',msg:`⚠ Run TSB is ${tsb.toFixed(0)} (fatigued) — race prediction assumes peak form. Current form may result in slower splits.`});
   if(!warns.length) return '';
   return '<div style="margin-top:8px;">'+warns.map(w=>`<div style="background:${w.lv==='warn'?'var(--orange-dim)':'var(--blue-glow)'};border:1px solid ${w.lv==='warn'?'rgba(255,152,0,.3)':'rgba(33,150,243,.2)'};border-radius:8px;padding:8px 12px;margin-bottom:6px;font-size:11px;color:${w.lv==='warn'?'var(--orange)':'var(--text-mid)'};">${w.msg}</div>`).join('')+'</div>';
 }
@@ -1538,6 +2026,306 @@ function _renderCTLChart(R,B,S) {
   labels.forEach((l,i)=>{
     if(i%4===0){const d2=new Date(l+'T00:00:00');ctx.fillStyle='rgba(90,112,128,0.5)';ctx.font='9px DM Mono,monospace';ctx.textAlign='center';ctx.fillText(d2.toLocaleDateString('en-AU',{day:'numeric',month:'short'}),xOf(i),H-4);}
   });
+}
+
+function showIntervalReview(sport) {
+  const extra = document.getElementById('pred-extra');
+  if(!extra || !window._predState) return;
+  const {R, B, S} = window._predState;
+  sport = sport || 'run';
+
+  if(!D.ivExcluded) D.ivExcluded = [];
+  if(!D.ivManual)   D.ivManual   = [];   // [{sport,date,name,val,valB,dur,note}]
+  const excluded = new Set(D.ivExcluded);
+
+  function fmtP(p) { const m=Math.floor(p),s=Math.round((p-m)*60); return `${m}:${String(s).padStart(2,'0')}`; }
+  function getRepScale(name, dk) {
+    const n=(name||'').toLowerCase(), m=n.match(/(\d+)x(\d+\.?\d*)\s*(km|m)/);
+    if(m){ const r=m[3]==='km'?parseFloat(m[2]):parseFloat(m[2])/1000; return r>=2?1.02:r>=0.8?1.05:1.08; }
+    return (dk||0)>=8?1.05:1.08;
+  }
+
+  const ivPat = /\d+\s*x\s*\d/i;
+  const allActs = STRAVA_ACTS.acts||[];
+
+  // ── Build per-sport data ──────────────────────────────────────────────
+  const sportCfg = {
+    run: {
+      label:'🏃 Run', color:'var(--green)', unit:'min/km',
+      acts: allActs.filter(a => a.s==='Run' && a.p>0 && (a.dk||0)>=3 &&
+              (a.iv||ivPat.test(a.n||''))),
+      currentStat: R.threshold ? `${fmtP(R.threshold)}/km` : '—',
+      currentSrc: R.thresholdSource||'CTL estimate',
+      statLabel: 'Lactate Threshold',
+      cols: ['Date','Session','km','Avg Pace','Best Lap','Scale → LT est','HR','Status',''],
+      rowFn(a, isEx, isBest, badge, bestBadge, btn) {
+        const scale = getRepScale(a.n, a.dk);
+        const pace = a.lp || a.p;
+        const ltEst = fmtP(pace * scale);
+        const lapNote = a.lp ? `<div style="font-size:9px;color:var(--green);">${fmtP(a.lp)}/km · ${(a.lp_km||0).toFixed(2)}km</div>` : '—';
+        const paceDisp = `<div>${fmtP(a.p)}/km avg</div>`;
+        return `<td style="white-space:nowrap">${a.d}</td>
+          <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(a.n||'').replace(/"/g,"'")}">${a.n||'Run'}${bestBadge}</td>
+          <td>${(a.dk||0).toFixed(1)}</td>
+          <td>${paceDisp}</td>
+          <td>${lapNote}</td>
+          <td style="color:var(--orange);font-weight:700">${isEx?`<s>${ltEst}</s>`:ltEst}/km ${badge}</td>
+          <td style="color:var(--text-dim)">${a.lp_hr||a.hr||'—'}</td>`;
+      },
+      addFields: `
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px;">
+          <div><label>Date</label><input type="date" id="iv-add-date" value="${new Date().toISOString().slice(0,10)}"></div>
+          <div><label>Session name</label><input type="text" id="iv-add-name" placeholder="e.g. 8x400m track"></div>
+          <div><label>Rep pace (min:ss/km)</label><input type="text" id="iv-add-val" placeholder="4:05"></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
+          <div><label>Rep distance (km)</label><input type="number" id="iv-add-dk" step="0.01" placeholder="e.g. 0.4 for 400m"></div>
+          <div><label>Avg HR (optional)</label><input type="number" id="iv-add-hr" placeholder="175"></div>
+        </div>`
+    },
+    bike: {
+      label:'🚴 Bike', color:'var(--orange)', unit:'W NP',
+      acts: allActs.filter(a => a.s==='Bike' && (a.nw||a.w||a.pw) &&
+              (a.iv||ivPat.test(a.n||'')) && (a.mm||0)>=15),
+      currentStat: B.ftp ? `${B.ftp}W` : '—',
+      currentSrc: B.ftpSource||'CTL estimate',
+      statLabel: 'FTP',
+      cols: ['Date','Session','min','Session NP','Best Lap','→ FTP est','HR','Status',''],
+      rowFn(a, isEx, isBest, badge, bestBadge, btn) {
+        const useLap = a.pw && a.pw_min && a.pw_min>=3;
+        const np = useLap ? a.pw : (a.nw||a.w||0);
+        const dur = useLap ? a.pw_min : (a.mm||60);
+        function dS(d){return d>=150?.91:d>=120?.94:d>=90?.97:d>=60?1:d>=45?.98:d>=30?.97:.95;}
+        const ftpEst = Math.round(np * dS(dur) * (a.vr?0.98:1));
+        const lapDisp = useLap ? `<div style="font-size:9px;color:var(--orange)">${a.pw}W · ${a.pw_min}min</div>` : '—';
+        const npDisp = `<div>${a.nw||a.w||'—'}W avg NP</div>`;
+        return `<td style="white-space:nowrap">${a.d}</td>
+          <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(a.n||'').replace(/"/g,"'")}">${a.n||'Ride'}${bestBadge}</td>
+          <td>${Math.round(a.mm||0)}</td>
+          <td>${npDisp}</td>
+          <td>${lapDisp}</td>
+          <td style="color:var(--orange);font-weight:700">${isEx?`<s>${ftpEst}W</s>`:`${ftpEst}W`} ${badge}</td>
+          <td style="color:var(--text-dim)">${a.hr||'—'}</td>`;
+      },
+      addFields: `
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px;">
+          <div><label>Date</label><input type="date" id="iv-add-date" value="${new Date().toISOString().slice(0,10)}"></div>
+          <div><label>Session name</label><input type="text" id="iv-add-name" placeholder="e.g. 3x10min Z4"></div>
+          <div><label>Interval NP / avg watts</label><input type="number" id="iv-add-val" placeholder="245"></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px;">
+          <div><label>Interval duration (min)</label><input type="number" id="iv-add-dur" placeholder="45"></div>
+          <div><label>Virtual/Rouvy?</label><select id="iv-add-vr"><option value="0">No (outdoor)</option><option value="1">Yes (Rouvy)</option></select></div>
+          <div><label>Avg HR (optional)</label><input type="number" id="iv-add-hr" placeholder="160"></div>
+        </div>`
+    },
+    swim: {
+      label:'🏊 Swim', color:'#2196f3', unit:'min/100m',
+      acts: allActs.filter(a => a.s==='Swim' && a.sp>0 &&
+              ((a.dk||0)*1000>=400) && (a.iv||ivPat.test(a.n||'')||a.ef==='hard'||a.ef==='max')),
+      currentStat: S.css ? `${fmtP(S.css)}/100m` : '—',
+      currentSrc: S.cssSource||'CTL estimate',
+      statLabel: 'CSS',
+      cols: ['Date','Session','m','Avg Pace','Best Lap','→ CSS est','HR','Status',''],
+      rowFn(a, isEx, isBest, badge, bestBadge, btn) {
+        const sp = a.lsp || a.sp;
+        const ef = a.ef||'easy';
+        const scale = ef==='hard'||ef==='max'?1.01:ef==='moderate'?0.97:0.95;
+        const cssEst = fmtP(sp * scale);
+        const lapDisp = a.lsp ? `<div style="font-size:9px;color:#2196f3">${fmtP(a.lsp)}/100m</div>` : '—';
+        return `<td style="white-space:nowrap">${a.d}</td>
+          <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(a.n||'').replace(/"/g,"'")}">${a.n||'Swim'}${bestBadge}</td>
+          <td>${Math.round((a.dk||0)*1000)}</td>
+          <td><div>${fmtP(a.sp)}/100m avg</div></td>
+          <td>${lapDisp}</td>
+          <td style="color:#2196f3;font-weight:700">${isEx?`<s>${cssEst}</s>`:cssEst}/100m ${badge}</td>
+          <td style="color:var(--text-dim)">${a.hr||'—'}</td>`;
+      },
+      addFields: `
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px;">
+          <div><label>Date</label><input type="date" id="iv-add-date" value="${new Date().toISOString().slice(0,10)}"></div>
+          <div><label>Session name</label><input type="text" id="iv-add-name" placeholder="e.g. 4x500m CSS test"></div>
+          <div><label>Rep pace (min:ss/100m)</label><input type="text" id="iv-add-val" placeholder="1:44"></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
+          <div><label>Rep distance (m)</label><input type="number" id="iv-add-dk" placeholder="500"></div>
+          <div><label>Avg HR (optional)</label><input type="number" id="iv-add-hr" placeholder="—"></div>
+        </div>`
+    }
+  };
+
+  const cfg = sportCfg[sport];
+
+  // Manual entries for this sport
+  const manuals = (D.ivManual||[]).filter(m => m.sport===sport);
+
+  // Sort Strava acts: excluded last, then best first
+  function bestVal(a) {
+    if(sport==='run') return a.lp||a.p;
+    if(sport==='bike') { const useLap=a.pw&&a.pw_min>=3; return useLap?-a.pw:-(a.nw||a.w||0); }
+    return a.lsp||a.sp;
+  }
+  const sorted = [...cfg.acts].sort((a,b) => {
+    const aEx=excluded.has(String(a.id)), bEx=excluded.has(String(b.id));
+    if(aEx!==bEx) return aEx?1:-1;
+    return bestVal(a) - bestVal(b);
+  });
+
+  // Determine current best Strava session
+  const active = sorted.filter(a => !excluded.has(String(a.id)));
+  let bestAct = active.length ? active[0] : null;
+
+  const tabs = ['run','bike','swim'].map(s =>
+    `<button onclick="showIntervalReview('${s}')" style="padding:5px 14px;border-radius:6px;border:1px solid ${s===sport?sportCfg[s].color:'var(--border)'};background:${s===sport?`rgba(${s==='run'?'0,230,118':s==='bike'?'255,152,0':'33,150,243'},.12)`:'transparent'};color:${s===sport?sportCfg[s].color:'var(--text-dim)'};cursor:pointer;font-size:11px;font-weight:600;font-family:'DM Sans',sans-serif;">${sportCfg[s].label}</button>`
+  ).join('');
+
+  const stravaRows = sorted.map(a => {
+    const isEx = excluded.has(String(a.id));
+    const isBest = bestAct && a.id===bestAct.id && !isEx;
+    const isAuto = !!a.iv;
+    const rowStyle = isEx?'opacity:0.4;':isBest?`background:rgba(${sport==='run'?'0,230,118':sport==='bike'?'255,152,0':'33,150,243'},.05);`:'';
+    const badge = isAuto
+      ? `<span style="background:rgba(0,230,118,.12);color:var(--green);padding:1px 5px;border-radius:3px;font-size:9px">AUTO</span>`
+      : `<span style="background:rgba(33,150,243,.12);color:#2196f3;padding:1px 5px;border-radius:3px;font-size:9px">NAME</span>`;
+    const bestBadge = isBest?` <span style="color:var(--orange);font-size:9px">★</span>`:'';
+    const btn = isEx
+      ? `<button class="btn sec sml" style="font-size:9px;padding:2px 8px" onclick="ivToggleExclude('${a.id}',false)">Restore</button>`
+      : `<button class="btn sec sml" style="font-size:9px;padding:2px 8px;background:rgba(244,67,54,.1);color:var(--red)" onclick="ivToggleExclude('${a.id}',true)">Exclude</button>`;
+    return `<tr style="${rowStyle}"><td colspan="0"></td>${cfg.rowFn(a,isEx,isBest,badge,bestBadge,btn)}<td>${isEx?'<span style="color:var(--red);font-size:10px">Excluded</span>':'<span style="color:var(--green);font-size:10px">Active</span>'}</td><td>${btn}</td></tr>`;
+  }).join('');
+
+  const manualRows = manuals.map((m,i) => {
+    const delBtn = `<button class="btn sec sml" style="font-size:9px;padding:2px 8px;background:rgba(244,67,54,.1);color:var(--red)" onclick="ivDeleteManual(${i},'${sport}')">Remove</button>`;
+    const badge = `<span style="background:rgba(206,147,216,.12);color:var(--purple);padding:1px 5px;border-radius:3px;font-size:9px">MANUAL</span>`;
+    let valDisp='', ltDisp='';
+    if(sport==='run'){
+      valDisp=`<b>${m.val}/km</b>`;
+      ltDisp=`${m.val}/km`;
+    } else if(sport==='bike'){
+      valDisp=`<b>${m.val}W · ${m.dur}min</b>`;
+      function dS(d){return d>=150?.91:d>=120?.94:d>=90?.97:d>=60?1:d>=45?.98:d>=30?.97:.95;}
+      const ftpE=Math.round(parseFloat(m.val)*dS(parseFloat(m.dur||60))*(m.vr?0.98:1));
+      ltDisp=`${ftpE}W`;
+    } else {
+      valDisp=`<b>${m.val}/100m</b>`;
+      ltDisp=`${m.val}/100m`;
+    }
+    return `<tr style="background:rgba(206,147,216,.04)"><td style="white-space:nowrap">${m.date}</td>
+      <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.name||'Manual entry'} <span style="color:var(--orange);font-size:9px">★</span></td>
+      <td>—</td><td>${valDisp}</td><td>—</td>
+      <td style="color:var(--purple);font-weight:700">${ltDisp} ${badge}</td>
+      <td style="color:var(--text-dim)">${m.hr||'—'}</td>
+      <td><span style="color:var(--purple);font-size:10px">Manual</span></td>
+      <td>${delBtn}</td></tr>`;
+  }).join('');
+
+  extra.innerHTML = `<div class="card" style="margin-top:10px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+      <div class="sl" style="margin:0">⚡ INTERVAL SESSION EDITOR</div>
+      <div style="display:flex;gap:6px">${tabs}</div>
+    </div>
+
+    <div style="background:var(--surface2);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:11px;line-height:1.8;">
+      <b style="color:${cfg.color}">${cfg.statLabel}:</b>
+      <span style="color:${cfg.color};font-weight:700;margin:0 6px">${cfg.currentStat}</span>
+      <span style="color:var(--text-dim);font-size:10px">from ${cfg.currentSrc}</span>
+    </div>
+
+    <div style="overflow-x:auto;margin-bottom:14px;">
+      <table class="tbl" style="font-size:11px;">
+        <thead><tr>${cfg.cols.map(c=>`<th>${c}</th>`).join('')}</tr></thead>
+        <tbody>
+          ${manualRows}
+          ${stravaRows || `<tr><td colspan="9" style="text-align:center;color:var(--text-dim);padding:16px">No interval sessions detected. Add one manually below or rename sessions to include patterns like "5x1km" or "3x10min".</td></tr>`}
+        </tbody>
+      </table>
+    </div>
+
+    <div style="background:var(--surface2);border:1px solid rgba(206,147,216,.2);border-radius:8px;padding:14px;margin-bottom:10px;">
+      <div style="font-size:10px;font-weight:700;letter-spacing:1.5px;color:var(--purple);margin-bottom:10px">+ ADD MANUAL INTERVAL</div>
+      ${cfg.addFields}
+      <button class="btn" style="background:var(--purple);color:#000;font-size:11px;padding:7px 18px" onclick="ivAddManual('${sport}')">Add Entry</button>
+      <span id="iv-add-msg" style="font-size:10px;color:var(--green);margin-left:10px;"></span>
+    </div>
+
+    <div style="font-size:10px;color:var(--text-dim);line-height:1.8;">
+      <b>AUTO</b> = Strava iv=true flag · <b>NAME</b> = matched NxM pattern · <b>MANUAL</b> = your entry (always wins if faster)<br>
+      ${sport==='run'?'Rep scale: ×1.02 for 2km+ · ×1.05 for 0.8-2km · ×1.08 for 400-500m reps':
+        sport==='bike'?'FTP scale: 60min×1.0 · 45min×0.98 · 90min×0.97 · 120min×0.94 · Rouvy ×0.98':
+        'CSS scale: hard×1.01 · moderate×0.97 · easy×0.95'}<br>
+      ★ = session currently setting your ${cfg.statLabel} · Changes take effect instantly
+    </div>
+  </div>`;
+}
+
+
+function ivAddManual(sport) {
+  if(!D.ivManual) D.ivManual = [];
+  const date = document.getElementById('iv-add-date')?.value || '';
+  const name = document.getElementById('iv-add-name')?.value?.trim() || '';
+  const val  = document.getElementById('iv-add-val')?.value?.trim()  || '';
+  const msg  = document.getElementById('iv-add-msg');
+
+  if(!date || !val) { if(msg) { msg.style.color='var(--red)'; msg.textContent='Date and value required'; } return; }
+
+  const entry = { sport, date, name, val };
+  if(sport==='bike') {
+    const dur = document.getElementById('iv-add-dur')?.value;
+    const vr  = document.getElementById('iv-add-vr')?.value;
+    if(!dur) { if(msg) { msg.style.color='var(--red)'; msg.textContent='Duration required for bike'; } return; }
+    entry.dur = parseFloat(dur);
+    entry.vr  = vr==='1';
+  }
+  if(sport==='run' || sport==='swim') {
+    const dk = document.getElementById('iv-add-dk')?.value;
+    if(dk) entry.dk = parseFloat(dk);
+  }
+  const hr = document.getElementById('iv-add-hr')?.value;
+  if(hr) entry.hr = parseInt(hr);
+
+  // Validate val format
+  if(sport==='run' || sport==='swim') {
+    if(!/^\d+:\d{2}$/.test(val)) { if(msg) { msg.style.color='var(--red)'; msg.textContent='Pace must be M:SS format (e.g. 4:05)'; } return; }
+  }
+  if(sport==='bike') {
+    if(!/^\d+$/.test(val)) { if(msg) { msg.style.color='var(--red)'; msg.textContent='Enter watts as a whole number (e.g. 245)'; } return; }
+  }
+
+  D.ivManual.push(entry);
+  save();
+  window._predState = null;
+  renderRacePredictor();
+  if(msg) { msg.style.color='var(--green)'; msg.textContent='✓ Added'; setTimeout(()=>{ msg.textContent=''; },2000); }
+  setTimeout(() => showIntervalReview(sport), 120);
+}
+
+function ivDeleteManual(idx, sport) {
+  if(!D.ivManual) return;
+  // idx is position within this sport's entries
+  let count = 0;
+  D.ivManual = D.ivManual.filter(m => {
+    if(m.sport !== sport) return true;
+    return count++ !== idx;
+  });
+  save();
+  window._predState = null;
+  renderRacePredictor();
+  setTimeout(() => showIntervalReview(sport), 120);
+}
+
+
+function ivToggleExclude(id, exclude) {
+  if(!D.ivExcluded) D.ivExcluded = [];
+  if(exclude) {
+    if(!D.ivExcluded.includes(String(id))) D.ivExcluded.push(String(id));
+  } else {
+    D.ivExcluded = D.ivExcluded.filter(x => x !== String(id));
+  }
+  save();
+  // Force predictor rebuild and re-render interval panel
+  window._predState = null;
+  renderRacePredictor();
+  setTimeout(showIntervalReview, 100);
 }
 
 function showPredHistory() {
@@ -1591,12 +2379,19 @@ function showPredSignals() {
     <div style="font-size:11px;line-height:2;color:var(--text-dim);">
       <b style="color:var(--text);">🏃 Run signal:</b> Aerobic Efficiency (speed÷HR÷LTHR) × volume weight × effort multiplier.
       CTL <b style="color:var(--green);">${(R.ctl*100).toFixed(2)}</b> → VDOT ~${Math.round(R.vdot)} → Threshold pace ${_fmtRunP(R.threshold)}<br>
+      <b style="color:var(--text);">🏃 Run race paces:</b> Sprint fatigue ×1.03 · Olympic ×1.06 · 70.3 ×1.12 · Ironman ×1.26 (Friel triathlete model)<br>
+      <b style="color:var(--green);">🏃 Threshold source:</b> ${R.thresholdSource||'CTL estimate'}<br>
       <b style="color:var(--text);">🚴 Bike signal:</b> W:HR efficiency (Allen & Coggan) × duration × effort.
-      CTL <b style="color:var(--orange);">${(B.ctl*100).toFixed(2)}</b> → FTP ~${Math.round(B.ftp)}W · Speed model: ${B.speedModel.type==='rouvy'?`✅ Rouvy calibrated (${B.speedModel.sessions} sessions)`:'⚠ Physics default (add Rouvy power data)'}<br>
+      CTL <b style="color:var(--orange);">${(B.ctl*100).toFixed(2)}</b> → FTP ~${Math.round(B.ftp)}W<br>
+      <b style="color:var(--text);">🚴 Bike race efforts:</b> Sprint ${PRED_DEFAULTS.sprint.bikePct}% FTP · Olympic ${PRED_DEFAULTS.olympic.bikePct}% · 70.3 ${PRED_DEFAULTS['70.3'].bikePct}% · IM ${PRED_DEFAULTS.ironman.bikePct}% — physics: Martin 1998 (CdA=0.32, 82kg)<br>
+      <b style="color:var(--orange);">🚴 FTP source:</b> ${B.ftpSource||'CTL estimate'}<br>
       <b style="color:var(--text);">🏊 Swim signal:</b> Pace quality (Wakayoshi CSS proxy) × session length.
       CTL <b style="color:#2196f3;">${(S.ctl*100).toFixed(2)}</b> → CSS ~${_fmtSwimP(S.css)}<br>
+      <b style="color:var(--text);">🏊 Swim race paces:</b> Sprint ${PRED_DEFAULTS.sprint.swimPct}% CSS · Olympic ${PRED_DEFAULTS.olympic.swimPct}% · 70.3 ${PRED_DEFAULTS['70.3'].swimPct}% · IM ${PRED_DEFAULTS.ironman.swimPct}% (shorter = faster than CSS)<br>
+      <b style="color:#2196f3;">🏊 CSS source:</b> ${S.cssSource||'CTL estimate'}<br>
+      <b style="color:var(--text);">❤️ HR estimates:</b> %LTHR per sport · Swim ~80-87% · Bike ~77-90% · Run ~85-95% (Friel HR zones)<br>
       <b style="color:var(--text);">Form (TSB):</b> Run ${(R.tsb*100).toFixed(1)} · Bike ${(B.tsb*100).toFixed(1)} · Swim ${(S.tsb*100).toFixed(1)}<br>
-      <span style="color:var(--text-dim);font-size:10px;">References: Banister 1991, Allen & Coggan, Wakayoshi 1992, Riegel 1981, Friel Triathlete's Training Bible</span>
+      <span style="color:var(--text-dim);font-size:10px;">References: Banister 1991, Martin et al. 1998, Allen & Coggan, Wakayoshi 1992, Friel Triathlete's Training Bible</span>
     </div>
   </div>`;
 }

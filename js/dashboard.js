@@ -349,7 +349,7 @@ function renderPBs(){
   });
 }
 
-function openPBModal(){
+function openMyPBModal(){
   const cats=['swim','bike','run','tri','phys'];
   cats.forEach(cat=>{
     const div=document.getElementById('pb-edit-'+cat);
@@ -376,7 +376,7 @@ function openPBModal(){
   document.getElementById('pb-modal').classList.add('open');
 }
 
-function closePBModal(){document.getElementById('pb-modal').classList.remove('open');}
+function closeMyPBModal(){document.getElementById('pb-modal').classList.remove('open');}
 
 function savePBs(){
   const cats=['swim','bike','run','tri','phys'];
@@ -389,7 +389,7 @@ function savePBs(){
     });
     D.pbs[cat]=items;
   });
-  save();renderPBs();closePBModal();showToast('PBs updated ✓');
+  save();renderPBs();closeMyPBModal();showToast('PBs updated ✓');
 }
 
 // ===== UTILS =====
