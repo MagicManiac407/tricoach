@@ -13,26 +13,18 @@ async function loadGarminFromSupabase() {
     if(!rows.length || !rows[0].data) return;
     const garmin = rows[0].data;
     const today = localDateStr(new Date());
-    // Only use if synced today
-    if(garmin.date !== today) return;
-    // Inject into morning check fields
-    const fill = (id, val) => { const el=document.getElementById(id); if(el&&val!=null) el.value=val; };
-    fill('m-hrv',        garmin.hrv);
-    fill('m-hrv7',       garmin.hrv7);
-    fill('m-rhr',        garmin.rhr);
-    fill('m-sleepscore', garmin.sleepScore);
-    fill('m-sleep',      garmin.sleepHrs);
-    fill('m-gstress',    garmin.yesterdayStress);
-    // Update dashboard health cards
-    const set = (id, val) => { const el=document.getElementById(id); if(el&&val!=null) el.textContent=val; };
-    set('d-hrv',    garmin.hrv);
-    set('d-rhr',    garmin.rhr);
-    set('d-sleep',  garmin.sleepScore);
-    set('d-stress', garmin.yesterdayStress);
-    // Update health date indicator
-    const dateEl = document.getElementById('d-health-date');
-    if(dateEl) { dateEl.textContent = 'Today · '+today; dateEl.style.color='var(--green)'; }
-    if(typeof calcReadiness==='function') calcReadiness();
+    if(garmin.date !== today) {
+      console.log('[TriCoach] Garmin data in Supabase is from', garmin.date, '— not today, skipping');
+      return;
+    }
+    // Store in GARMIN_TODAY so applySyncData() and populateMorningForm() can use it
+    if(typeof GARMIN_TODAY !== 'undefined') {
+      Object.assign(GARMIN_TODAY, garmin);
+    }
+    // Re-run applySyncData now that we have fresh data
+    if(typeof applySyncData === 'function') applySyncData();
+    // Re-render dashboard
+    if(typeof updateDashboard === 'function') updateDashboard();
     console.log('[TriCoach] Garmin data loaded from Supabase:', garmin);
   } catch(e) {
     console.warn('[TriCoach] Supabase Garmin load failed, using static data:', e);
@@ -340,8 +332,8 @@ function autoPopulatePlannerFromStrava() {
 
 
 // ===== SYNC DATA — fallback constants (overridden by Supabase garmin_data if available) =====
-const GARMIN_TODAY = {"hrv": 87, "hrv7": 81, "sleepScore": 89, "sleepHrs": 10.1, "rhr": 48, "yesterdayStress": 39, "bodyBattery": 72, "date": "2026-03-12"}; // @@GARMIN_INJECT@@ — do not edit this line
-const SYNC_META = {"synced_at": "2026-03-12T11:49:16.826639", "strava_count": 26};    // @@SYNC_META@@    — do not edit this line
+const GARMIN_TODAY = {"hrv": 82, "hrv7": 82, "sleepScore": 84, "sleepHrs": 7.9, "rhr": 49, "yesterdayStress": 33, "date": "2026-03-10"}; // @@GARMIN_INJECT@@ — do not edit this line
+const SYNC_META = {"synced_at": "2026-03-09T10:35:16.078102", "strava_count": 0};    // @@SYNC_META@@    — do not edit this line
 
 // Refresh planner for recent weeks from STRAVA_ACTS (handles duplication safely)
 function refreshPlannerFromStrava() {
