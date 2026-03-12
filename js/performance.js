@@ -98,7 +98,7 @@ function stravaImportWeek(weekKey) {
 
 // ===== PERFORMANCE =====
 function switchPT(tab) {
-  ['overview','run','longrun','bike','swim','volume','trends','autopb','predictor'].forEach(t => {
+  ['overview','run','bike','swim','volume','trends','autopb','predictor'].forEach(t => {
     const pv = document.getElementById('pv-'+t);
     if(pv) pv.style.display = t===tab?'block':'none';
     const btn = document.getElementById('pt-'+t);
@@ -111,7 +111,6 @@ function switchPT(tab) {
     }
   });
   if(tab==='run')       renderRunCharts();
-  if(tab==='longrun')   renderLongRunCharts();
   if(tab==='bike')      renderBikeCharts();
   if(tab==='swim')      renderSwimCharts();
   if(tab==='volume')    renderVolumeCharts();
@@ -158,7 +157,13 @@ function filterActs(sport, opts) {
   opts = opts || {};
   let acts = STRAVA_ACTS.acts.filter(a => a.s === sport);
   if(opts.range && opts.range !== 'all') acts = acts.filter(a => a.d >= daysAgo(parseInt(opts.range)));
-  if(opts.effort && opts.effort !== 'all') acts = acts.filter(a => a.ef === opts.effort);
+  if(opts.effort && opts.effort !== 'all') {
+    if(opts.effort === 'longrun') {
+      acts = acts.filter(a => isLongRun(a));
+    } else {
+      acts = acts.filter(a => a.ef === opts.effort);
+    }
+  }
   if(opts.minDist) acts = acts.filter(a => a.dk && a.dk >= opts.minDist);
   if(opts.minDur) acts = acts.filter(a => a.mm && a.mm >= opts.minDur);
   if(opts.noInterval) acts = acts.filter(a => !a.iv);
@@ -586,6 +591,7 @@ function renderRunCharts() {
     iDiv.innerHTML='<div style="overflow-x:auto;"><table class="tbl"><thead><tr><th>Date</th><th>Session</th><th>Dist</th><th>Avg Pace</th><th>HR</th><th></th></tr></thead><tbody>'+
       recent.map(a=>`<tr><td style="white-space:nowrap;">${fmtDate(a.d)}</td><td style="font-size:10px;color:var(--text-dim);">${a.n}</td><td>${a.dk?a.dk.toFixed(1):'—'}km</td><td style="font-family:monospace;color:var(--red);">${a.p?fmtPace(a.p):'—'}/km</td><td>${a.hr?a.hr.toFixed(0):'—'}bpm</td><td><button class="btn sec sml" style="font-size:9px;padding:2px 6px;" onclick="editWorkout(${a.id})">✏️</button></td></tr>`).join('')+'</tbody></table></div>';
   }
+}
 
 // ===== LONG RUN CHARTS =====
 function renderLongRunCharts() {
@@ -2365,7 +2371,20 @@ function showIntervalReview(sport) {
           <td style="font-size:11px">${setDisp}</td>
           <td style="font-size:11px;color:var(--text-dim)">${hrDisp}</td>
           <td style="color:var(--orange);font-weight:700;font-size:11px">${ftpCell}</td>`;
-      },    swim: {
+      },
+      addFields: `
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px;">
+          <div><label>Date</label><input type="date" id="iv-add-date" value="${new Date().toISOString().slice(0,10)}"></div>
+          <div><label>Session name</label><input type="text" id="iv-add-name" placeholder="e.g. 4x8min FTP intervals"></div>
+          <div><label>Avg lap power (W NP)</label><input type="number" id="iv-add-val" placeholder="280"></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px;">
+          <div><label>Reps</label><input type="number" id="iv-add-reps" placeholder="4"></div>
+          <div><label>Lap duration (min)</label><input type="number" id="iv-add-lapmin" placeholder="8"></div>
+          <div><label>Avg HR (optional)</label><input type="number" id="iv-add-hr" placeholder="160"></div>
+        </div>`
+    },
+    swim: {
       label:'🏊 Swim', color:'#2196f3', unit:'min/100m',
       // All swims ≥400m that are hard or any effort with meaningful distance
       acts: allActs.filter(a => a.s==='Swim' && a.sp>0 && (a.dk||0)*1000>=400 &&
