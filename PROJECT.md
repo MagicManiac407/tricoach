@@ -268,3 +268,101 @@ python3 garmin_backfill.py --days 180
 
 ### Priority 3: Multi-User Polish
 - Better athlete sharing/viewing, coach view, invite links
+
+---
+
+## Session Log — 2026-03-12 (Session 2)
+
+### Files Changed This Session
+| File | Change |
+|------|--------|
+| `index.html` | Predictor card moved inside `page-dashboard` div; interval log panel added to planner page |
+| `js/trends.js` | `renderInsights()` completely rewritten with world-class coaching recommendations |
+| `js/planner.js` | `initPlannerIntervalLog()` wired into `renderPlanner()` via setTimeout |
+| `js/performance.js` | `editWorkout()` modal upgraded with interval toggle + sport-specific interval fields |
+| `sync.py` | Now captures `desc`, `elap`, `laps` fields; interval auto-detection massively improved |
+
+### Feature 1: Race Predictor Card Scoping ✅ DEPLOYED
+**Problem**: `d-race-pred-card` div was sitting *outside* all `.page` divs in HTML, so CSS rule `.page{display:none}` never hid it — visible on every page.  
+**Fix**: Moved the card inside `page-dashboard`. CSS now hides it correctly on all other pages.  
+**Note**: The mini widget (Sprint/Olympic/70.3/IM times) remains on the dashboard. The full predictor is in the Performance tab under Race Predictor sub-tab. `updateDashboard()` being called from morning saves / trends saves is fine — it just updates values in hidden elements.
+
+### Feature 2: World-Class Trend Insights ✅ DEPLOYED
+**Old**: Single-sentence text bullets with basic threshold comparisons.  
+**New**: 11 insight categories, each with bold title + specific **Action:** coaching step. Sorted by priority (1–5). Categories:
+- HRV 7-day trend (recovery trajectory)
+- RHR trend (cardiac fatigue)
+- Sleep score vs readiness correlation
+- Sleep hours compliance
+- Recovery compliance + modality effectiveness scoring
+- Garmin stress vs readiness mismatch
+- Supplement compliance + HRV correlation
+- Calorie intake vs HRV
+- Consecutive fatigue / overreach warning (multi-marker)
+- Training load periodisation (3-week build detection)
+- Day-of-week readiness pattern for schedule optimisation
+
+### Feature 3: Planner Interval Log ✅ DEPLOYED
+**Added to Planner page**: Sport selector (Run/Bike/Swim), "+ Add Entry" form, per-sport fields (run: rep pace/dist/HR; bike: NP/duration/virtual toggle; swim: rep pace/dist/HR), table display with ★ badge and predictor impact column.  
+**Data model**: Uses `D.ivManual[]` — same array as performance.js interval editor, so entries automatically feed `buildRunModel_pred()`, `buildBikeModel_pred()`, `buildSwimModel_pred()`.  
+**Wiring**: `renderPlanner()` now calls `setTimeout(initPlannerIntervalLog, 0)` at the end.
+
+### Feature 4: Interval Detection Overhaul ✅ DEPLOYED
+
+#### Root causes identified
+1. `sync.py` never stored `description` — only `name` was checked for keywords
+2. `sync.py` never stored `elapsed_time` — so elapsed vs moving ratio (strong interval signal) was unavailable
+3. `sync.py` never stored `lap_count`
+4. Auto-detection only checked: `workout_type in [3,12]` OR name containing "interval/vo2/threshold/z4/z5/tempo"
+
+#### sync.py changes
+Now stores per activity:
+- `desc` — Strava description (up to 300 chars)
+- `elap` — elapsed time in minutes (includes rest periods)
+- `laps` — lap count (if > 1)
+
+Auto-detection now fires on ANY of:
+- `workout_type in [3, 12]` (Strava workout type)
+- Keywords in **name** OR **description**: interval, vo2, threshold, z4, z5, tempo, fartlek, track, reps, repeats, efforts, hard effort
+- `NxM` pattern in name or description (e.g. "2x6km", "5 × 400m", "10x1min")
+- `laps ≥ 4` AND `elapsed/moving ≥ 1.20`
+- `elapsed/moving ≥ 1.35` AND session ≥ 20min
+
+**Practical impact**: A session with "2x6km @ 4:39" in the description now auto-detects. Run `python3 sync.py` to re-process recent activities.
+
+#### Edit Workout modal changes (performance.js)
+The edit modal now includes:
+- **Strava description panel** — shows the raw description in an orange-bordered box at the top
+- **Detection signals** — shows lap count and elapsed/moving ratio so you can see why it was/wasn't detected
+- **⚡ Interval toggle** — checkbox to manually mark/unmark any session as an interval
+  - When ticked, sport-specific fields expand:
+    - **Run**: Best Rep Pace (min/km), Rep Distance (km), Rep HR
+    - **Bike**: Best Interval NP (watts), Interval Duration (min)
+    - **Swim**: Best Rep Pace (min/100m), Rep Distance (m)
+  - These write directly to `lp/lp_km/lp_hr` (run), `pw/pw_min` (bike), `lsp/lsp_m` (swim)
+  - These fields are what the race predictor models actually use
+- When unticked, all interval fields are cleared from the activity
+- Saves force predictor rebuild (`window._predState = null`)
+
+### Strava Activity Data Model — Updated
+```json
+{
+  "id": 14086505118, "d": "2026-03-11", "s": "Run", "n": "Morning Run",
+  "mm": 62.1, "dk": 12.0, "hr": 158, "tl": 86,
+  "p": 5.175, "rc": 81, "ef": "hard",
+  "iv": true,
+  "desc": "2x6km @ 4:39 w/ 5min rest",
+  "elap": 78.4,
+  "laps": 4,
+  "lp": 4.65, "lp_km": 6.0, "lp_hr": 172
+}
+```
+
+### Known Issues / Pending
+- `sync.py` changes only affect *future syncs* — existing activities in Supabase won't have `desc`/`elap`/`laps` until re-synced. Run `python3 sync.py --days 90` to backfill recent activities.
+- Edit Workout modal edits are stored in `localStorage` under `tc26_workout_edits` and survive page reloads, but a full Strava re-sync will overwrite them.
+- Interval chart markers in performance tab charts (dot highlighting) not yet implemented.
+
+### Auth Correction (previous sessions noted this as pending)
+- **Actual auth**: Email/password via Supabase (NOT GitHub OAuth as stated earlier in this doc)
+

@@ -40,6 +40,8 @@ function renderPlanner(){
     c.appendChild(card);
   });
   liveUpdateTotals();updateAutoTotals();checkStack();
+  // Render interval log panel below planner
+  if(typeof initPlannerIntervalLog === 'function') setTimeout(initPlannerIntervalLog, 0);
 }
 
 // Color-code completed session lines based on effort tags
@@ -210,5 +212,179 @@ function copyLastWeek(){
     D.plans[currentWeekKey][di]={types:ld.types||'',plan:ld.plan||'',completed:'',notes:ld.notes||''};
   });
   save();renderPlanner();showToast('Last week copied ✓');
+}
+
+// ===== PLANNER INTERVAL SESSION LOG =====
+let _pliv_sport = 'run';
+
+function plannerShowIvSport(sport) {
+  _pliv_sport = sport;
+  ['run','bike','swim'].forEach(s => {
+    const formEl = document.getElementById('pliv-form-'+s);
+    const btn    = document.getElementById('pliv-btn-'+s);
+    if(formEl) formEl.style.display = s===sport ? 'block' : 'none';
+    if(btn) {
+      const colors = {run:'var(--green)',bike:'var(--orange)',swim:'#2196f3'};
+      btn.style.borderColor = s===sport ? colors[s] : 'var(--border)';
+      btn.style.color       = s===sport ? colors[s] : 'var(--text-dim)';
+      btn.style.background  = s===sport ? `rgba(${s==='run'?'0,230,118':s==='bike'?'255,152,0':'33,150,243'},.1)` : 'transparent';
+    }
+  });
+  // Pre-fill today's date
+  const today = new Date().toISOString().slice(0,10);
+  const dateEl = document.getElementById('pliv-'+sport+'-date');
+  if(dateEl && !dateEl.value) dateEl.value = today;
+  // Show form if not already visible
+  const form = document.getElementById('pliv-form');
+  if(form) form.style.display = 'block';
+  plannerRenderIvTable();
+}
+
+function plannerToggleIvForm() {
+  const form = document.getElementById('pliv-form');
+  if(!form) return;
+  const isHidden = form.style.display === 'none' || !form.style.display;
+  form.style.display = isHidden ? 'block' : 'none';
+  if(isHidden) plannerShowIvSport(_pliv_sport);
+  const btn = document.getElementById('pliv-toggle-btn');
+  if(btn) btn.style.color = isHidden ? 'var(--red)' : 'var(--orange)';
+}
+
+function plannerAddInterval() {
+  const sport = _pliv_sport;
+  if(!D.ivManual) D.ivManual = [];
+  const msg = document.getElementById('pliv-msg');
+
+  const date = document.getElementById('pliv-'+sport+'-date')?.value || '';
+  const name = document.getElementById('pliv-'+sport+'-name')?.value?.trim() || '';
+  const val  = document.getElementById('pliv-'+sport+'-val')?.value?.trim() || '';
+  const hr   = document.getElementById('pliv-'+sport+'-hr')?.value;
+
+  if(!date || !val) {
+    if(msg) { msg.style.color='var(--red)'; msg.textContent='Date and value required'; }
+    return;
+  }
+
+  // Validate pace format for run/swim
+  if((sport==='run'||sport==='swim') && !/^\d+:\d{2}$/.test(val)) {
+    if(msg) { msg.style.color='var(--red)'; msg.textContent='Pace must be M:SS format (e.g. 4:05)'; }
+    return;
+  }
+  if(sport==='bike' && !/^\d+$/.test(val)) {
+    if(msg) { msg.style.color='var(--red)'; msg.textContent='Enter watts as a whole number (e.g. 245)'; }
+    return;
+  }
+
+  const entry = { sport, date, name, val };
+  if(hr) entry.hr = parseInt(hr);
+
+  if(sport==='bike') {
+    const dur = document.getElementById('pliv-bike-dur')?.value;
+    const vr  = document.getElementById('pliv-bike-vr')?.value;
+    if(!dur) { if(msg) { msg.style.color='var(--red)'; msg.textContent='Duration required for bike'; } return; }
+    entry.dur = parseFloat(dur);
+    entry.vr  = vr === '1';
+  }
+  if(sport==='run' || sport==='swim') {
+    const dk = document.getElementById('pliv-'+sport+'-dk')?.value;
+    if(dk) entry.dk = parseFloat(dk);
+  }
+
+  D.ivManual.push(entry);
+  save();
+
+  // Reset form fields
+  ['name','val','hr','dk','dur'].forEach(f => {
+    const el = document.getElementById('pliv-'+sport+'-'+f);
+    if(el) el.value = '';
+  });
+
+  // Force predictor rebuild on next open
+  window._predState = null;
+
+  if(msg) { msg.style.color='var(--green)'; msg.textContent='✓ Saved — will update Race Predictor'; setTimeout(()=>{ if(msg) msg.textContent=''; },3000); }
+  plannerRenderIvTable();
+  showToast('Interval session saved ✓');
+}
+
+function plannerDeleteInterval(idx, sport) {
+  if(!D.ivManual) return;
+  if(!confirm('Remove this interval entry?')) return;
+  let count = 0;
+  D.ivManual = D.ivManual.filter(m => {
+    if(m.sport !== sport) return true;
+    return count++ !== idx;
+  });
+  save();
+  window._predState = null;
+  plannerRenderIvTable();
+  showToast('Entry removed');
+}
+
+function plannerRenderIvTable() {
+  const div = document.getElementById('pliv-table');
+  if(!div) return;
+  if(!D.ivManual || !D.ivManual.length) {
+    div.innerHTML = '<div style="color:var(--text-dim);font-size:12px;padding:8px 0;">No manual interval entries yet — add sessions above to improve Race Predictor accuracy.</div>';
+    return;
+  }
+
+  const fmtDate = d => { try { return new Date(d+'T00:00:00').toLocaleDateString('en-AU',{day:'numeric',month:'short',year:'2-digit'}); } catch(e){return d;} };
+  const colors  = {run:'var(--green)',bike:'var(--orange)',swim:'#2196f3'};
+  const icons   = {run:'🏃',bike:'🚴',swim:'🏊'};
+  function dS(d){return d>=150?.91:d>=120?.94:d>=90?.97:d>=60?1:d>=45?.98:d>=30?.97:.95;}
+
+  // Group by sport
+  const bySport = {};
+  D.ivManual.forEach((m,globalIdx) => {
+    if(!bySport[m.sport]) bySport[m.sport] = [];
+    bySport[m.sport].push({...m, _globalIdx: globalIdx});
+  });
+
+  let html = '';
+  ['run','bike','swim'].forEach(sport => {
+    const entries = bySport[sport];
+    if(!entries || !entries.length) return;
+    const color = colors[sport];
+    html += `<div style="margin-bottom:12px;">
+      <div style="font-size:10px;font-weight:700;letter-spacing:1px;color:${color};margin-bottom:6px;">${icons[sport]} ${sport.toUpperCase()} INTERVALS</div>
+      <div style="overflow-x:auto;"><table class="tbl" style="font-size:11px;">
+        <thead><tr><th>Date</th><th>Session</th><th>Value</th><th>→ Predictor</th><th>HR</th><th></th></tr></thead>
+        <tbody>`;
+    let sportIdx = 0;
+    entries.forEach(m => {
+      let valDisp = m.val, predDisp = m.val;
+      if(sport==='run') { valDisp=m.val+'/km'; predDisp=m.val+'/km LT est'; }
+      else if(sport==='bike') {
+        const ftpE = Math.round(parseFloat(m.val)*dS(parseFloat(m.dur||60))*(m.vr?0.98:1));
+        valDisp=m.val+'W · '+m.dur+'min'; predDisp=`→ ~${ftpE}W FTP`;
+      } else { valDisp=m.val+'/100m'; predDisp=m.val+'/100m CSS'; }
+      const si = sportIdx;
+      html += `<tr>
+        <td style="white-space:nowrap;">${fmtDate(m.date)}</td>
+        <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${m.name||'Interval'} <span style="color:var(--orange);font-size:9px;">★</span></td>
+        <td style="font-family:monospace;color:${color};">${valDisp}</td>
+        <td style="font-size:10px;color:var(--text-dim);">${predDisp}</td>
+        <td style="color:var(--text-dim);">${m.hr||'—'}</td>
+        <td><button class="btn sec sml" style="font-size:9px;padding:2px 8px;background:rgba(244,67,54,.1);color:var(--red);" onclick="plannerDeleteInterval(${si},'${sport}')">Remove</button></td>
+      </tr>`;
+      sportIdx++;
+    });
+    html += '</tbody></table></div></div>';
+  });
+
+  div.innerHTML = html || '<div style="color:var(--text-dim);font-size:12px;padding:8px 0;">No entries yet.</div>';
+}
+
+// Call on planner page load
+function initPlannerIntervalLog() {
+  plannerShowIvSport('run');
+  plannerRenderIvTable();
+  // Pre-fill dates
+  const today = new Date().toISOString().slice(0,10);
+  ['run','bike','swim'].forEach(s => {
+    const el = document.getElementById('pliv-'+s+'-date');
+    if(el && !el.value) el.value = today;
+  });
 }
 

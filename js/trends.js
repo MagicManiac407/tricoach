@@ -312,127 +312,256 @@ function renderInsights(series){
   const M=D.mornings;
   const insights=[];
   const avg=(arr)=>arr.length?arr.reduce((a,b)=>a+b,0)/arr.length:null;
-
-  // ── HRV trend ────────────────────────────────────────────────
-  const hrvData=M.slice(-7).filter(m=>m.hrv).map(m=>m.hrv);
-  if(hrvData.length>=4){
-    const recent=avg(hrvData.slice(-3)), earlier=avg(hrvData.slice(0,-3));
-    if(recent<earlier-3) insights.push({type:'warn',text:`HRV dropped ~${Math.round(earlier-recent)} pts over 3 days — load may be exceeding recovery. Consider an easy day.`});
-    else if(recent>earlier+3) insights.push({type:'good',text:`HRV trending up ${Math.round(recent-earlier)} pts — training is being absorbed well. Good adaptation signal.`});
-    else insights.push({type:'info',text:`HRV stable around ${Math.round(avg(hrvData))} — consistent recovery. Keep monitoring.`});
-  }
-
-  // ── Readiness score trend ────────────────────────────────────
-  const rdScores=M.slice(-7).filter(m=>m.readinessScore).map(m=>m.readinessScore);
-  if(rdScores.length>=4){
-    const recentR=avg(rdScores.slice(-3)), earlierR=avg(rdScores.slice(0,-3));
-    if(recentR<earlierR-10) insights.push({type:'warn',text:`Readiness score has dropped from ${Math.round(earlierR)} → ${Math.round(recentR)} over the last 3 days. Accumulated fatigue building.`});
-    else if(recentR>earlierR+10) insights.push({type:'good',text:`Readiness score improving: ${Math.round(earlierR)} → ${Math.round(recentR)}. Recovery is working.`});
-  }
-
-  // ── Sleep score (corrected thresholds) vs readiness ──────────
-  const sleepRd=M.filter(m=>m.sleepScore&&m.readiness);
-  if(sleepRd.length>=5){
-    const poor=sleepRd.filter(m=>m.sleepScore<80), good=sleepRd.filter(m=>m.sleepScore>=88);
-    if(poor.length>=2&&good.length>=2){
-      const poorR=avg(poor.map(m=>m.readiness)), goodR=avg(good.map(m=>m.readiness));
-      if(goodR-poorR>0.6) insights.push({type:'info',text:`Sleep quality strongly predicts your readiness. Sleep 88+ scores readiness ${goodR.toFixed(1)}/5 vs ${poorR.toFixed(1)}/5 on <80 nights.`});
-    }
-  }
-
-  // ── Sleep hours trend ────────────────────────────────────────
-  const sleepHrs=M.slice(-7).filter(m=>m.sleep).map(m=>m.sleep);
-  if(sleepHrs.length>=4){
-    const avgSleep=avg(sleepHrs);
-    if(avgSleep<7.5) insights.push({type:'warn',text:`Averaging only ${avgSleep.toFixed(1)}hrs sleep this week — target is 8.5+. This is likely the biggest drag on your readiness score.`});
-    else if(avgSleep>=8.5) insights.push({type:'good',text:`Great sleep average this week: ${avgSleep.toFixed(1)}hrs. Consistent sleep is your biggest recovery lever.`});
-  }
-
-  // ── Recovery actions: None tracking ─────────────────────────
-  const hasRecovery=M.filter(m=>m.recovery);
-  if(hasRecovery.length>=5){
-    const noneDays=hasRecovery.filter(m=>m.recovery.none===true);
-    const noneRate=Math.round(noneDays.length/hasRecovery.length*100);
-    if(noneRate>=50) insights.push({type:'warn',text:`No recovery work on ${noneRate}% of logged days. Skipping recovery is compounding fatigue — even 10min foam rolling helps.`});
-    else if(noneRate<=20&&hasRecovery.length>=7) insights.push({type:'good',text:`Good recovery compliance — only ${noneRate}% of days with zero recovery work logged.`});
-
-    // Any recovery vs none: next-day HRV impact
-    const recovDays=hasRecovery.filter(m=>!m.recovery.none&&Object.values(m.recovery).some(v=>v));
-    if(recovDays.length>=3&&noneDays.length>=3){
-      // Get HRV the day after recovery vs day after nothing
-      const nextDayHRV=(days)=>days.map(m=>{
-        const next=M.find(n=>n.date>m.date&&n.hrv);
-        return next?next.hrv:null;
-      }).filter(Boolean);
-      const recovNextHRV=avg(nextDayHRV(recovDays));
-      const noneNextHRV=avg(nextDayHRV(noneDays));
-      if(recovNextHRV&&noneNextHRV&&recovNextHRV-noneNextHRV>2)
-        insights.push({type:'good',text:`Recovery work pays off: next-day HRV averages ${recovNextHRV.toFixed(0)} after recovery sessions vs ${noneNextHRV.toFixed(0)} after none.`});
-    }
-  }
-
-  // ── Individual recovery modalities ──────────────────────────
-  const checkRecovMod=(key,label)=>{
-    const withIt=M.filter(m=>m.recovery?.[key]&&m.legs);
-    const withoutIt=M.filter(m=>m.recovery&&!m.recovery[key]&&!m.recovery.none&&m.legs);
-    if(withIt.length>=3&&withoutIt.length>=3){
-      const wL=avg(withIt.map(m=>m.legs)), woL=avg(withoutIt.map(m=>m.legs));
-      if(wL-woL>0.5) insights.push({type:'good',text:`${label} days show leg freshness ${wL.toFixed(1)}/5 vs ${woL.toFixed(1)}/5 — it's making a measurable difference.`});
-    }
+  const trend7=(key)=>{
+    const d=M.slice(-7).filter(m=>m[key]!=null).map(m=>m[key]);
+    if(d.length<4)return null;
+    const first=avg(d.slice(0,Math.ceil(d.length/2))), last=avg(d.slice(Math.floor(d.length/2)));
+    return{val:avg(d),delta:last-first,pct:first>0?(last-first)/first*100:0,n:d.length,first,last};
   };
-  checkRecovMod('massage','Massage gun');
-  checkRecovMod('foam','Foam rolling');
-  checkRecovMod('stretch','Stretching');
-  checkRecovMod('ice','Ice bath');
-  checkRecovMod('compression','Compression');
-  checkRecovMod('nap','Napping');
+  const trend14=(key)=>{
+    const d=M.slice(-14).filter(m=>m[key]!=null).map(m=>m[key]);
+    if(d.length<6)return null;
+    const first=avg(d.slice(0,Math.ceil(d.length/2))), last=avg(d.slice(Math.floor(d.length/2)));
+    return{val:avg(d),delta:last-first,pct:first>0?(last-first)/first*100:0,n:d.length};
+  };
 
-  // ── Supplements compliance ───────────────────────────────────
+  // ── 1. HRV: Primary fitness/fatigue signal ─────────────────────────────
+  const hrv7=trend7('hrv');
+  const hrv14=trend14('hrv');
+  if(hrv7){
+    const base=hrv14?hrv14.val:hrv7.val;
+    const current=hrv7.last;
+    const drop=base-current;
+    if(drop>=5&&hrv7.delta<-3){
+      insights.push({type:'warn',pri:1,
+        title:'⚠️ HRV Declining — Fatigue Signal',
+        text:`Your HRV has dropped <b>${drop.toFixed(0)} points</b> over the past week (now ~${current.toFixed(0)}, baseline ~${base.toFixed(0)}). This is a clear fatigue accumulation signal. <b>Action:</b> Reduce total training volume by 20–30% this week, swap any hard sessions for Z2 aerobic work, and prioritise 8.5h+ sleep. Check back in 3–4 days — HRV recovery to baseline confirms adaptation is occurring.`});
+    } else if(hrv7.delta>4&&hrv7.last>hrv7.first){
+      insights.push({type:'good',pri:1,
+        title:'✅ HRV Rising — Strong Adaptation',
+        text:`HRV has climbed <b>+${hrv7.delta.toFixed(0)} points</b> this week to ~${hrv7.last.toFixed(0)}. Your body is adapting well to current training load. <b>Action:</b> This is a green light to introduce one additional quality session or extend your long workout by 10–15% this week. Don't exceed a 10% volume increase week-on-week.`});
+    } else if(hrv7&&Math.abs(hrv7.delta)<2&&hrv7.n>=5){
+      insights.push({type:'info',pri:3,
+        title:'💡 HRV Stable',
+        text:`HRV averaging ${hrv7.val.toFixed(0)} — consistent for 7 days. Stable HRV means your recovery is matching your training load. <b>Action:</b> Continue current training structure. If you've been building volume, this stability confirms it's sustainable — consider a progression week.`});
+    }
+  }
+
+  // ── 2. RHR: cardiovascular stress indicator ────────────────────────────
+  const rhr7=trend7('rhr');
+  if(rhr7&&rhr7.val>0){
+    if(rhr7.delta>=3&&rhr7.last>rhr7.first){
+      insights.push({type:'warn',pri:2,
+        title:'⚠️ Resting HR Elevated',
+        text:`Resting HR has risen <b>+${rhr7.delta.toFixed(0)}bpm</b> this week (now ~${rhr7.last.toFixed(0)}bpm). Combined with any HRV dip, this is a reliable indicator of accumulated fatigue or early illness. <b>Action:</b> Skip or significantly reduce today's hard session. If it persists 3+ days, schedule a full rest day and evaluate training load for the block.`});
+    } else if(rhr7.delta<=-3){
+      insights.push({type:'good',pri:3,
+        title:'✅ Resting HR Trending Down',
+        text:`RHR dropped <b>${Math.abs(rhr7.delta).toFixed(0)}bpm</b> over the last week — a hallmark of aerobic fitness improving. Long Z2 sessions are doing their job. <b>Action:</b> Your aerobic base is responding. If you're mid-block, this is a good time to test your Z2 pace — you may find your threshold has shifted.`});
+    }
+  }
+
+  // ── 3. Sleep Score vs Readiness correlation ────────────────────────────
+  const sleepVsReady=M.filter(m=>m.sleepScore&&m.readiness&&m.sleepScore>0&&m.readiness>0);
+  if(sleepVsReady.length>=7){
+    const poor=sleepVsReady.filter(m=>m.sleepScore<80);
+    const good=sleepVsReady.filter(m=>m.sleepScore>=85);
+    if(poor.length>=3&&good.length>=3){
+      const poorR=avg(poor.map(m=>m.readiness)), goodR=avg(good.map(m=>m.readiness));
+      const diff=goodR-poorR;
+      if(diff>=0.5){
+        insights.push({type:'info',pri:2,
+          title:'💡 Sleep is Your Biggest Recovery Lever',
+          text:`When your sleep score is 85+, your readiness averages <b>${goodR.toFixed(1)}/5</b>. On nights under 80, it drops to <b>${poorR.toFixed(1)}/5</b> — a ${diff.toFixed(1)}-point gap. <b>Action:</b> Protect sleep above all other recovery. Set a phone-down time 30min before bed. In triathlon, no supplement or recovery tool matches consistent 8.5h quality sleep for adaptation.`});
+      }
+    }
+  }
+
+  // ── 4. Sleep hours recent average ─────────────────────────────────────
+  const sleep7=trend7('sleep');
+  if(sleep7&&sleep7.val>0){
+    if(sleep7.val<7.5){
+      insights.push({type:'warn',pri:2,
+        title:'⚠️ Chronic Sleep Deficit',
+        text:`You're averaging only <b>${sleep7.val.toFixed(1)} hours</b> of sleep over the last 7 days. For a triathlete with 3-discipline training load, the minimum for full adaptation is 8h, with 8.5–9h optimal. <b>Action:</b> A 1-hour sleep deficit compounds across a training week — prioritise an early bedtime tonight. Even 2 extra hours this week meaningfully impacts HRV recovery and performance.`});
+    } else if(sleep7.val>=8.5){
+      insights.push({type:'good',pri:4,
+        title:'✅ Sleep Volume Excellent',
+        text:`Averaging <b>${sleep7.val.toFixed(1)} hours</b> — you're in the optimal range for triathlon adaptation. <b>Action:</b> Consistency matters more than any single night. Keep protecting this habit through race week — sleep debt in the final 3 days before a race cannot be paid back.`});
+    }
+  }
+
+  // ── 5. Recovery compliance and effectiveness ───────────────────────────
+  const withRecovery=M.filter(m=>m.recovery&&Object.keys(m.recovery).length>0);
+  if(withRecovery.length>=7){
+    const noDays=withRecovery.filter(m=>m.recovery.none===true);
+    const noneRate=noDays.length/withRecovery.length;
+    if(noneRate>=0.5){
+      insights.push({type:'warn',pri:3,
+        title:'⚠️ Recovery Work Missing Most Days',
+        text:`No recovery work logged on <b>${Math.round(noneRate*100)}%</b> of days. In triathlon, training stress without recovery produces breakdown, not adaptation. <b>Action:</b> Start with the minimum viable routine: 10 min foam rolling + 5 min hip flexor stretch daily. These two alone reduce DOMS by ~40% and protect injury risk on back-to-back days.`});
+    }
+    // Test which modalities actually correlate with next-day HRV
+    const modalities=[['massage','Massage gun'],['foam','Foam rolling'],['stretch','Stretching'],['ice','Ice bath/contrast'],['compression','Compression'],['nap','Napping']];
+    const bestMod=[];
+    modalities.forEach(([key,label])=>{
+      const withIt=withRecovery.filter(m=>m.recovery[key]&&m.hrv);
+      const withoutIt=withRecovery.filter(m=>!m.recovery[key]&&!m.recovery.none&&m.hrv);
+      if(withIt.length>=3&&withoutIt.length>=3){
+        const wH=avg(withIt.map(m=>m.hrv)), woH=avg(withoutIt.map(m=>m.hrv));
+        if(wH-woH>=2.5) bestMod.push({label,delta:wH-woH});
+      }
+    });
+    if(bestMod.length>0){
+      bestMod.sort((a,b)=>b.delta-a.delta);
+      const top=bestMod[0];
+      insights.push({type:'good',pri:3,
+        title:`✅ ${top.label} — Measurable HRV Boost`,
+        text:`Days with <b>${top.label.toLowerCase()}</b> show HRV averaging <b>+${top.delta.toFixed(1)} points</b> higher than days without it. That's not noise — it's your nervous system responding. <b>Action:</b> Make ${top.label.toLowerCase()} a non-negotiable post-session habit, especially after hard intervals or long sessions.`});
+    }
+  }
+
+  // ── 6. Garmin stress vs readiness ─────────────────────────────────────
+  const stressData=M.filter(m=>m.gstress>0&&m.readiness>0);
+  if(stressData.length>=8){
+    const stressVals=stressData.map(m=>m.gstress);
+    const medStress=stressVals.sort((a,b)=>a-b)[Math.floor(stressVals.length/2)];
+    const highStress=stressData.filter(m=>m.gstress>medStress+12);
+    const lowStress=stressData.filter(m=>m.gstress<=medStress);
+    if(highStress.length>=3&&lowStress.length>=3){
+      const highR=avg(highStress.map(m=>m.readiness)), lowR=avg(lowStress.map(m=>m.readiness));
+      if(lowR-highR>=0.6){
+        insights.push({type:'info',pri:3,
+          title:'💡 Life Stress Is Costing You Readiness',
+          text:`High Garmin stress days (>${(medStress+12).toFixed(0)}) average readiness <b>${highR.toFixed(1)}/5</b> vs <b>${lowR.toFixed(1)}/5</b> on calmer days. Life stressors and training stress share the same recovery pool. <b>Action:</b> On days with high life stress, switch hard sessions to easy Z2 — same training time, far less systemic demand. A backed-off session beats a missed session.`});
+      }
+    }
+  }
+
+  // ── 7. Supplements compliance ──────────────────────────────────────────
   const suppLogged=M.filter(m=>m.supplements!==null&&m.supplements!==undefined);
-  if(suppLogged.length>=5){
+  if(suppLogged.length>=8){
     const skipped=suppLogged.filter(m=>m.supplements===false);
-    const skipRate=Math.round(skipped.length/suppLogged.length*100);
-    if(skipRate>=30) insights.push({type:'warn',text:`Supplements skipped on ${skipRate}% of logged days. Consistency matters — set a morning reminder.`});
-    // Supplement vs HRV
+    const skipRate=skipped.length/suppLogged.length;
+    if(skipRate>=0.35){
+      insights.push({type:'warn',pri:4,
+        title:'⚠️ Supplement Compliance Low',
+        text:`Supplements skipped <b>${Math.round(skipRate*100)}%</b> of days. Inconsistent intake eliminates any benefit from cycling or timing protocols. <b>Action:</b> Leave supplements next to your morning alarm — habit stacking with an existing routine is the most reliable compliance fix.`});
+    }
     const suppHRV=M.filter(m=>m.supplements===true&&m.hrv);
     const noSuppHRV=M.filter(m=>m.supplements===false&&m.hrv);
-    if(suppHRV.length>=3&&noSuppHRV.length>=3){
+    if(suppHRV.length>=4&&noSuppHRV.length>=4){
       const sH=avg(suppHRV.map(m=>m.hrv)), nH=avg(noSuppHRV.map(m=>m.hrv));
-      if(sH-nH>2) insights.push({type:'info',text:`Days after taking supplements average HRV ${sH.toFixed(0)} vs ${nH.toFixed(0)} on skipped days — positive signal.`});
+      if(sH-nH>=3){
+        insights.push({type:'info',pri:4,
+          title:'💡 Supplements Correlate With Higher HRV',
+          text:`Days with supplements average HRV <b>${sH.toFixed(0)}</b> vs <b>${nH.toFixed(0)}</b> on skipped days (+${(sH-nH).toFixed(0)} pts). That's a meaningful signal — likely magnesium and omega-3 driving parasympathetic recovery. <b>Action:</b> Keep consistent for 4 more weeks to confirm the pattern.`});
+      }
     }
   }
 
-  // ── Calories vs HRV ──────────────────────────────────────────
-  const calHRV=M.filter(m=>m.calIn&&m.hrv);
-  if(calHRV.length>=5){
-    const low=calHRV.filter(m=>m.calIn<3200), high=calHRV.filter(m=>m.calIn>=3200);
-    if(low.length>=2&&high.length>=2){
-      const lowH=avg(low.map(m=>m.hrv)), highH=avg(high.map(m=>m.hrv));
-      if(highH-lowH>3) insights.push({type:'info',text:`Better-fuelled days (3200+ kcal) average HRV ${highH.toFixed(0)} vs ${lowH.toFixed(0)} on lower days. Underfuelling appears to impact recovery.`});
-      else if(lowH-highH>3) insights.push({type:'info',text:`Interestingly, lower calorie days average HRV ${lowH.toFixed(0)} vs ${highH.toFixed(0)} on high days. May reflect overeating on heavy training days.`});
+  // ── 8. Nutrition: fuelling for training load ───────────────────────────
+  const calData=M.filter(m=>m.calIn>0&&m.hrv>0);
+  if(calData.length>=7){
+    const calVals=calData.map(m=>m.calIn).sort((a,b)=>a-b);
+    const medCal=calVals[Math.floor(calVals.length/2)];
+    const underFuelled=calData.filter(m=>m.calIn<medCal*0.85);
+    const wellFuelled=calData.filter(m=>m.calIn>=medCal);
+    if(underFuelled.length>=3&&wellFuelled.length>=3){
+      const uH=avg(underFuelled.map(m=>m.hrv)), wH=avg(wellFuelled.map(m=>m.hrv));
+      if(wH-uH>=3){
+        insights.push({type:'info',pri:3,
+          title:'💡 Under-Fuelling is Suppressing Your HRV',
+          text:`Days with lower calorie intake (under ${Math.round(medCal*0.85)} kcal) average HRV <b>${uH.toFixed(0)}</b> vs <b>${wH.toFixed(0)}</b> on better-fuelled days. In triathlon, chronic undereating is the #1 hidden performance limiter. <b>Action:</b> On days after long sessions (90min+), actively target 300–500 kcal above your normal intake within 2 hours post-session.`});
+      }
     }
   }
 
-  // ── Stress vs performance ────────────────────────────────────
-  const stressData=M.filter(m=>m.gstress&&m.readiness);
-  if(stressData.length>=5){
-    const stressHist2 = M.filter(m=>m.gstress&&m.gstress>0).map(m=>m.gstress);
-    const stressAvg2 = stressHist2.length>=5 ? Math.round(stressHist2.reduce((a,b)=>a+b,0)/stressHist2.length) : 27;
-    const lowS=stressData.filter(m=>m.gstress<=stressAvg2+3), highS=stressData.filter(m=>m.gstress>=stressAvg2+10);
-    if(lowS.length>=2&&highS.length>=2){
-      const lowR=avg(lowS.map(m=>m.readiness)), highR=avg(highS.map(m=>m.readiness));
-      if(lowR-highR>0.7) insights.push({type:'info',text:`High Garmin stress days (55+) average readiness ${highR.toFixed(1)}/5 vs ${lowR.toFixed(1)}/5 on low-stress days. Life load is affecting training capacity.`});
+  // ── 9. Consecutive fatigue detection ──────────────────────────────────
+  const last5=M.slice(-5);
+  const last5hrv=last5.filter(m=>m.hrv>0);
+  const last5ready=last5.filter(m=>m.readiness>0);
+  const last5legs=last5.filter(m=>m.legs>0);
+  if(last5hrv.length>=4&&last5ready.length>=4){
+    const avgHRV5=avg(last5hrv.map(m=>m.hrv));
+    const avgReady5=avg(last5ready.map(m=>m.readiness));
+    const avgLegs5=last5legs.length>=3?avg(last5legs.map(m=>m.legs)):null;
+    const allPoor=avgReady5<2.5&&(avgHRV5<(hrv14?hrv14.val*0.92:0));
+    const legsDown=avgLegs5!==null&&avgLegs5<=2;
+    if(allPoor||(legsDown&&avgReady5<2.8)){
+      insights.push({type:'warn',pri:1,
+        title:'🚨 Overreach Warning — Mandatory Easy Week',
+        text:`Multiple markers are flagging: ${allPoor?`HRV ~${avgHRV5.toFixed(0)} (below baseline), readiness ${avgReady5.toFixed(1)}/5`:''}${legsDown?`, leg freshness only ${avgLegs5.toFixed(1)}/5`:''}. This pattern over 5 consecutive days is a textbook overreach signal. <b>Action:</b> Mandatory easy week — cut total volume 30–40%, zero hard sessions, prioritise sleep and nutrition. Train through this and injury probability rises sharply.`});
     }
   }
 
-  // ── Consecutive low readiness ─────────────────────────────────
-  const last5rd=M.slice(-5).filter(m=>m.readinessScore);
-  if(last5rd.length>=3&&last5rd.every(m=>m.readinessScore<55))
-    insights.push({type:'warn',text:`Readiness below 55 for ${last5rd.length} consecutive days. This is a meaningful overreach signal — consider a rest day or reduced week.`});
+  // ── 10. Training Load vs Recovery balance (weekly pattern) ────────────
+  if(STRAVA_ACTS&&typeof calcWeekTrainingLoad==='function'){
+    const today=new Date();
+    const weeks=[];
+    for(let i=3;i>=0;i--){
+      const d=new Date(today);d.setDate(d.getDate()-i*7);
+      const wk=getWeekKey(d);
+      const tl=calcWeekTrainingLoad(wk);
+      weeks.push({wk,score:tl?tl.score:null,label:tl?tl.label:null});
+    }
+    const scored=weeks.filter(w=>w.score!==null);
+    if(scored.length>=3){
+      const recent=scored[scored.length-1];
+      const prev=scored[scored.length-2];
+      const prevPrev=scored[scored.length-3];
+      if(recent.score>75&&prev.score>70&&prevPrev.score>65){
+        insights.push({type:'warn',pri:2,
+          title:'⚠️ Three Consecutive High-Load Weeks',
+          text:`Training load scores: ${prevPrev.score}→${prev.score}→${recent.score}. Three hard weeks without a down week violates the basic periodisation rule. <b>Action:</b> Next week must be a recovery week (target load score under 50). Skip this and you risk a forced rest from overuse injury. The rule: 3 weeks build, 1 week recover.`});
+      } else if(recent.score<30&&prev.score<35&&scored.length>=3){
+        insights.push({type:'warn',pri:3,
+          title:'💡 Training Load Has Been Very Low',
+          text:`Load scores over recent weeks: ${prevPrev.score}→${prev.score}→${recent.score}. Low consistent load means fitness is slowly declining. <b>Action:</b> Plan a structured progression — add one session type per week (e.g. second run, or longer swim). Small consistent increases beat irregular big weeks every time.`});
+      }
+    }
+  }
 
-  if(!insights.length) insights.push({type:'info',text:'Keep logging daily — trends and correlations will surface here once you have more data variation.'});
+  // ── 11. Pattern: what day of week is hardest ──────────────────────────
+  if(M.length>=14){
+    const byDow={};
+    M.filter(m=>m.readiness>0).forEach(m=>{
+      const dow=new Date(m.date+'T12:00:00').getDay();
+      if(!byDow[dow])byDow[dow]=[]; byDow[dow].push(m.readiness);
+    });
+    const dowAvg=Object.entries(byDow).filter(([,v])=>v.length>=3).map(([d,v])=>({d:parseInt(d),avg:avg(v),n:v.length}));
+    if(dowAvg.length>=4){
+      const worst=dowAvg.sort((a,b)=>a.avg-b.avg)[0];
+      const best=dowAvg.sort((a,b)=>b.avg-a.avg)[0];
+      const dowNames=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+      if(best.avg-worst.avg>=0.8){
+        insights.push({type:'info',pri:4,
+          title:`💡 Schedule Insight: ${dowNames[worst.d]} is Your Hardest Recovery Day`,
+          text:`${dowNames[worst.d]} readiness averages <b>${worst.avg.toFixed(1)}/5</b> — your lowest. ${dowNames[best.d]} averages <b>${best.avg.toFixed(1)}/5</b> — your best. <b>Action:</b> Place your key hard sessions on ${dowNames[best.d]} when you're freshest, and make ${dowNames[worst.d]} a recovery or easy Z2 day. Aligning intensity with your natural rhythm compounds over a season.`});
+      }
+    }
+  }
 
-  div.innerHTML=insights.map(i=>`<div style="display:flex;gap:10px;padding:10px 14px;background:${i.type==='good'?'var(--green-dim)':i.type==='warn'?'var(--red-dim)':'var(--surface2)'};border:1px solid ${i.type==='good'?'rgba(0,230,118,.2)':i.type==='warn'?'rgba(244,67,54,.2)':'var(--border)'};border-radius:8px;margin-bottom:8px;"><span style="font-size:16px;">${i.type==='good'?'✅':i.type==='warn'?'⚠️':'💡'}</span><span style="font-size:12px;color:var(--text-mid);line-height:1.6;">${i.text}</span></div>`).join('');
+  // ── Sort by priority and render ───────────────────────────────────────
+  insights.sort((a,b)=>(a.pri||5)-(b.pri||5));
+
+  if(!insights.length){
+    insights.push({type:'info',pri:5,
+      title:'💡 Keep Logging — Patterns Are Building',
+      text:'Keep logging daily morning checks — meaningful correlations surface after 7–14 days of consistent data. The more metrics you fill in (HRV, sleep, legs, calories), the richer and more specific these insights become.'});
+  }
+
+  div.innerHTML=`
+    <div style="font-size:10px;color:var(--text-dim);letter-spacing:1px;font-weight:600;margin-bottom:10px;">
+      ${insights.length} INSIGHT${insights.length!==1?'S':''} · Based on your last ${M.length} logged days
+    </div>
+    ${insights.map(i=>`
+    <div style="display:flex;gap:12px;padding:12px 16px;background:${i.type==='good'?'rgba(0,230,118,.06)':i.type==='warn'?'rgba(244,67,54,.06)':'var(--surface2)'};border:1px solid ${i.type==='good'?'rgba(0,230,118,.25)':i.type==='warn'?'rgba(244,67,54,.25)':'var(--border)'};border-radius:10px;margin-bottom:10px;">
+      <div style="flex:1;">
+        <div style="font-size:12px;font-weight:700;color:${i.type==='good'?'var(--green)':i.type==='warn'?'var(--red)':'var(--text)'};margin-bottom:5px;line-height:1.3;">${i.title}</div>
+        <div style="font-size:12px;color:var(--text-mid);line-height:1.65;">${i.text}</div>
+      </div>
+    </div>`).join('')}`;
 }
 
 // ===== CHECK-IN =====

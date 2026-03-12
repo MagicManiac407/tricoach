@@ -169,6 +169,10 @@ def strava_fetch(days=14):
         nrm_w    = a.get("weighted_average_watts")
         avg_cad  = a.get("average_cadence")
 
+        elap_min = (a.get("elapsed_time", 0) or 0) / 60
+        desc     = (a.get("description") or "").strip()
+        laps_n   = a.get("lap_count") or 0
+
         entry = {
             "id": a["id"],
             "d":  a["start_date_local"][:10],
@@ -177,6 +181,9 @@ def strava_fetch(days=14):
             "dk": round(dist_km, 3),
             "mm": round(move_min, 1),
         }
+        if elap_min > 0: entry["elap"] = round(elap_min, 1)
+        if desc:         entry["desc"] = desc[:300]   # cap at 300 chars
+        if laps_n > 1:   entry["laps"] = laps_n
         if avg_hr:  entry["hr"] = round(avg_hr)
         if a.get("suffer_score"): entry["tl"] = a["suffer_score"]
 
@@ -194,9 +201,26 @@ def strava_fetch(days=14):
 
         # Effort classification
         name_lower = entry["n"].lower()
+        desc_lower = desc.lower()
         hr = entry.get("hr", 0) or 0
-        has_interval = bool(a.get("workout_type") in [3, 12] or
-                           any(w in name_lower for w in ["interval","vo2","threshold","z4","z5","tempo"]))
+
+        # Interval detection: multiple signals
+        iv_keywords = ["interval","vo2","threshold","z4","z5","tempo","fartlek",
+                       "track","reps","repeats","efforts","hard effort"]
+        # NxM pattern in name OR description e.g. "2x6km", "5 x 400m", "10x1min"
+        import re as _re
+        nx_pat = _re.compile(r'\d+\s*[x×]\s*\d', _re.IGNORECASE)
+        # elapsed >> moving means lots of rest time (ratio > 1.25 strongly suggests intervals)
+        elap_ratio = (elap_min / move_min) if move_min > 0 else 1.0
+        has_interval = bool(
+            a.get("workout_type") in [3, 12]                              # Strava workout type
+            or any(w in name_lower for w in iv_keywords)                  # name keywords
+            or any(w in desc_lower for w in iv_keywords)                  # description keywords
+            or nx_pat.search(name_lower)                                  # "5x1km" in name
+            or nx_pat.search(desc_lower)                                  # "5x1km" in description
+            or (laps_n >= 4 and elap_ratio >= 1.20)                       # many laps + rest time
+            or (elap_ratio >= 1.35 and move_min >= 20)                    # heavy rest in any session ≥20min
+        )
         if has_interval:
             entry["ef"] = "hard"
             entry["iv"] = True

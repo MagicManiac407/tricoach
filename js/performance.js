@@ -2426,41 +2426,108 @@ function editWorkout(actId) {
   if(!act) { showToast('Activity not found', true); return; }
 
   const fP = p => { const m=Math.floor(p),s=Math.round((p-m)*60); return m+':'+(s<10?'0':'')+s; };
-  const inpStyle = 'background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 10px;font-size:12px;';
+  const IS = 'background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 10px;font-size:12px;width:100%;box-sizing:border-box;';
+  const isIv = !!act.iv;
+
+  // Strava description hint
+  const descHint = act.desc
+    ? `<div style="background:var(--surface2);border-radius:6px;padding:8px 10px;margin-bottom:12px;font-size:11px;color:var(--text-mid);border-left:3px solid var(--orange);">
+        <span style="font-size:10px;color:var(--text-dim);display:block;margin-bottom:2px;">📋 Strava Description</span>
+        ${act.desc.replace(/</g,'&lt;')}
+       </div>` : '';
+
+  // Signals banner — show why it was/wasn't auto-detected
+  const signals = [];
+  if(act.iv) signals.push('<span style="color:var(--green)">✓ auto-detected</span>');
+  if(act.laps) signals.push(`${act.laps} laps`);
+  if(act.elap && act.mm) {
+    const ratio = act.elap / act.mm;
+    if(ratio >= 1.2) signals.push(`<span style="color:var(--orange)">${ratio.toFixed(2)}× elapsed/moving (rest time)</span>`);
+  }
+  const signalsBanner = signals.length
+    ? `<div style="font-size:10px;color:var(--text-dim);margin-bottom:10px;">Signals: ${signals.join(' · ')}</div>`
+    : '';
+
+  // Sport fields
   const sportFields = act.s === 'Run' ? `
-    <div><label style="font-size:10px;color:var(--text-dim);">Distance (km)</label><input type="number" id="ew-dk" step="0.01" value="${act.dk||''}" style="width:100%;${inpStyle}"></div>
-    <div><label style="font-size:10px;color:var(--text-dim);">Duration (min)</label><input type="number" id="ew-mm" step="0.1" value="${act.mm||''}" style="width:100%;${inpStyle}"></div>
-    <div><label style="font-size:10px;color:var(--text-dim);">Avg HR (bpm)</label><input type="number" id="ew-hr" value="${act.hr||''}" style="width:100%;${inpStyle}"></div>
-    <div><label style="font-size:10px;color:var(--text-dim);">Avg Pace (min/km)</label><input type="text" id="ew-p" value="${act.p?fP(act.p):''}" placeholder="e.g. 5:30" style="width:100%;${inpStyle}"></div>
+    <div><label style="font-size:10px;color:var(--text-dim);">Dist (km)</label><input type="number" id="ew-dk" step="0.01" value="${act.dk||''}" style="${IS}"></div>
+    <div><label style="font-size:10px;color:var(--text-dim);">Duration (min)</label><input type="number" id="ew-mm" step="0.1" value="${act.mm||''}" style="${IS}"></div>
+    <div><label style="font-size:10px;color:var(--text-dim);">Avg HR (bpm)</label><input type="number" id="ew-hr" value="${act.hr||''}" style="${IS}"></div>
+    <div><label style="font-size:10px;color:var(--text-dim);">Avg Pace (min/km)</label><input type="text" id="ew-p" value="${act.p?fP(act.p):''}" placeholder="5:30" style="${IS}"></div>
   ` : act.s === 'Bike' ? `
-    <div><label style="font-size:10px;color:var(--text-dim);">Distance (km)</label><input type="number" id="ew-dk" step="0.1" value="${act.dk||''}" style="width:100%;${inpStyle}"></div>
-    <div><label style="font-size:10px;color:var(--text-dim);">Duration (min)</label><input type="number" id="ew-mm" step="1" value="${act.mm||''}" style="width:100%;${inpStyle}"></div>
-    <div><label style="font-size:10px;color:var(--text-dim);">Avg HR (bpm)</label><input type="number" id="ew-hr" value="${act.hr||''}" style="width:100%;${inpStyle}"></div>
-    <div><label style="font-size:10px;color:var(--text-dim);">NP Watts</label><input type="number" id="ew-nw" value="${act.nw||''}" style="width:100%;${inpStyle}"></div>
-    <div><label style="font-size:10px;color:var(--text-dim);">Avg Watts</label><input type="number" id="ew-w" value="${act.w||''}" style="width:100%;${inpStyle}"></div>
-    <div><label style="font-size:10px;color:var(--text-dim);">Cadence (rpm)</label><input type="number" id="ew-cad" value="${act.cad||''}" style="width:100%;${inpStyle}"></div>
+    <div><label style="font-size:10px;color:var(--text-dim);">Dist (km)</label><input type="number" id="ew-dk" step="0.1" value="${act.dk||''}" style="${IS}"></div>
+    <div><label style="font-size:10px;color:var(--text-dim);">Duration (min)</label><input type="number" id="ew-mm" step="1" value="${act.mm||''}" style="${IS}"></div>
+    <div><label style="font-size:10px;color:var(--text-dim);">Avg HR (bpm)</label><input type="number" id="ew-hr" value="${act.hr||''}" style="${IS}"></div>
+    <div><label style="font-size:10px;color:var(--text-dim);">NP Watts</label><input type="number" id="ew-nw" value="${act.nw||''}" style="${IS}"></div>
+    <div><label style="font-size:10px;color:var(--text-dim);">Avg Watts</label><input type="number" id="ew-w" value="${act.w||''}" style="${IS}"></div>
+    <div><label style="font-size:10px;color:var(--text-dim);">Cadence (rpm)</label><input type="number" id="ew-cad" value="${act.cad||''}" style="${IS}"></div>
   ` : `
-    <div><label style="font-size:10px;color:var(--text-dim);">Distance (km)</label><input type="number" id="ew-dk" step="0.01" value="${act.dk||''}" style="width:100%;${inpStyle}"></div>
-    <div><label style="font-size:10px;color:var(--text-dim);">Duration (min)</label><input type="number" id="ew-mm" step="0.1" value="${act.mm||''}" style="width:100%;${inpStyle}"></div>
-    <div><label style="font-size:10px;color:var(--text-dim);">Avg HR (bpm)</label><input type="number" id="ew-hr" value="${act.hr||''}" style="width:100%;${inpStyle}"></div>
-    <div><label style="font-size:10px;color:var(--text-dim);">Pace /100m (min)</label><input type="text" id="ew-sp" value="${act.sp?fP(act.sp):''}" placeholder="e.g. 1:45" style="width:100%;${inpStyle}"></div>
+    <div><label style="font-size:10px;color:var(--text-dim);">Dist (km)</label><input type="number" id="ew-dk" step="0.01" value="${act.dk||''}" style="${IS}"></div>
+    <div><label style="font-size:10px;color:var(--text-dim);">Duration (min)</label><input type="number" id="ew-mm" step="0.1" value="${act.mm||''}" style="${IS}"></div>
+    <div><label style="font-size:10px;color:var(--text-dim);">Avg HR (bpm)</label><input type="number" id="ew-hr" value="${act.hr||''}" style="${IS}"></div>
+    <div><label style="font-size:10px;color:var(--text-dim);">Pace /100m</label><input type="text" id="ew-sp" value="${act.sp?fP(act.sp):''}" placeholder="1:45" style="${IS}"></div>
   `;
 
+  // Interval detail section — sport-specific
+  const ivRunFields = `
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px;">
+      <div><label style="font-size:10px;color:var(--text-dim);">Best Rep Pace (min/km)</label><input type="text" id="ew-lp" value="${act.lp?fP(act.lp):''}" placeholder="4:39" style="${IS}"></div>
+      <div><label style="font-size:10px;color:var(--text-dim);">Rep Dist (km)</label><input type="number" id="ew-lp-km" step="0.1" value="${act.lp_km||''}" placeholder="6.0" style="${IS}"></div>
+      <div><label style="font-size:10px;color:var(--text-dim);">Rep HR (bpm)</label><input type="number" id="ew-lp-hr" value="${act.lp_hr||''}" style="${IS}"></div>
+    </div>`;
+  const ivBikeFields = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;">
+      <div><label style="font-size:10px;color:var(--text-dim);">Best Interval NP (watts)</label><input type="number" id="ew-pw" value="${act.pw||''}" placeholder="e.g. 285" style="${IS}"></div>
+      <div><label style="font-size:10px;color:var(--text-dim);">Interval Duration (min)</label><input type="number" id="ew-pw-min" step="0.5" value="${act.pw_min||''}" placeholder="e.g. 20" style="${IS}"></div>
+    </div>`;
+  const ivSwimFields = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;">
+      <div><label style="font-size:10px;color:var(--text-dim);">Best Rep Pace (min/100m)</label><input type="text" id="ew-lsp" value="${act.lsp?fP(act.lsp):''}" placeholder="1:35" style="${IS}"></div>
+      <div><label style="font-size:10px;color:var(--text-dim);">Rep Dist (m)</label><input type="number" id="ew-lsp-m" value="${act.lsp_m||''}" placeholder="100" style="${IS}"></div>
+    </div>`;
+  const ivFields = act.s==='Run' ? ivRunFields : act.s==='Bike' ? ivBikeFields : ivSwimFields;
+
   const efOpts = ['easy','moderate','hard','max'].map(v=>`<option value="${v}" ${act.ef===v?'selected':''}>${v}</option>`).join('');
+
   const html = `
     <div id="edit-modal-bg" onclick="closeEditModal()" style="position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:12px;">
-      <div onclick="event.stopPropagation()" style="background:var(--card);border-radius:12px;padding:24px;width:min(520px,98vw);max-height:92vh;overflow-y:auto;">
+      <div onclick="event.stopPropagation()" style="background:var(--card);border-radius:12px;padding:24px;width:min(560px,98vw);max-height:92vh;overflow-y:auto;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
           <div style="font-family:'Bebas Neue',sans-serif;font-size:20px;color:var(--orange);">EDIT WORKOUT — ${act.d}</div>
           <button class="btn sec sml" onclick="closeEditModal()">✕</button>
         </div>
-        <div style="margin-bottom:12px;"><label style="font-size:10px;color:var(--text-dim);">Activity Name</label><input type="text" id="ew-name" value="${act.n||''}" style="width:100%;${inpStyle}"></div>
+
+        ${descHint}
+
+        <div style="margin-bottom:12px;">
+          <label style="font-size:10px;color:var(--text-dim);">Activity Name</label>
+          <input type="text" id="ew-name" value="${(act.n||'').replace(/"/g,'&quot;')}" style="${IS}">
+        </div>
+
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
           ${sportFields}
-          <div><label style="font-size:10px;color:var(--text-dim);">Effort Level</label><select id="ew-ef" style="width:100%;${inpStyle}"><option value="">—</option>${efOpts}</select></div>
-          <div><label style="font-size:10px;color:var(--text-dim);">Training Load</label><input type="number" id="ew-tl" value="${act.tl||''}" style="width:100%;${inpStyle}"></div>
+          <div><label style="font-size:10px;color:var(--text-dim);">Effort Level</label><select id="ew-ef" style="${IS}"><option value="">—</option>${efOpts}</select></div>
+          <div><label style="font-size:10px;color:var(--text-dim);">Training Load</label><input type="number" id="ew-tl" value="${act.tl||''}" style="${IS}"></div>
         </div>
-        <div style="font-size:10px;color:var(--text-dim);margin-bottom:12px;">⚠️ Changes apply to local data only. Re-syncing from Strava will overwrite edits.</div>
+
+        <!-- INTERVAL TOGGLE -->
+        <div style="border:1px solid ${isIv?'var(--green)':'var(--border)'};border-radius:8px;padding:12px;margin-bottom:14px;transition:border .2s;" id="ew-iv-box">
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;margin-bottom:4px;">
+            <input type="checkbox" id="ew-iv" ${isIv?'checked':''} onchange="ewToggleIv()"
+              style="width:16px;height:16px;accent-color:var(--green);cursor:pointer;">
+            <span style="font-weight:700;font-size:13px;">⚡ Interval / Structured Session</span>
+          </label>
+          <div style="font-size:10px;color:var(--text-dim);margin-left:26px;margin-bottom:8px;">
+            Mark this session as an interval workout — it will appear in the Race Predictor interval table and feed the performance models.
+          </div>
+          ${signalsBanner}
+          <div id="ew-iv-fields" style="display:${isIv?'block':'none'};">
+            <div style="font-size:10px;color:var(--text-dim);margin-bottom:6px;font-weight:600;">INTERVAL DETAILS — used directly by Race Predictor</div>
+            ${ivFields}
+          </div>
+        </div>
+
+        <div style="font-size:10px;color:var(--text-dim);margin-bottom:12px;">⚠️ Changes apply to local data only. Re-syncing from Strava will overwrite manual edits.</div>
         <div style="display:flex;gap:10px;justify-content:flex-end;">
           <button class="btn sec" onclick="closeEditModal()">Cancel</button>
           <button class="btn" style="background:var(--orange);color:#000;font-weight:700;" onclick="saveWorkoutEdit(${actId})">💾 Save Changes</button>
@@ -2468,6 +2535,15 @@ function editWorkout(actId) {
       </div>
     </div>`;
   document.body.insertAdjacentHTML('beforeend', html);
+}
+
+function ewToggleIv() {
+  const cb = document.getElementById('ew-iv');
+  const fields = document.getElementById('ew-iv-fields');
+  const box = document.getElementById('ew-iv-box');
+  if(!cb || !fields || !box) return;
+  fields.style.display = cb.checked ? 'block' : 'none';
+  box.style.borderColor = cb.checked ? 'var(--green)' : 'var(--border)';
 }
 
 function saveWorkoutEdit(actId) {
@@ -2492,6 +2568,38 @@ function saveWorkoutEdit(actId) {
   if(a.s === 'Bike') { a.nw=getNum('ew-nw')||a.nw; a.w=getNum('ew-w')||a.w; a.cad=getNum('ew-cad')||a.cad; }
   if(a.s === 'Swim') a.sp = parsePace(getStr('ew-sp')) || a.sp;
 
+  // Interval toggle + detail fields
+  const ivCb = document.getElementById('ew-iv');
+  if(ivCb) {
+    if(ivCb.checked) {
+      a.iv = true;
+      if(a.ef === 'easy' || a.ef === 'moderate') a.ef = 'hard'; // auto-upgrade effort
+      // Run interval details
+      const lp = parsePace(getStr('ew-lp'));
+      const lpKm = getNum('ew-lp-km');
+      const lpHr = getNum('ew-lp-hr');
+      if(lp)   a.lp    = lp;
+      if(lpKm) a.lp_km = lpKm;
+      if(lpHr) a.lp_hr = lpHr;
+      // Bike interval details
+      const pw    = getNum('ew-pw');
+      const pwMin = getNum('ew-pw-min');
+      if(pw)    a.pw     = pw;
+      if(pwMin) a.pw_min = pwMin;
+      // Swim interval details
+      const lsp  = parsePace(getStr('ew-lsp'));
+      const lspM = getNum('ew-lsp-m');
+      if(lsp)  a.lsp   = lsp;
+      if(lspM) a.lsp_m = lspM;
+    } else {
+      // Explicitly un-marking as interval
+      delete a.iv;
+      delete a.lp; delete a.lp_km; delete a.lp_hr;
+      delete a.pw; delete a.pw_min;
+      delete a.lsp; delete a.lsp_m;
+    }
+  }
+
   // Persist edits in localStorage under a separate key so they survive page reloads
   try {
     const edits = JSON.parse(localStorage.getItem('tc26_workout_edits') || '{}');
@@ -2499,6 +2607,7 @@ function saveWorkoutEdit(actId) {
     localStorage.setItem('tc26_workout_edits', JSON.stringify(edits));
   } catch(e) {}
 
+  window._predState = null; // force predictor rebuild
   closeEditModal();
   renderPerformance(); // refresh current tab
   showToast('Workout updated ✓');
