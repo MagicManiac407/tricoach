@@ -382,15 +382,19 @@ async function saveMorningEdit(idx) {
     }
   }
 
-  // Immediate save — push to Supabase now so refresh doesn't lose the edit
-  localStorage.setItem('tc26v4', JSON.stringify(D));
-  if(supa && currentUser){ clearTimeout(_saveDebounce); await pushToSupabase(); }
-
+  // Always close modal and re-render first — never block UI on Supabase
   closeEditModal();
   renderHistory();
-  updateDashboard();                               // refreshes arc + metric cards
-  if(typeof renderReadinessChart === 'function') renderReadinessChart(); // refreshes 28d chart
+  updateDashboard();
+  if(typeof renderReadinessChart === 'function') renderReadinessChart();
   showToast('Morning check updated ✓');
+
+  // Then persist — localStorage immediately, Supabase async in background
+  localStorage.setItem('tc26v4', JSON.stringify(D));
+  if(supa && currentUser){
+    clearTimeout(_saveDebounce);
+    pushToSupabase().catch(e => console.warn('[TriCoach] Supabase sync error:', e));
+  }
 }
 
 function deleteMorning(idx) {
@@ -601,13 +605,17 @@ async function saveCheckinEdit(idx) {
         q4=parseInt(c.q4)||0, q6=parseInt(c.q6)||0, q8=parseInt(c.q8)||0;
   c.score = q1+q2+q4+q6+q8;
 
-  // Immediate save — push to Supabase now (not debounced) so refresh doesn't lose data
-  localStorage.setItem('tc26v4', JSON.stringify(D));
-  if(supa && currentUser){ clearTimeout(_saveDebounce); await pushToSupabase(); }
-
+  // Always close and re-render first
   closeEditModal();
   renderHistory();
   showToast('Check-in updated ✓');
+
+  // Then persist in background
+  localStorage.setItem('tc26v4', JSON.stringify(D));
+  if(supa && currentUser){
+    clearTimeout(_saveDebounce);
+    pushToSupabase().catch(e => console.warn('[TriCoach] Supabase sync error:', e));
+  }
 }
 
 function deleteCheckin(idx) {
