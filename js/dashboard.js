@@ -181,13 +181,21 @@ function renderHistory(){
       return val||'—';
     };
     cc.innerHTML=`<div class="tbl-scroll"><table class="tbl">
-      <thead><tr><th>Date</th><th>Block</th><th>Score</th><th>Hrs</th><th>HRV Avg</th><th>Sessions</th><th>Z2 Discipline</th><th>Training Load</th><th>Freshness</th><th>Sleep</th><th>Motivation</th><th>Nutrition</th><th>Life Stress</th><th>Decision</th><th>Notes</th><th></th></tr></thead>
+      <thead><tr><th>Week Ending</th><th>Block</th><th>Score</th><th>Hrs</th><th>HRV Avg</th><th>Sessions</th><th>Z2 Discipline</th><th>Training Load</th><th>Freshness</th><th>Sleep</th><th>Motivation</th><th>Nutrition</th><th>Life Stress</th><th>Decision</th><th>Notes</th><th></th></tr></thead>
       <tbody>${[...D.checkins].reverse().map((c)=>{
         const idx=D.checkins.indexOf(c);
         const sc=c.score>=8?'var(--green)':c.score>=5?'var(--orange)':'var(--red)';
         const action=c.score>=8?'🟢 Increase':c.score>=5?'🟡 Hold':'🔴 Reduce';
+        // Format week-end date nicely
+        const fmtWeekEnd = c.date ? (() => {
+          const d = new Date(c.date + 'T12:00:00');
+          const wkStart = getWeekKey(d);
+          const startFmt = new Date(wkStart+'T12:00:00').toLocaleDateString('en-AU',{day:'numeric',month:'short'});
+          const endFmt   = d.toLocaleDateString('en-AU',{day:'numeric',month:'short'});
+          return `<div style="font-size:10px;font-weight:600;">${endFmt}</div><div style="font-size:9px;color:var(--text-dim);">${startFmt} – ${endFmt}</div>`;
+        })() : '—';
         return`<tr>
-          <td style="white-space:nowrap;font-size:10px;">${c.date}</td>
+          <td style="white-space:nowrap;">${fmtWeekEnd}</td>
           <td style="font-size:11px;">${c.block||'—'}</td>
           <td style="font-family:'Bebas Neue',sans-serif;font-size:18px;color:${sc};">${c.score}/10</td>
           <td>${c.hours||'—'}</td>
@@ -264,8 +272,15 @@ function updateDashboard(){
     if(l.sleepScore){
       document.getElementById('d-sleep-v').textContent=l.sleepScore;
       const sc=l.sleepScore;
-      document.getElementById('d-sleep-s').textContent=sc>=88?'Excellent':sc>=80?'Good':sc>=70?'Average — monitor':'Poor — recovery impacted';
-      document.getElementById('d-sleep-v').parentElement.className='metric'+(sc>=80?' g':sc>=70?' o':' r');
+      // Use personal avg from recent mornings (fallback 83 = Travis's known avg)
+      const sleepH=m.filter(x=>x.sleepScore&&x.sleepScore>0).map(x=>x.sleepScore).slice(-30);
+      const personalAvg = sleepH.length>=7 ? Math.round(sleepH.reduce((a,b)=>a+b,0)/sleepH.length) : 83;
+      const delta = sc - personalAvg;
+      document.getElementById('d-sleep-s').textContent=
+        delta>=3  ? 'Excellent (avg '+personalAvg+')' :
+        delta>=-3 ? 'Good (avg '+personalAvg+')' :
+        delta>=-8 ? 'Below avg ('+personalAvg+') — monitor' : 'Poor — recovery impacted';
+      document.getElementById('d-sleep-v').parentElement.className='metric'+(delta>=-3?' g':delta>=-8?' o':' r');
     }
     if(l.gstress)document.getElementById('d-stress-v').textContent=l.gstress;
     // Restore readiness arc if today's check already saved
@@ -311,6 +326,178 @@ function updateDashboard(){
   else {snap.innerHTML=`<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:10px;">${DAYS.map((_,di)=>{const d=plan[di];if(!d||!d.types)return`<div style="background:var(--surface2);border-radius:7px;padding:8px 6px;text-align:center;"><div style="font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:1px;color:var(--text-dim);">${DAYS[di].slice(0,3).toUpperCase()}</div><div style="font-size:9px;color:var(--text-dim);margin-top:2px;">Rest</div></div>`;const isHard=/interval|effort|threshold|max|285|260|245|hard|vo2/i.test(d.plan||'');const qc=d.quality>=4?'var(--green)':d.quality>=3?'var(--orange)':d.quality?'var(--red)':'';return`<div style="background:var(--surface2);border:1px solid ${isHard?'rgba(244,67,54,.3)':'var(--border)'};border-radius:7px;padding:8px 6px;"><div style="font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:1px;${isHard?'color:var(--red)':''};">${DAYS[di].slice(0,3).toUpperCase()}</div><div style="font-size:9px;color:var(--text-mid);margin-top:2px;line-height:1.3;">${d.types}</div>${d.quality?`<div style="font-family:'Bebas Neue',sans-serif;font-size:12px;color:${qc};margin-top:3px;">Q${d.quality} R${d.recovery||'?'}</div>`:''}</div>`;}).join('')}</div>`;}
   // Render race predictor mini widget
   if(typeof renderDashboardRacePredictor === 'function') setTimeout(renderDashboardRacePredictor, 50);
+  // Render readiness history chart
+  setTimeout(renderReadinessChart, 80);
+}
+
+// ===== READINESS HISTORY CHART =====
+let _readinessChartDays = 28;
+
+function setReadinessChartRange(days) {
+  _readinessChartDays = days;
+  document.getElementById('d-rc-7').className  = days===7  ? 'btn sml' : 'btn sec sml';
+  document.getElementById('d-rc-28').className = days===28 ? 'btn sml' : 'btn sec sml';
+  renderReadinessChart();
+}
+
+function renderReadinessChart() {
+  const canvas = document.getElementById('readiness-history-canvas');
+  if (!canvas) return;
+
+  const days = _readinessChartDays;
+  // Build date array
+  const dateArr = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(); d.setDate(d.getDate() - i);
+    dateArr.push(d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'));
+  }
+
+  // Collect readiness scores per date
+  const scores = dateArr.map(date => {
+    const m = D.mornings.find(x => x.date === date);
+    return m?.readinessScore || null;
+  });
+
+  // Compute 7-day rolling average
+  const rollingAvg = scores.map((_, i) => {
+    const window = scores.slice(Math.max(0, i-6), i+1).filter(v => v !== null);
+    return window.length >= 3 ? Math.round(window.reduce((a,b)=>a+b,0)/window.length) : null;
+  });
+
+  // Personal baseline (avg of all scores)
+  const allScores = D.mornings.filter(m=>m.readinessScore).map(m=>m.readinessScore);
+  const personalAvg = allScores.length >= 5
+    ? Math.round(allScores.slice(-60).reduce((a,b)=>a+b,0) / Math.min(allScores.slice(-60).length, 60))
+    : 65;
+
+  // Stats for the row below chart
+  const validScores = scores.filter(v=>v!==null);
+  const avgScore = validScores.length ? Math.round(validScores.reduce((a,b)=>a+b,0)/validScores.length) : null;
+  const highScore = validScores.length ? Math.max(...validScores) : null;
+  const lowScore  = validScores.length ? Math.min(...validScores) : null;
+  const greenDays = validScores.filter(v=>v>=70).length;
+
+  // Update stats row
+  const statsEl = document.getElementById('d-readiness-stats');
+  if (statsEl) {
+    const statPill = (label, value, color) => `
+      <div style="background:var(--surface2);border-radius:8px;padding:8px 10px;text-align:center;">
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;color:${color||'var(--text)'};">${value??'—'}</div>
+        <div style="font-size:9px;color:var(--text-dim);letter-spacing:.5px;text-transform:uppercase;">${label}</div>
+      </div>`;
+    statsEl.innerHTML =
+      statPill(`${days}d Avg`, avgScore, avgScore>=70?'#00e676':avgScore>=40?'#ff9800':'#f44336') +
+      statPill('Peak', highScore, '#00e676') +
+      statPill('Low', lowScore, '#f44336') +
+      statPill('Green Days', greenDays + '/' + validScores.length, '#00e676');
+  }
+
+  // Update subtitle
+  const sub = document.getElementById('d-readiness-chart-sub');
+  if (sub && personalAvg) sub.textContent = `Your ${days}-day avg: ${avgScore??'—'}/100 · Personal baseline: ${personalAvg}/100`;
+
+  // Canvas dimensions
+  const wrap = canvas.parentElement;
+  const W = wrap.clientWidth;
+  const H = days <= 7 ? 160 : 200;
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, W, H);
+
+  const padL = 36, padR = 12, padT = 16, padB = 28;
+  const cW = W - padL - padR;
+  const cH = H - padT - padB;
+  const n = dateArr.length;
+
+  // Grid lines at 0, 40, 70, 100
+  [0, 40, 70, 100].forEach(val => {
+    const y = padT + cH * (1 - val/100);
+    ctx.strokeStyle = val === 70 ? 'rgba(0,230,118,0.2)' : val === 40 ? 'rgba(255,152,0,0.2)' : 'rgba(255,255,255,0.06)';
+    ctx.lineWidth = val === 70 || val === 40 ? 1.5 : 1;
+    ctx.setLineDash(val === 70 || val === 40 ? [4,4] : []);
+    ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(padL + cW, y); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = 'rgba(90,112,128,0.7)';
+    ctx.font = '9px DM Mono, monospace';
+    ctx.textAlign = 'right';
+    ctx.fillText(val, padL - 4, y + 3);
+  });
+  ctx.textAlign = 'left';
+
+  // Bar width
+  const barW = Math.max(4, Math.floor(cW / n) - 2);
+  const barGap = cW / n;
+
+  // Draw bars
+  scores.forEach((score, i) => {
+    if (score === null) return;
+    const x = padL + i * barGap + (barGap - barW) / 2;
+    const barH = Math.max(2, cH * (score / 100));
+    const y = padT + cH - barH;
+    const color = score >= 70 ? '#00e676' : score >= 40 ? '#ff9800' : '#f44336';
+    // Highlight today
+    const isToday = i === n - 1;
+    ctx.globalAlpha = isToday ? 1.0 : 0.75;
+    ctx.fillStyle = color;
+    // Rounded top corners
+    const r = Math.min(3, barW/2);
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + barW - r, y);
+    ctx.quadraticCurveTo(x + barW, y, x + barW, y + r);
+    ctx.lineTo(x + barW, y + barH);
+    ctx.lineTo(x, y + barH);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+    ctx.fill();
+    ctx.globalAlpha = 1.0;
+    // Score label on bar if tall enough
+    if (barH > 18 && barW > 12) {
+      ctx.fillStyle = 'rgba(0,0,0,0.7)';
+      ctx.font = 'bold 9px DM Sans, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(score, x + barW/2, y + 11);
+    }
+  });
+  ctx.textAlign = 'left';
+
+  // Personal avg line (dashed white)
+  const avgY = padT + cH * (1 - personalAvg/100);
+  ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([3, 4]);
+  ctx.beginPath(); ctx.moveTo(padL, avgY); ctx.lineTo(padL + cW, avgY); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Rolling 7-day avg line (cyan)
+  ctx.strokeStyle = '#00e5ff';
+  ctx.lineWidth = 2;
+  ctx.lineJoin = 'round';
+  ctx.globalAlpha = 0.8;
+  let lineStarted = false;
+  rollingAvg.forEach((val, i) => {
+    if (val === null) { lineStarted = false; return; }
+    const x = padL + i * barGap + barGap / 2;
+    const y = padT + cH * (1 - val/100);
+    if (!lineStarted) { ctx.beginPath(); ctx.moveTo(x, y); lineStarted = true; }
+    else ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+  ctx.globalAlpha = 1.0;
+
+  // X-axis date labels — show every Nth
+  const labelStep = days <= 7 ? 1 : days <= 14 ? 2 : 4;
+  ctx.fillStyle = 'rgba(90,112,128,0.8)';
+  ctx.font = '9px DM Mono, monospace';
+  ctx.textAlign = 'center';
+  dateArr.forEach((date, i) => {
+    if (i % labelStep !== 0 && i !== n - 1) return;
+    const x = padL + i * barGap + barGap / 2;
+    const label = date.slice(5); // MM-DD
+    ctx.fillText(label, x, H - 6);
+  });
 }
 
 // ===== PBs =====

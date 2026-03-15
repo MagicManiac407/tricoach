@@ -133,7 +133,7 @@
       <div class="g4" style="margin-bottom:12px;">
         <div class="metric" id="d-hrv"><div class="mlb">HRV Today</div><div class="mv" id="d-hrv-v">—</div><div class="ms" id="d-hrv-s">Log morning check</div></div>
         <div class="metric g"><div class="mlb">Resting HR</div><div class="mv" id="d-rhr-v">—</div><div class="ms" id="d-rhr-s">Baseline ~50bpm</div></div>
-        <div class="metric o"><div class="mlb">Sleep Score</div><div class="mv" id="d-sleep-v">—</div><div class="ms" id="d-sleep-s">Target 88+</div></div>
+        <div class="metric o"><div class="mlb">Sleep Score</div><div class="mv" id="d-sleep-v">—</div><div class="ms" id="d-sleep-s">Avg ~86</div></div>
         <div class="metric p"><div class="mlb">Garmin Stress</div><div class="mv" id="d-stress-v">—</div><div class="ms">Yesterday's score</div></div>
       </div>
       <div style="font-size:10px;margin-bottom:8px;margin-top:-6px;"><span id="d-health-date" style="color:var(--text-dim);">No morning check yet today</span> <span style="color:var(--text-dim);cursor:pointer;" onclick="nav('morning')">→ Log check</span></div>
@@ -252,6 +252,33 @@
         <div class="bm-row" style="border:none;"><div class="bm-signal"><span class="zone-dot z5"></span>Z5 Sprint</div><div style="font-size:10px;color:var(--text-dim);">&lt;1:36/100m</div></div>
       </div>
     </div>
+  </div>
+
+  <!-- ===== READINESS HISTORY CHART ===== -->
+  <div class="card" style="margin-bottom:14px;" id="d-readiness-chart-card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+      <div>
+        <div class="sl">📊 Training Readiness — 28 Days</div>
+        <div style="font-size:10px;color:var(--text-dim);" id="d-readiness-chart-sub">Based on HRV, RHR, sleep, load &amp; stress</div>
+      </div>
+      <div style="display:flex;gap:6px;">
+        <button class="btn sec sml" id="d-rc-7" onclick="setReadinessChartRange(7)" style="background:var(--surface2);">7d</button>
+        <button class="btn sml" id="d-rc-28" onclick="setReadinessChartRange(28)">28d</button>
+        <button class="btn sec sml" onclick="nav('trends');applyPreset(['readinessScore','hrv','sleepScore'])" style="font-size:10px;">Trends →</button>
+      </div>
+    </div>
+    <!-- Legend -->
+    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px;font-size:10px;color:var(--text-dim);">
+      <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#00e676;margin-right:4px;vertical-align:middle;"></span>Optimal / Good (70+)</span>
+      <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#ff9800;margin-right:4px;vertical-align:middle;"></span>Moderate / Caution (40–69)</span>
+      <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#f44336;margin-right:4px;vertical-align:middle;"></span>Rest (below 40)</span>
+      <span><span style="display:inline-block;width:28px;height:2px;background:#00e5ff;margin-right:4px;vertical-align:middle;opacity:0.7;"></span>7-day avg</span>
+    </div>
+    <div style="position:relative;">
+      <canvas id="readiness-history-canvas" style="width:100%;"></canvas>
+    </div>
+    <!-- Stats row -->
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:12px;" id="d-readiness-stats"></div>
   </div>
 
   <!-- ===== RACE PREDICTOR MINI (inside Dashboard page) ===== -->
@@ -565,7 +592,11 @@
   <div class="card" style="margin-bottom:14px;">
     <div class="sl" style="margin-bottom:10px;">Quick Presets</div>
     <div style="display:flex;flex-wrap:wrap;gap:6px;">
+      <button class="preset-btn" style="background:rgba(0,229,255,.15);border-color:#00e5ff;color:#00e5ff;" onclick="applyPreset(['readinessScore'])">🎯 Readiness Score</button>
+      <button class="preset-btn" style="background:rgba(0,229,255,.1);border-color:#00e5ff;" onclick="applyPreset(['readinessScore','hrv','sleepScore'])">Readiness vs HRV + Sleep</button>
+      <button class="preset-btn" style="background:rgba(0,229,255,.1);border-color:#00e5ff;" onclick="applyPreset(['readinessScore','trainingLoad','gstress'])">Readiness vs Load + Stress</button>
       <button class="preset-btn" onclick="applyPreset(['hrv','sleepScore'])">HRV vs Sleep Score</button>
+      <button class="preset-btn" onclick="applyPreset(['hrv','rhr'])">HRV vs Resting HR</button>
       <button class="preset-btn" onclick="applyPreset(['calIn','readiness'])">Calories vs Readiness</button>
       <button class="preset-btn" onclick="applyPreset(['calOut','hrv'])">Calories Burnt vs HRV</button>
       <button class="preset-btn" onclick="applyPreset(['sleepScore','sessionQuality'])">Sleep Score vs Session Quality</button>
