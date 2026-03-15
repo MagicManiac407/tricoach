@@ -1451,7 +1451,21 @@ function buildBikeModel_pred() {
     if(hr1Val && (!ftpVal || hr1Val > ftpVal)) {
       // 1hr power is higher — it IS FTP by definition (power held for 60min = FTP)
       ftp = hr1Val;
-      ftpSource = `✓ 1hr PB: ${hr1Pb.v} (FTP = 60min power directly)`;
+      // Check if any Strava efforts > 60min suggest FTP is higher
+      // Holding Xw for N minutes → FTP ≈ Xw × durScale(N) where durScale(80min) ≈ 1.03
+      const longerBikes = bikes.filter(a => (a.nw||a.w) && (a.mm||0) > 65 && (a.nw||a.w) > hr1Val);
+      const bestLonger = longerBikes.length ? longerBikes.reduce((b,a) => {
+        const dur = a.mm || 90;
+        const ds = dur >= 90 ? 1.0 : dur >= 75 ? 1.02 : 1.03;
+        const est = Math.round((a.nw||a.w) * ds);
+        return est > b.est ? {est, a, dur} : b;
+      }, {est: hr1Val}) : null;
+      if(bestLonger && bestLonger.est > hr1Val + 5) {
+        ftp = bestLonger.est;
+        ftpSource = `✓ 1hr PB: ${hr1Pb.v} — but ${Math.round(bestLonger.a.mm||0)}min effort @${bestLonger.a.nw||bestLonger.a.w}W suggests FTP ~${bestLonger.est}W`;
+      } else {
+        ftpSource = `✓ 1hr PB: ${hr1Pb.v} (FTP = 60min power directly)`;
+      }
     } else if(ftpVal) {
       ftp = ftpVal;
       ftpSource = `✓ FTP PB entry: ${ftpPb.v}`;
@@ -2030,10 +2044,14 @@ function _calcPrediction(dk, R, B, S, settings) {
 
   // ── ESTIMATED HEART RATES (% of LTHR, Friel Triathlete's Training Bible) ─
   const lthr = R.lthr || 181;
-  const swimHRpct  = {sprint:0.87, olympic:0.85, '70.3':0.83, ironman:0.80}[distKey]||0.83;
+  const swimHRpct  = {sprint:0.87, olympic:0.86, '70.3':0.86, ironman:0.82}[distKey]||0.86; // calibrated: CSS pace → ~86% LTHR from actual swim data
   // Bike & run HR scale with effort % — harder effort = higher % LTHR
-  const bikeHRpct  = Math.min(0.96, 0.62 + (cfg.bikePct/100)*0.38);
-  const runHRpct   = Math.min(0.99, 0.70 + (cfg.runPct < 105 ? 0.27 : cfg.runPct < 115 ? 0.22 : 0.17));
+  // Bike HR: calibrated from actual data (224W@160bpm=88%LTHR at ~96%FTP)
+  // Linear interpolation: at 75%FTP→78%LTHR, at 100%FTP→92%LTHR
+  const bikeHRpct  = Math.min(0.93, 0.78 + ((cfg.bikePct - 75) / 25) * 0.14);
+  // Run HR off bike: typically 90-94% LTHR for HIM (legs fatigued, HR elevated)
+  // runPct 112% (12% slower than LT) → 91% LTHR; runPct 126% → 86% LTHR (Ironman shuffle)
+  const runHRpct   = Math.min(0.97, 0.98 - (cfg.runPct - 100) * 0.005);
   const swimHR = Math.round(lthr * swimHRpct);
   const bikeHR = Math.round(lthr * bikeHRpct);
   const runHR  = Math.round(lthr * runHRpct);
@@ -2223,7 +2241,7 @@ function _renderDetail(distKey,pred,dist,R,B,S) {
       '#ff9800'],
     ['⟳','T2',pred.t2,'Transition','rgba(255,255,255,0.3)'],
     ['🏃','Run',pred.runMins,
-      `${dist.run}km @ ${_fmtRunP(pred.runP)} (${cfg.runPct}% LT) · ~${pred.runHR}bpm (${Math.round(pred.runHR/lthr*100)}% LTHR)`,
+      `${dist.run}km @ ${_fmtRunP(pred.runP)} (${cfg.runPct}% of LT ${_fmtRunP(R.threshold)} — ${cfg.runPct < 100 ? '⚠️ faster than threshold: unrealistic' : cfg.runPct < 108 ? 'optimistic' : cfg.runPct < 118 ? 'realistic HIM' : 'conservative'}) · ~${pred.runHR}bpm`,
       '#00e676']
   ];
 
@@ -2285,14 +2303,18 @@ function _renderDetail(distKey,pred,dist,R,B,S) {
           ${isModified ? `<button onclick="_resetPredSettings('${distKey}')" style="background:none;border:1px solid var(--border);border-radius:5px;color:var(--text-dim);font-size:9px;padding:2px 8px;cursor:pointer;">↺ Reset defaults</button>` : ''}
         </div>
 
-        ${pctSlider('bikePct', cfg.bikePct, 60, 100, '🚴 Bike effort (% of FTP)', '#ff9800',
-          `${cfg.bikePct}% of ${Math.round(B.ftp)}W FTP = ${pred.raceW}W · ${pred.bikeSpd.toFixed(1)}km/h avg`)}
+        ${pctSlider('bikePct', cfg.bikePct, 60, 100, '🚴 Bike effort (% of FTP · ↑ = harder)', '#ff9800',
+          `${cfg.bikePct}% → ${pred.raceW}W (FTP ${Math.round(B.ftp)}W) · ${pred.bikeSpd.toFixed(1)}km/h avg (HIM target: 82–88%)`)}
 
-        ${pctSlider('swimPct', cfg.swimPct, 90, 115, '🏊 Swim pace (% of CSS — lower = faster)', '#2196f3',
-          `${cfg.swimPct}% of CSS ${_fmtSwimP(S.css)} = ${_fmtSwimP(pred.swimP)}/100m`)}
+        ${pctSlider('swimPct', cfg.swimPct, 90, 115, '🏊 Swim effort (100%=CSS pace · ↓ = faster than CSS)', '#2196f3',
+          `${cfg.swimPct}% → ${_fmtSwimP(pred.swimP)}/100m · CSS is ${_fmtSwimP(S.css)}/100m (HIM target: 100–105%)`)}
 
-        ${pctSlider('runPct', cfg.runPct, 95, 135, '🏃 Run pace (% of LT — lower = faster)', '#00e676',
-          `${cfg.runPct}% of LT ${_fmtRunP(R.threshold)} = ${_fmtRunP(pred.runP)}/km off the bike`)}
+        ${(()=>{
+          const isFasterThanLT = cfg.runPct < 100;
+          const warn = isFasterThanLT ? ' ⚠️ FASTER than LT — unrealistic off bike' : '';
+          return pctSlider('runPct', cfg.runPct, 95, 135, '🏃 Run fatigue (100%=LT pace · ↑ = slower off bike)', '#00e676',
+          `${cfg.runPct}% → ${_fmtRunP(pred.runP)}/km · LT is ${_fmtRunP(R.threshold)}/km (HIM target: 108–115%)${warn}`);
+        })()}
 
         <div style="font-size:9px;color:var(--text-dim);border-top:1px solid var(--border);padding-top:8px;margin-top:4px;">
           Drag sliders to model different scenarios — saves automatically per distance.<br>
