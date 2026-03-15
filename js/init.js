@@ -250,6 +250,66 @@ function exportBackup(){
 }
 function saveAndDownload(){ exportBackup(); }
 // ===== HISTORY EDIT FUNCTIONS =====
+function logPastDayPrompt() {
+  // Ask for a date, then open a blank editMorning-style modal to create a new entry
+  const existing = document.getElementById('edit-modal-bg');
+  if(existing) existing.remove();
+
+  const html = `
+    <div id="edit-modal-bg" onclick="closeEditModal()" style="position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:12px;">
+      <div onclick="event.stopPropagation()" style="background:var(--card);border-radius:12px;padding:24px;width:min(420px,98vw);">
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:20px;color:var(--green);margin-bottom:16px;">LOG PAST DAY</div>
+        <div style="margin-bottom:14px;">
+          <label style="font-size:10px;color:var(--text-dim);">Date</label>
+          <input type="date" id="lpd-date" max="${localDateStr(new Date())}"
+            style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:8px 10px;font-size:13px;margin-top:4px;">
+        </div>
+        <div style="font-size:11px;color:var(--text-dim);margin-bottom:16px;">
+          After selecting the date, you'll be able to fill in HRV, sleep, RHR and other details. Readiness score will be automatically calculated.
+        </div>
+        <div style="display:flex;gap:10px;justify-content:flex-end;">
+          <button class="btn sec sml" onclick="closeEditModal()">Cancel</button>
+          <button class="btn" style="background:var(--green);color:#000;font-weight:700;" onclick="logPastDayOpen()">Continue →</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.insertAdjacentHTML('beforeend', html);
+  // Default to yesterday if nothing selected
+  const dateEl = document.getElementById('lpd-date');
+  if(dateEl) {
+    const yest = new Date(); yest.setDate(yest.getDate()-1);
+    dateEl.value = yest.getFullYear()+'-'+String(yest.getMonth()+1).padStart(2,'0')+'-'+String(yest.getDate()).padStart(2,'0');
+  }
+}
+
+function logPastDayOpen() {
+  const dateEl = document.getElementById('lpd-date');
+  if(!dateEl || !dateEl.value) { showToast('Please select a date', true); return; }
+  const date = dateEl.value;
+
+  // Check if entry already exists — if so just edit it
+  const existingIdx = D.mornings.findIndex(m => m.date === date);
+  closeEditModal();
+  if(existingIdx >= 0) {
+    editMorning(existingIdx);
+    return;
+  }
+
+  // Create a blank entry for this date and open the edit modal
+  const blank = {
+    date, hrv:null, hrv7:null, rhr:null, sleepScore:null, sleep:null,
+    gstress:null, calIn:null, calOut:null, protein:null, carbs:null,
+    legs:null, stress:null, readiness:null, fuel:null, note:'',
+    recovery:{}, supplements:null, supplementNote:'',
+    status:'green', readinessScore:null, timestamp:Date.now()
+  };
+  D.mornings.push(blank);
+  // Sort mornings by date so it sits in the right place
+  D.mornings.sort((a,b) => a.date.localeCompare(b.date));
+  const newIdx = D.mornings.findIndex(m => m.date === date);
+  editMorning(newIdx);
+}
+
 function editMorning(idx) {
   const m = D.mornings[idx];
   if(!m) return;
@@ -294,7 +354,7 @@ function editMorning(idx) {
   document.body.insertAdjacentHTML('beforeend', html);
 }
 
-function saveMorningEdit(idx) {
+async function saveMorningEdit(idx) {
   const m = D.mornings[idx];
   if(!m) return;
   const getNum = id => parseFloat(document.getElementById(id)?.value) || null;
@@ -312,9 +372,24 @@ function saveMorningEdit(idx) {
   m.protein    = getNum('em-protein');
   m.carbs      = getNum('em-carbs');
   m.note       = document.getElementById('em-note').value;
-  save();
+
+  // Recalculate readiness score from the updated values
+  if(typeof recalcMorningReadiness === 'function') {
+    const recalc = recalcMorningReadiness(m);
+    if(recalc) {
+      m.readinessScore = recalc.readinessScore;
+      m.status = recalc.status;
+    }
+  }
+
+  // Immediate save — push to Supabase now so refresh doesn't lose the edit
+  localStorage.setItem('tc26v4', JSON.stringify(D));
+  if(supa && currentUser){ clearTimeout(_saveDebounce); await pushToSupabase(); }
+
   closeEditModal();
   renderHistory();
+  updateDashboard();                               // refreshes arc + metric cards
+  if(typeof renderReadinessChart === 'function') renderReadinessChart(); // refreshes 28d chart
   showToast('Morning check updated ✓');
 }
 
@@ -330,36 +405,167 @@ function deleteMorning(idx) {
 function editCheckin(idx) {
   const c = D.checkins[idx];
   if(!c) return;
-  const sel = (id, val, opts) => `<select id="${id}" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 10px;font-size:12px;"><option value="">—</option>${opts.map(o=>`<option value="${o.v}" ${String(c[id]||'')==String(o.v)?'selected':''}>${o.l}</option>`).join('')}</select>`;
-  const inp = (id, type, val, extra='') => `<input type="${type}" id="${id}" value="${val||''}" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 10px;font-size:12px;" ${extra}>`;
+
+  // ── Compute week range (c.date is the "week ending" Sunday) ────
+  const weekEnd = c.date;
+  const wkStart = getWeekKey(new Date(c.date + 'T12:00:00')); // Monday
+  const prevWk  = (()=>{ const d=new Date(wkStart+'T12:00:00'); d.setDate(d.getDate()-7); return getWeekKey(d); })();
+
+  // ── Auto-fill from Garmin morning logs for that week ────────────
+  const wkMornings = D.mornings.filter(m => m.date >= wkStart && m.date <= weekEnd);
+  const avgF = (arr, key) => {
+    const v = arr.filter(m=>m[key]!=null && m[key]>0).map(m=>m[key]);
+    return v.length ? Math.round(v.reduce((a,b)=>a+b,0)/v.length * 10)/10 : null;
+  };
+  const autoHRV        = avgF(wkMornings, 'hrv');
+  const autoSleepScore = avgF(wkMornings, 'sleepScore');
+  const autoSleepHrs   = avgF(wkMornings, 'sleep');
+  const autoGStress    = avgF(wkMornings, 'gstress');
+
+  // ── Auto-fill from Strava for that week ─────────────────────────
+  const stravaT = (typeof calcWeekTotalsFromStrava === 'function') ? calcWeekTotalsFromStrava(wkStart) : null;
+  const tl      = (typeof calcWeekTrainingLoad   === 'function') ? calcWeekTrainingLoad(wkStart)   : null;
+  const autoHours = stravaT && stravaT.totalMin > 0 ? (stravaT.totalMin/60).toFixed(1) : null;
+
+  // ── Week label ───────────────────────────────────────────────────
+  const fmtDate = d => new Date(d+'T12:00:00').toLocaleDateString('en-AU',{day:'numeric',month:'short'});
+  const weekLabel = `${fmtDate(wkStart)} – ${fmtDate(weekEnd)} ${new Date(weekEnd+'T12:00:00').getFullYear()}`;
+
+  // ── UI helpers — NOTE: all IDs prefixed "ecm-" to avoid conflicts ─
+  const inpS = (id, type, val, extra='') =>
+    `<input type="${type}" id="${id}" value="${val!=null?val:''}" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 10px;font-size:12px;" ${extra}>`;
+
+  const selS = (id, val, opts) =>
+    `<select id="${id}" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 10px;font-size:12px;">
+      <option value="">Select...</option>
+      ${opts.map(o=>`<option value="${o.v}" ${String(val||'')==String(o.v)?'selected':''}>${o.l}</option>`).join('')}
+    </select>`;
+
+  const scoreBtns = (id, val) =>
+    `<div style="display:flex;gap:4px;margin-top:4px;">
+      ${[1,2,3,4,5].map(n=>
+        `<button type="button"
+          onclick="this.parentElement.querySelectorAll('button').forEach(b=>b.style.background='var(--surface2)');this.style.background='var(--green)';document.getElementById('${id}').value=${n}"
+          style="flex:1;padding:4px 0;border:1px solid var(--border);border-radius:5px;background:${(parseInt(val)||0)===n?'var(--green)':'var(--surface2)'};color:var(--text);cursor:pointer;font-size:12px;font-weight:600;">${n}</button>`
+      ).join('')}
+    </div>
+    <input type="hidden" id="${id}" value="${val||''}">`;
+
+  const statPill = (label, val, color) => val != null
+    ? `<div style="background:var(--surface2);border-radius:8px;padding:8px 10px;text-align:center;">
+        <div style="font-size:8px;color:var(--text-dim);letter-spacing:1px;text-transform:uppercase;">${label}</div>
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;color:${color||'var(--text)'};">${val}</div>
+       </div>` : '';
+
   const html = `
-    <div id="edit-modal-bg" onclick="closeEditModal()" style="position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:12px;">
-      <div onclick="event.stopPropagation()" style="background:var(--card);border-radius:12px;padding:24px;width:min(560px,98vw);max-height:92vh;overflow-y:auto;">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
-          <div style="font-family:'Bebas Neue',sans-serif;font-size:20px;color:var(--blue);">EDIT CHECK-IN — ${c.date}</div>
+    <div id="edit-modal-bg" onclick="closeEditModal()" style="position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:9999;display:flex;align-items:center;justify-content:center;padding:12px;">
+      <div onclick="event.stopPropagation()" style="background:var(--card);border-radius:14px;padding:24px;width:min(700px,98vw);max-height:94vh;overflow-y:auto;">
+
+        <!-- Header -->
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;">
+          <div>
+            <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;color:var(--blue);">EDIT CHECK-IN</div>
+            <div style="font-size:13px;color:var(--text-dim);margin-top:2px;">📅 ${weekLabel}</div>
+          </div>
           <button class="btn sec sml" onclick="closeEditModal()">✕</button>
         </div>
+
+        <!-- Auto-filled data banner -->
+        ${(autoHRV||autoSleepScore||autoHours||tl) ? `
+        <div style="background:rgba(33,150,243,.07);border:1px solid rgba(33,150,243,.2);border-radius:10px;padding:14px;margin-bottom:16px;">
+          <div style="font-size:9px;color:var(--blue);letter-spacing:1px;font-weight:700;margin-bottom:10px;">⚡ AUTO-FILLED FROM GARMIN + STRAVA (${wkMornings.length} morning logs)</div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:8px;">
+            ${statPill('HRV Avg', autoHRV, '#2196f3')}
+            ${statPill('Sleep Score', autoSleepScore!=null?Math.round(autoSleepScore):null, autoSleepScore>=80?'var(--green)':autoSleepScore>=70?'var(--orange)':'var(--red)')}
+            ${statPill('Sleep Hrs', autoSleepHrs!=null?autoSleepHrs+'h':null, '#9575cd')}
+            ${statPill('Garmin Stress', autoGStress!=null?Math.round(autoGStress):null, 'var(--orange)')}
+            ${statPill('Train Hrs', autoHours?autoHours+'h':null, 'var(--text)')}
+            ${tl ? statPill('Load Score', tl.score, tl.color) : ''}
+          </div>
+          ${stravaT&&stravaT.totalSessions>0?`<div style="margin-top:8px;font-size:10px;color:var(--text-dim);text-align:center;">
+            ${stravaT.runSessions?'🏃 '+stravaT.runKm.toFixed(1)+'km':''} ${stravaT.swimSessions?'🏊 '+(stravaT.swimKm*1000).toFixed(0)+'m':''} ${stravaT.bikeSessions?'🚴 '+stravaT.bikeKm.toFixed(0)+'km':''} · ${stravaT.totalSessions} sessions
+          </div>`:''}
+        </div>` : `<div style="background:var(--surface2);border-radius:10px;padding:12px;margin-bottom:16px;font-size:11px;color:var(--text-dim);text-align:center;">No Garmin/Strava data found for this week (${wkStart} – ${weekEnd})</div>`}
+
+        <!-- Week info row -->
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
-          <div><label style="font-size:10px;color:var(--text-dim);">Training Block</label>${inp('ec-block','text',c.block)}</div>
-          <div><label style="font-size:10px;color:var(--text-dim);">Hours This Week</label>${inp('ec-hours','number',c.hours,'step="0.5"')}</div>
-          <div><label style="font-size:10px;color:var(--text-dim);">Overall Score (1–10)</label>${inp('ec-score','number',c.score,'min="0" max="10"')}</div>
-          <div><label style="font-size:10px;color:var(--text-dim);">HRV Avg This Week</label>${inp('ec-hrv','number',c.hrvAvg)}</div>
+          <div>
+            <label style="font-size:10px;color:var(--text-dim);">Week Ending (Sunday)</label>
+            <div style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:7px 10px;font-size:13px;font-weight:600;">${fmtDate(weekEnd)} ${new Date(weekEnd+'T12:00:00').getFullYear()}</div>
+            <input type="hidden" id="ecm-date" value="${weekEnd}">
+          </div>
+          <div>
+            <label style="font-size:10px;color:var(--text-dim);">Block / Week</label>
+            ${inpS('ecm-block','text',c.block)}
+          </div>
         </div>
-        <div style="font-size:10px;color:var(--text-dim);font-weight:600;letter-spacing:1px;margin-bottom:8px;">SESSION QUALITY</div>
+
+        <div style="border-top:1px solid var(--border);margin:4px 0 14px;"></div>
+        <div style="font-size:10px;color:var(--text-dim);font-weight:700;letter-spacing:1px;margin-bottom:12px;">✏️ YOUR ANSWERS — edit as needed</div>
+
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
-          <div><label style="font-size:10px;color:var(--text-dim);">Sessions completed</label>${sel('q1',c.q1,[{v:'3',l:'✅ All 3 (3pts)'},{v:'2',l:'⚠️ 2 of 3 (2pts)'},{v:'0',l:'❌ 1 or fewer (0pts)'}])}</div>
-          <div><label style="font-size:10px;color:var(--text-dim);">Z2 discipline</label>${sel('q2',c.q2,[{v:'2',l:'✅ Stayed in Z2 (2pts)'},{v:'1',l:'⚠️ Mostly (1pt)'},{v:'0',l:'❌ Drifting (0pts)'}])}</div>
-          <div><label style="font-size:10px;color:var(--text-dim);">Training load trend</label>${sel('q3trend',c.q3trend,[{v:'improving',l:'📈 Improving'},{v:'holding',l:'➡️ Stable'},{v:'declining',l:'📉 Declining'}])}</div>
-          <div><label style="font-size:10px;color:var(--text-dim);">Freshness / readiness</label>${sel('q4',c.q4,[{v:'2',l:'💪 Fresh (2pts)'},{v:'1',l:'😐 Tired but ok (1pt)'},{v:'0',l:'😓 Fatigued (0pts)'}])}</div>
-          <div><label style="font-size:10px;color:var(--text-dim);">Pushed too hard?</label>${sel('q5',c.q5,[{v:'no',l:'No — listened to body'},{v:'yes',l:'Yes — should have backed off'}])}</div>
-          <div><label style="font-size:10px;color:var(--text-dim);">HRV trend</label>${sel('q6',c.q6,[{v:'2',l:'📈 Trending up (2pts)'},{v:'1',l:'➡️ Stable (1pt)'},{v:'0',l:'📉 Trending down (0pts)'}])}</div>
-          <div><label style="font-size:10px;color:var(--text-dim);">Sleep quality</label>${sel('q7',c.q7,[{v:'good',l:'✅ Good 8.5h+ / score 80+ (2pts)'},{v:'ok',l:'⚠️ Hit and miss (1pt)'},{v:'bad',l:'❌ Consistently poor (0pts)'}])}</div>
-          <div><label style="font-size:10px;color:var(--text-dim);">Training motivation</label>${sel('q8',c.q8,[{v:'1',l:'🔥 Keen (1pt)'},{v:'0',l:'😐 Neutral (0pts)'},{v:'-1',l:'😩 Dreading (-1pt)'}])}</div>
-          <div><label style="font-size:10px;color:var(--text-dim);">Nutrition (1–5)</label>${inp('ec-nutrition','number',c.nutrition,'min="1" max="5"')}</div>
-          <div><label style="font-size:10px;color:var(--text-dim);">Life Stress (1–5)</label>${inp('ec-lifestress','number',c.lifestress,'min="1" max="5"')}</div>
+          <div>
+            <label style="font-size:10px;color:var(--text-dim);">1. Hard sessions completed at quality?</label>
+            ${selS('ecm-q1', c.q1, [{v:'3',l:'✅ All 3 (3pts)'},{v:'2',l:'⚠️ 2 of 3 (2pts)'},{v:'0',l:'❌ 1 or fewer (0pts)'}])}
+          </div>
+          <div>
+            <label style="font-size:10px;color:var(--text-dim);">2. Z2 sessions stayed in zone?</label>
+            ${selS('ecm-q2', c.q2, [{v:'2',l:'✅ Stayed in Z2 (2pts)'},{v:'1',l:'⚠️ Mostly (1pt)'},{v:'0',l:'❌ Drifting (0pts)'}])}
+          </div>
+          <div>
+            <label style="font-size:10px;color:var(--text-dim);">3. Training load vs last week?</label>
+            ${selS('ecm-q3', c.q3trend, [{v:'improving',l:'📈 Higher / Improved'},{v:'holding',l:'➡️ Held steady'},{v:'declining',l:'📉 Reduced / Lower'}])}
+          </div>
+          <div>
+            <label style="font-size:10px;color:var(--text-dim);">4. Feel going into hard sessions?</label>
+            ${selS('ecm-q4', c.q4, [{v:'2',l:'💪 Fresh (2pts)'},{v:'1',l:'😐 Tired but ok (1pt)'},{v:'0',l:'😓 Fatigued (0pts)'}])}
+          </div>
+          <div>
+            <label style="font-size:10px;color:var(--text-dim);">5. Pushed when should have backed off?</label>
+            ${selS('ecm-q5', c.q5, [{v:'no',l:'No — listened to body'},{v:'yes',l:'Yes — should have backed off'}])}
+          </div>
+          <div>
+            <label style="font-size:10px;color:var(--text-dim);">6. HRV trend this week?</label>
+            ${selS('ecm-q6', c.q6, [{v:'2',l:'📈 Trending up (2pts)'},{v:'1',l:'➡️ Stable (1pt)'},{v:'0',l:'📉 Trending down (0pts)'}])}
+          </div>
+          <div>
+            <label style="font-size:10px;color:var(--text-dim);">7. Sleep quality this week?</label>
+            ${selS('ecm-q7', c.q7, [{v:'good',l:'✅ Good 8.5h+ / score 80+ (2pts)'},{v:'ok',l:'⚠️ Hit and miss (1pt)'},{v:'bad',l:'❌ Consistently poor (0pts)'}])}
+          </div>
+          <div>
+            <label style="font-size:10px;color:var(--text-dim);">8. Motivation for next week?</label>
+            ${selS('ecm-q8', c.q8, [{v:'1',l:'🔥 Keen (1pt)'},{v:'0',l:'😐 Neutral (0pts)'},{v:'-1',l:'😩 Dreading (-1pt)'}])}
+          </div>
         </div>
-        <div style="margin-bottom:10px;"><label style="font-size:10px;color:var(--text-dim);">Weekly Intention / Focus</label><input type="text" id="ec-intention" value="${c.intention||''}" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 10px;font-size:12px;"></div>
-        <div style="margin-bottom:14px;"><label style="font-size:10px;color:var(--text-dim);">Recap / Notes</label><textarea id="ec-recap" rows="3" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 10px;resize:vertical;font-size:12px;">${c.recap||c.notes||''}</textarea></div>
+
+        <!-- Score buttons for nutrition/recovery/stress -->
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px;">
+          <div>
+            <label style="font-size:10px;color:var(--text-dim);">9. Nutrition this week (1–5)</label>
+            ${scoreBtns('ecm-nutrition', c.nutrition)}
+            <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--text-dim);margin-top:2px;"><span>Poor</span><span>Nailed it</span></div>
+          </div>
+          <div>
+            <label style="font-size:10px;color:var(--text-dim);">10. Recovery protocol (1–5)</label>
+            ${scoreBtns('ecm-recovery', c.recovery_protocol)}
+            <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--text-dim);margin-top:2px;"><span>None</span><span>Perfect</span></div>
+          </div>
+          <div>
+            <label style="font-size:10px;color:var(--text-dim);">11. Life stress (1–5)</label>
+            ${scoreBtns('ecm-lifestress', c.lifestress)}
+            <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--text-dim);margin-top:2px;"><span>Very high</span><span>Low/calm</span></div>
+          </div>
+        </div>
+
+        <div style="margin-bottom:10px;">
+          <label style="font-size:10px;color:var(--text-dim);">Next Week Intention</label>
+          ${inpS('ecm-intention','text', (c.intention||'').replace(/"/g,'&quot;'))}
+        </div>
+        <div style="margin-bottom:16px;">
+          <label style="font-size:10px;color:var(--text-dim);">Weekly Recap Notes</label>
+          <textarea id="ecm-recap" rows="3" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 10px;resize:vertical;font-size:12px;">${c.recap||c.notes||''}</textarea>
+        </div>
+
         <div style="display:flex;gap:10px;justify-content:flex-end;">
           <button class="btn" style="background:var(--red);color:#fff;" onclick="deleteCheckin(${idx})">🗑 Delete</button>
           <button class="btn" style="background:var(--blue);color:#fff;font-weight:700;" onclick="saveCheckinEdit(${idx})">💾 Save Changes</button>
@@ -369,27 +575,36 @@ function editCheckin(idx) {
   document.body.insertAdjacentHTML('beforeend', html);
 }
 
-function saveCheckinEdit(idx) {
+async function saveCheckinEdit(idx) {
   const c = D.checkins[idx];
   if(!c) return;
   const getV = id => { const el=document.getElementById(id); return el?el.value:''; };
-  c.block      = getV('ec-block');
-  c.hours      = parseFloat(getV('ec-hours')) || null;
-  c.score      = parseFloat(getV('ec-score')) || c.score || 0;
-  c.hrvAvg     = parseFloat(getV('ec-hrv')) || null;
-  c.q1         = getV('q1');
-  c.q2         = getV('q2');
-  c.q3trend    = getV('q3trend') || null;
-  c.q4         = getV('q4');
-  c.q5         = getV('q5');
-  c.q6         = getV('q6');
-  c.q7         = getV('q7');
-  c.q8         = getV('q8');
-  c.nutrition  = parseFloat(getV('ec-nutrition')) || null;
-  c.lifestress = parseFloat(getV('ec-lifestress')) || null;
-  c.intention  = getV('ec-intention');
-  c.recap      = getV('ec-recap');
-  save();
+  const getN = id => { const v=parseFloat(getV(id)); return isNaN(v)?null:v; };
+
+  c.block             = getV('ecm-block');
+  c.q1                = getV('ecm-q1');
+  c.q2                = getV('ecm-q2');
+  c.q3trend           = getV('ecm-q3');
+  c.q4                = getV('ecm-q4');
+  c.q5                = getV('ecm-q5');
+  c.q6                = getV('ecm-q6');
+  c.q7                = getV('ecm-q7');
+  c.q8                = getV('ecm-q8');
+  c.nutrition         = getN('ecm-nutrition');
+  c.recovery_protocol = getN('ecm-recovery');
+  c.lifestress        = getN('ecm-lifestress');
+  c.intention         = getV('ecm-intention');
+  c.recap             = getV('ecm-recap');
+
+  // Recalculate the scored questions (q1+q2+q4+q6+q8, max 10)
+  const q1=parseInt(c.q1)||0, q2=parseInt(c.q2)||0,
+        q4=parseInt(c.q4)||0, q6=parseInt(c.q6)||0, q8=parseInt(c.q8)||0;
+  c.score = q1+q2+q4+q6+q8;
+
+  // Immediate save — push to Supabase now (not debounced) so refresh doesn't lose data
+  localStorage.setItem('tc26v4', JSON.stringify(D));
+  if(supa && currentUser){ clearTimeout(_saveDebounce); await pushToSupabase(); }
+
   closeEditModal();
   renderHistory();
   showToast('Check-in updated ✓');

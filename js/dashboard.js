@@ -217,7 +217,11 @@ function renderHistory(){
   // Morning log — full detail with edit
   const mc=document.getElementById('hc-morning');
   if(!D.mornings.length){mc.innerHTML='<div style="color:var(--text-dim);font-size:12px;padding:16px 0;text-align:center;">No morning checks yet</div>';}else{
-    mc.innerHTML=`<div style="overflow-x:auto;"><table class="tbl">
+    mc.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+      <div style="font-size:11px;color:var(--text-dim);">${D.mornings.length} entries · click ✏️ to edit · edits recalculate readiness score everywhere</div>
+      <button class="btn sml" style="font-size:11px;" onclick="logPastDayPrompt()">+ Log Past Day</button>
+    </div>
+    <div style="overflow-x:auto;"><table class="tbl">
       <thead><tr><th>Date</th><th>HRV</th><th>RHR</th><th>Sleep Score</th><th>Sleep h</th><th>Stress</th><th>Readiness</th><th>Legs</th><th>Cal In</th><th>Protein</th><th>Readiness Score</th><th>Status</th><th>Note</th><th></th></tr></thead>
       <tbody>${[...D.mornings].reverse().map(m=>{
         const idx=D.mornings.indexOf(m);
@@ -517,6 +521,116 @@ function renderReadinessChart() {
     const label = date.slice(5); // MM-DD
     ctx.fillText(label, x, H - 6);
   });
+
+  // ── Click handler — show day detail popup ──────────────────────
+  canvas.style.cursor = 'pointer';
+  canvas.onclick = (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const mx = (e.clientX - rect.left) * scaleX;
+    // Find nearest bar index
+    let closest = -1, minDx = 9999;
+    dateArr.forEach((_, i) => {
+      const cx = padL + i * barGap + barGap / 2;
+      const dx = Math.abs(mx - cx);
+      if (dx < minDx) { minDx = dx; closest = i; }
+    });
+    if (closest >= 0 && minDx < barGap) {
+      showReadinessDayPopup(dateArr[closest], scores[closest]);
+    }
+  };
+}
+
+function showReadinessDayPopup(date, score) {
+  // Remove any existing popup
+  document.getElementById('rdp-overlay')?.remove();
+
+  const m = D.mornings.find(x => x.date === date);
+  const fmtDate = new Date(date + 'T12:00:00').toLocaleDateString('en-AU', {weekday:'long', day:'numeric', month:'long'});
+
+  // Strava activities for this day
+  const acts = (typeof STRAVA_ACTS !== 'undefined' ? STRAVA_ACTS.acts : [])
+    .filter(a => a.d === date && a.mm && a.mm >= 5)
+    .map(a => {
+      const hrs = a.mm >= 60 ? Math.floor(a.mm/60)+'h '+(Math.round(a.mm%60)>0?Math.round(a.mm%60)+'min':'') : Math.round(a.mm)+'min';
+      const ef = a.ef ? ` · <span style="color:${a.ef==='hard'||a.ef==='max'?'var(--red)':a.ef==='moderate'?'var(--orange)':'var(--cyan)'}">${a.ef}</span>` : '';
+      const dist = a.dk > 0 ? ` · ${a.dk.toFixed(1)}km` : '';
+      return `<div style="font-size:11px;padding:4px 0;border-bottom:1px solid var(--border);">${a.s} · ${hrs}${dist}${ef}</div>`;
+    }).join('') || '<div style="font-size:11px;color:var(--text-dim);padding:4px 0;">No Strava activities logged</div>';
+
+  // Planner link date
+  const wkKey = typeof getWeekKey === 'function' ? getWeekKey(new Date(date + 'T12:00:00')) : '';
+
+  // Score colour
+  const scoreColor = !score ? 'var(--text-dim)' : score >= 70 ? '#00e676' : score >= 40 ? '#ff9800' : '#f44336';
+  const scoreLabel = !score ? 'No Log' : score >= 85 ? 'OPTIMAL' : score >= 70 ? 'GOOD' : score >= 55 ? 'MODERATE' : score >= 40 ? 'CAUTION' : 'REST';
+
+  // Personal baselines
+  const allHRV = D.mornings.filter(x=>x.hrv).map(x=>x.hrv);
+  const baseHRV = allHRV.length >= 5 ? Math.round(allHRV.slice(-30).reduce((a,b)=>a+b,0)/Math.min(allHRV.slice(-30).length,30)) : 83;
+  const allSleep = D.mornings.filter(x=>x.sleepScore).map(x=>x.sleepScore);
+  const baseSleep = allSleep.length >= 5 ? Math.round(allSleep.slice(-30).reduce((a,b)=>a+b,0)/Math.min(allSleep.slice(-30).length,30)) : 85;
+
+  const pill = (label, val, color, baseline) => {
+    if (val == null) return `<div style="background:var(--surface2);border-radius:8px;padding:8px;text-align:center;opacity:0.4;"><div style="font-size:9px;color:var(--text-dim);">${label}</div><div style="font-size:18px;color:var(--text-dim);">—</div></div>`;
+    const delta = baseline ? val - baseline : null;
+    const deltaStr = delta != null ? `<div style="font-size:9px;color:${Math.abs(delta)<3?'var(--text-dim)':delta>0?'#00e676':'#f44336'};">${delta>0?'+':''}${Math.round(delta)} vs avg</div>` : '';
+    return `<div style="background:var(--surface2);border-radius:8px;padding:8px;text-align:center;">
+      <div style="font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.5px;">${label}</div>
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;color:${color};">${val}</div>
+      ${deltaStr}
+    </div>`;
+  };
+
+  const html = `
+  <div id="rdp-overlay" onclick="if(event.target===this)document.getElementById('rdp-overlay').remove()"
+    style="position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;">
+    <div onclick="event.stopPropagation()" style="background:var(--card);border-radius:14px;padding:24px;width:min(520px,98vw);max-height:90vh;overflow-y:auto;">
+
+      <!-- Header -->
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;">
+        <div>
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;color:${scoreColor};">${scoreLabel}</div>
+          <div style="font-size:13px;color:var(--text-dim);">${fmtDate}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          ${score ? `<div style="font-family:'Bebas Neue',sans-serif;font-size:42px;color:${scoreColor};line-height:1;">${score}<span style="font-size:16px;color:var(--text-dim);">/100</span></div>` : '<div style="font-size:13px;color:var(--text-dim);">No morning log</div>'}
+          <button onclick="document.getElementById('rdp-overlay').remove()" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:6px 10px;color:var(--text);cursor:pointer;font-size:13px;">✕</button>
+        </div>
+      </div>
+
+      ${m ? `
+      <!-- Garmin metrics grid -->
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:16px;">
+        ${pill('HRV', m.hrv, m.hrv >= baseHRV ? '#2196f3' : m.hrv >= baseHRV*0.93 ? '#64b5f6' : '#f44336', baseHRV)}
+        ${pill('Resting HR', m.rhr ? m.rhr+'bpm' : null, m.rhr <= 48 ? '#00e676' : m.rhr <= 52 ? '#ff9800' : '#f44336')}
+        ${pill('Sleep', m.sleepScore, m.sleepScore >= baseSleep ? '#ce93d8' : m.sleepScore >= baseSleep-8 ? '#ff9800' : '#f44336', baseSleep)}
+        ${pill('Stress', m.gstress, m.gstress <= 30 ? '#00e676' : m.gstress <= 40 ? '#ff9800' : '#f44336')}
+      </div>
+      ${(m.sleep||m.note) ? `
+      <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;">
+        ${m.sleep ? `<span style="background:var(--surface2);border-radius:6px;padding:4px 10px;font-size:11px;">😴 ${m.sleep}h sleep</span>` : ''}
+        ${m.legs ? `<span style="background:var(--surface2);border-radius:6px;padding:4px 10px;font-size:11px;">🦵 Legs: ${m.legs}/5</span>` : ''}
+        ${m.readiness ? `<span style="background:var(--surface2);border-radius:6px;padding:4px 10px;font-size:11px;">⚡ Readiness: ${m.readiness}/5</span>` : ''}
+        ${m.note ? `<span style="background:var(--surface2);border-radius:6px;padding:4px 10px;font-size:11px;color:var(--text-dim);">📝 ${m.note}</span>` : ''}
+      </div>` : ''}
+      ` : `<div style="background:var(--surface2);border-radius:8px;padding:12px;margin-bottom:14px;text-align:center;font-size:12px;color:var(--text-dim);">No morning check logged this day</div>`}
+
+      <!-- Training that day -->
+      <div style="margin-bottom:14px;">
+        <div style="font-size:10px;font-weight:700;letter-spacing:1px;color:var(--text-dim);margin-bottom:8px;">TRAINING THIS DAY</div>
+        ${acts}
+      </div>
+
+      <!-- Action buttons -->
+      <div style="display:flex;gap:8px;margin-top:6px;">
+        <button onclick="document.getElementById('rdp-overlay').remove();nav('morning')" style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px;font-size:12px;color:var(--text);cursor:pointer;">📋 Morning Check</button>
+        <button onclick="document.getElementById('rdp-overlay').remove();currentWeekKey='${wkKey}';nav('planner')" style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px;font-size:12px;color:var(--text);cursor:pointer;">📅 Open in Planner</button>
+      </div>
+    </div>
+  </div>`;
+
+  document.body.insertAdjacentHTML('beforeend', html);
 }
 
 // ===== PBs =====

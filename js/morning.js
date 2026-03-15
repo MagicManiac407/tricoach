@@ -426,3 +426,75 @@ function populateMorningForm(){
   showToast('Today\'s data loaded ✓');
 }
 
+// ===== RECALC READINESS FROM STORED DATA (used by edit modal) =====
+// Recomputes readinessScore for a morning entry object without touching the DOM
+function recalcMorningReadiness(m) {
+  if(!m) return null;
+  const {hrv, hrv7, rhr, sleepScore, sleep: sleepHrs, gstress} = m;
+  if(!hrv && !rhr && !sleepScore && !sleepHrs) return null;
+
+  let score = 0;
+
+  // 1. HRV vs baseline (30pts)
+  const hrvHist = D.mornings.filter(x => x.date < m.date && x.hrv).slice(-9);
+  const baseline = hrv7 || (hrvHist.length >= 3 ? hrvHist.reduce((a,x)=>a+x.hrv,0)/hrvHist.length : null);
+  if(hrv && baseline) {
+    const pct = ((hrv - baseline) / baseline) * 100;
+    score += pct >= 2 ? 30 : pct >= -3 ? 24 : pct >= -8 ? 14 : pct >= -15 ? 6 : 0;
+  } else if(hrv) { score += 18; }
+
+  // 2. RHR vs baseline (15pts)
+  const rhrHist = D.mornings.filter(x => x.date < m.date && x.rhr).slice(-21);
+  const baseRHR = rhrHist.length >= 3 ? rhrHist.reduce((a,x)=>a+x.rhr,0)/rhrHist.length : 50;
+  if(rhr) {
+    const d = rhr - baseRHR;
+    score += d <= -2 ? 15 : d <= 2 ? 13 : d <= 5 ? 8 : d <= 8 ? 4 : 0;
+  }
+
+  // 3. Sleep score — personal baseline (20pts)
+  if(sleepScore) {
+    const sleepHist = D.mornings.filter(x => x.date < m.date && x.sleepScore).map(x=>x.sleepScore).slice(-30);
+    const personalSleepAvg = sleepHist.length >= 7 ? Math.round(sleepHist.reduce((a,b)=>a+b,0)/sleepHist.length) : 83;
+    const delta = sleepScore - personalSleepAvg;
+    score += delta >= 3 ? 20 : delta >= -3 ? 15 : delta >= -8 ? 9 : delta >= -15 ? 4 : 0;
+  }
+
+  // 4. Sleep hours (5pts)
+  if(sleepHrs) score += sleepHrs >= 8.5 ? 5 : sleepHrs >= 7.5 ? 4 : sleepHrs >= 6.5 ? 2 : 0;
+
+  // 5. Subjective readiness + legs (10pts)
+  const subR = m.readiness || 0, subL = m.legs || 0;
+  if(subR || subL) { score += Math.round(((subR||3)+(subL||3))/2/5*10); }
+  else { score += 6; }
+
+  // 6. Yesterday's training load (10pts)
+  const yDate = new Date(m.date + 'T12:00:00'); yDate.setDate(yDate.getDate()-1);
+  const yStr = yDate.getFullYear()+'-'+String(yDate.getMonth()+1).padStart(2,'0')+'-'+String(yDate.getDate()).padStart(2,'0');
+  const yActs = (typeof STRAVA_ACTS !== 'undefined' ? STRAVA_ACTS.acts : []).filter(a=>a.d===yStr&&a.mm&&a.mm>5);
+  const yHard = yActs.filter(a=>(a.ef==='hard'||a.ef==='max'||a.iv));
+  const yMin  = yActs.reduce((s,a)=>s+(a.mm||0),0);
+  let loadPts = 10;
+  if(yHard.length >= 2) loadPts -= 8;
+  else if(yHard.length === 1) loadPts -= 5;
+  if(yMin >= 240) loadPts -= 4; else if(yMin >= 180) loadPts -= 3; else if(yMin >= 120) loadPts -= 1;
+  score += Math.max(0, loadPts);
+
+  // 7. Week accumulated load (5pts)
+  const wk = (typeof getWeekKey === 'function') ? getWeekKey(new Date(m.date+'T12:00:00')) : null;
+  if(wk && typeof calcWeekTotalsFromStrava === 'function') {
+    const t = calcWeekTotalsFromStrava(wk);
+    score += t.totalMin > 660 ? 1 : t.totalMin > 480 ? 2 : t.totalMin > 300 ? 4 : 5;
+  } else { score += 3; }
+
+  // 8. Garmin stress (5pts)
+  if(gstress) {
+    const stressHist = D.mornings.filter(x=>x.date<m.date&&x.gstress>0).map(x=>x.gstress);
+    const stressBase = stressHist.length >= 5 ? Math.round(stressHist.reduce((a,b)=>a+b,0)/stressHist.length) : 27;
+    const sd = gstress - stressBase;
+    score += sd <= -3 ? 5 : sd <= 3 ? 4 : sd <= 8 ? 2 : sd <= 15 ? 1 : 0;
+  }
+
+  score = Math.max(0, Math.min(100, Math.round(score)));
+  const status = score >= 70 ? 'green' : score >= 40 ? 'amber' : 'red';
+  return { readinessScore: score, status };
+}
