@@ -564,6 +564,57 @@ function renderInsights(series){
     </div>`).join('')}`;
 }
 
+// ===== CHECK-IN WEEK NAVIGATOR =====
+// Tracks which week the check-in form is currently showing
+let _ciWeekKey = null; // Monday of the displayed week
+
+function _sundayOfWeek(weekKey) {
+  // weekKey = Monday YYYY-MM-DD. Return Sunday date string.
+  const d = new Date(weekKey + 'T12:00:00');
+  d.setDate(d.getDate() + 6);
+  return localDateStr(d);
+}
+
+function _formatCILabel(weekKey) {
+  const sun = _sundayOfWeek(weekKey);
+  const d = new Date(sun + 'T12:00:00');
+  return 'Week ending ' + d.toLocaleDateString('en-AU', {day:'numeric', month:'short', year:'numeric'});
+}
+
+function initCIWeek() {
+  // Only set to current week if not already initialised
+  if (!_ciWeekKey) _ciWeekKey = getWeekKey(new Date());
+  _applyCIWeek();
+}
+
+function _applyCIWeek() {
+  const sun = _sundayOfWeek(_ciWeekKey);
+  document.getElementById('ci-date').value = sun;
+  const lbl = document.getElementById('ci-week-label');
+  if (lbl) lbl.textContent = _formatCILabel(_ciWeekKey);
+  // Disable → if already on current week
+  const nextBtn = document.getElementById('ci-next-btn');
+  if (nextBtn) nextBtn.disabled = (_ciWeekKey >= getWeekKey(new Date()));
+}
+
+function ciPrevWeek() {
+  const d = new Date(_ciWeekKey + 'T12:00:00');
+  d.setDate(d.getDate() - 7);
+  _ciWeekKey = getWeekKey(d);
+  _applyCIWeek();
+  if (typeof autoFillCI === 'function') autoFillCI();
+}
+
+function ciNextWeek() {
+  const cur = getWeekKey(new Date());
+  if (_ciWeekKey >= cur) return; // Can't go past current week
+  const d = new Date(_ciWeekKey + 'T12:00:00');
+  d.setDate(d.getDate() + 7);
+  _ciWeekKey = getWeekKey(d);
+  _applyCIWeek();
+  if (typeof autoFillCI === 'function') autoFillCI();
+}
+
 // ===== CHECK-IN =====
 
 function autoFillCI() {
@@ -717,7 +768,7 @@ function calcCI(){
   document.getElementById('ci-result').style.display='block';
 }
 
-function saveCI(){
+async function saveCI(){
   if(window._ciScore===undefined)calcCI();
   const ciDate = document.getElementById('ci-date').value;
   if(!ciDate){ showToast('Please set a check-in date', true); return; }
@@ -751,13 +802,22 @@ function saveCI(){
 
   // Update existing entry for same date, or push new one
   const existingIdx = D.checkins.findIndex(c => c.date === ciDate);
-  if(existingIdx >= 0){
-    D.checkins[existingIdx] = entry;
-    showToast('Check-in updated ✓');
+  const isUpdate = existingIdx >= 0;
+  if(isUpdate){ D.checkins[existingIdx] = entry; } else { D.checkins.push(entry); }
+
+  // ── Persist: localStorage first, then immediate Supabase push ──
+  // IMPORTANT: We push to Supabase immediately (not debounced) so that if the
+  // user refreshes the page, loadFromSupabase() gets the updated data.
+  // A debounced save would lose the entry if the page is refreshed within 2s.
+  localStorage.setItem('tc26v4', JSON.stringify(D));
+  if(supa && currentUser){
+    clearTimeout(_saveDebounce);
+    showToast('💾 Saving...');
+    await pushToSupabase();
+    showToast(isUpdate ? 'Check-in updated ✓ (synced)' : 'Check-in saved ✓ (synced)');
   } else {
-    D.checkins.push(entry);
-    showToast('Check-in saved ✓');
+    showToast(isUpdate ? 'Check-in updated ✓' : 'Check-in saved ✓');
   }
-  save(); updateDashboard();
+  updateDashboard();
 }
 

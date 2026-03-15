@@ -74,7 +74,8 @@ function nav(page){
   if(page==='nutrition')renderNutrition();
   if(page==='athletes')renderAthletes();
   if(page==='checkin'){
-    document.getElementById('ci-date').value=localDateStr(new Date());
+    // Default to this week's Sunday (week-ending) if not already set
+    if(typeof initCIWeek === 'function') initCIWeek();
     // Auto-fill training load, HRV, sleep from this week's data
     if(typeof autoFillCI === 'function') setTimeout(autoFillCI, 100);
   }
