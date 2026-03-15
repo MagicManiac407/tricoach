@@ -527,6 +527,242 @@ def garmin_fetch():
     return result if result else None
 
 # ─────────────────────────────────────────────────────────────────
+# AUTO PB DETECTION — compute best performances from all stored acts
+# ─────────────────────────────────────────────────────────────────
+def compute_pbs_from_acts(all_acts):
+    """
+    Scan ALL stored Strava activities and compute best performances per category.
+    Returns a dict that gets stored in STRAVA_ACTS.pbs and used by the JS app
+    to auto-update D.pbs when better values are found.
+    """
+    pbs = {}
+
+    def fmt_time(total_min):
+        h = int(total_min // 60)
+        m = int(total_min % 60)
+        s = int(round((total_min % 1) * 60))
+        if h > 0:
+            return f"{h}:{m:02d}:{s:02d}"
+        return f"{m}:{s:02d}"
+
+    def fmt_pace(min_per_km):
+        m = int(min_per_km)
+        s = int(round((min_per_km % 1) * 60))
+        return f"{m}:{s:02d}"
+
+    def better(a, b, invert=False):
+        """True if a is better than b (lower is better by default = faster pace/time)"""
+        if a is None: return False
+        if b is None: return True
+        return a < b if not invert else a > b
+
+    # ── RUN DISTANCE PBs (continuous efforts only — no interval sessions) ───
+    run_acts = [a for a in all_acts if a.get('s') == 'Run' and a.get('p') and a.get('dk')]
+    # Interval detection: iv flag OR name contains NxM pattern OR interval keywords
+    _iv_name_pat = re.compile(r'\d+\s*[x×]\s*\d|\binterval\b|\bfartlek\b|\brepeat\b|\breps\b|\bworkout\b', re.IGNORECASE)
+    continuous_runs = [a for a in run_acts if not a.get('iv') and not _iv_name_pat.search(a.get('n',''))]
+
+    dist_buckets = [
+        ('Run 5km',           4.8,  5.5,   5.0,  'run'),
+        ('Run 10km',          9.5,  10.5,  10.0, 'run'),
+        ('Run 15km',         14.0,  16.0,  15.0, 'run'),
+        ('Run Half Marathon', 20.0, 22.5,  21.1, 'run'),
+        ('Run Marathon',      38.0, 45.0,  42.2, 'run'),
+    ]
+    for key, lo, hi, std_km, _ in dist_buckets:
+        candidates = [a for a in continuous_runs if lo <= a['dk'] <= hi and a['p'] > 2.0]
+        if candidates:
+            best = min(candidates, key=lambda a: a['p'])
+            total_min = best['p'] * std_km
+            pbs[key] = {
+                'v': fmt_time(total_min),
+                'pace': round(best['p'], 3),
+                'date': best['d'],
+                'hr': best.get('hr'),
+                'dk': round(best['dk'], 2),
+                'note': f"Auto-detected from Strava · {best['d']} · {fmt_pace(best['p'])}/km"
+            }
+
+    # ── RUN BEST INTERVAL PACE ──────────────────────────────────────────────
+    iv_runs = [a for a in run_acts if a.get('iv')]
+    # Use best lap pace (lp) if available, else session avg pace
+    if iv_runs:
+        # Best session that has lap pace data
+        with_lp = [a for a in iv_runs if a.get('lp')]
+        if with_lp:
+            best_iv = min(with_lp, key=lambda a: a['lp'])
+            pbs['Run Best Interval'] = {
+                'v': fmt_pace(best_iv['lp']) + '/km',
+                'pace': best_iv['lp'],
+                'date': best_iv['d'],
+                'lap_km': best_iv.get('lp_km'),
+                'hr': best_iv.get('lp_hr') or best_iv.get('hr'),
+                'note': f"Best lap pace · {best_iv['d']} · {best_iv.get('n','')}"
+            }
+        # Also best avg-of-work-laps pace (alp_p) — best threshold estimate
+        with_alp = [a for a in iv_runs if a.get('alp_p')]
+        if with_alp:
+            best_alp = min(with_alp, key=lambda a: a['alp_p'])
+            pbs['Run Best Threshold'] = {
+                'v': fmt_pace(best_alp['alp_p']) + '/km',
+                'pace': best_alp['alp_p'],
+                'date': best_alp['d'],
+                'lap_km': best_alp.get('alp_km'),
+                'hr': best_alp.get('alp_hr') or best_alp.get('hr'),
+                'note': f"Best avg work-lap pace · {best_alp['d']} · {best_alp.get('n','')}"
+            }
+
+    # ── BIKE POWER DURATION PBs ─────────────────────────────────────────────
+    bike_acts = [a for a in all_acts if a.get('s') == 'Bike' and (a.get('nw') or a.get('w'))]
+
+    def best_power_for_duration(acts, min_dur, max_dur, label):
+        """Find best NP/power output for activities within the duration window."""
+        candidates = [a for a in acts if min_dur <= (a.get('mm') or 0) <= max_dur]
+        if not candidates:
+            return None
+        # Also include pw (best lap power) from longer activities where pw_min falls in range
+        lap_candidates = [
+            a for a in acts
+            if a.get('pw') and a.get('pw_min')
+            and min_dur <= a['pw_min'] <= max_dur
+        ]
+        best_from_session = max(candidates, key=lambda a: a.get('nw') or a.get('w') or 0)
+        best_session_power = best_from_session.get('nw') or best_from_session.get('w') or 0
+        best_lap = max(lap_candidates, key=lambda a: a.get('pw', 0)) if lap_candidates else None
+        best_lap_power = best_lap.get('pw', 0) if best_lap else 0
+
+        if best_lap_power > best_session_power:
+            a = best_lap
+            power = best_lap_power
+            tag = f"best lap · {round(a['pw_min'])}min"
+        else:
+            a = best_from_session
+            power = best_session_power
+            tag = f"{round(a.get('mm',0))}min session"
+
+        rouvy_flag = ' (Rouvy)' if a.get('vr') else ''
+        return {
+            'v': f"{power}W",
+            'watts': power,
+            'date': a['d'],
+            'hr': a.get('hr'),
+            'vr': bool(a.get('vr')),
+            'note': f"Auto · {a['d']} · {tag}{rouvy_flag}"
+        }
+
+    for label, lo, hi in [
+        ('Bike 20min Power', 18, 28),
+        ('Bike 45min Power', 40, 55),
+        ('Bike 60min Power', 55, 75),
+        ('Bike 90min Power', 80, 105),
+    ]:
+        result = best_power_for_duration(bike_acts, lo, hi, label)
+        if result:
+            pbs[label] = result
+
+    # Best Rouvy NP (any duration ≥ 30min)
+    rouvy_acts = [a for a in bike_acts if a.get('vr') and (a.get('mm') or 0) >= 30]
+    if rouvy_acts:
+        best_rouvy = max(rouvy_acts, key=lambda a: a.get('nw') or a.get('w') or 0)
+        power = best_rouvy.get('nw') or best_rouvy.get('w') or 0
+        pbs['Bike Best NP (Rouvy)'] = {
+            'v': f"{power}W",
+            'watts': power,
+            'date': best_rouvy['d'],
+            'hr': best_rouvy.get('hr'),
+            'mm': round(best_rouvy.get('mm', 0)),
+            'note': f"Auto · {best_rouvy['d']} · {round(best_rouvy.get('mm',0))}min"
+        }
+
+    # ── FTP ESTIMATE from best duration-scaled power ────────────────────────
+    def dur_scale(dur):
+        if dur >= 150: return 0.91
+        if dur >= 120: return 0.94
+        if dur >= 90:  return 0.97
+        if dur >= 60:  return 1.00
+        if dur >= 45:  return 0.98
+        if dur >= 30:  return 0.97
+        return 0.95
+
+    ftp_candidates = []
+    for a in bike_acts:
+        if a.get('pw') and a.get('pw_min') and a['pw_min'] >= 18:
+            est = round(a['pw'] * dur_scale(a['pw_min']) * (0.98 if a.get('vr') else 1.0))
+            ftp_candidates.append({'est': est, 'a': a, 'power': a['pw'], 'dur': a['pw_min'], 'source': 'lap'})
+        elif (a.get('nw') or a.get('w')) and (a.get('mm') or 0) >= 18:
+            power = a.get('nw') or a.get('w')
+            dur = a.get('mm')
+            est = round(power * dur_scale(dur) * (0.98 if a.get('vr') else 1.0))
+            ftp_candidates.append({'est': est, 'a': a, 'power': power, 'dur': dur, 'source': 'session'})
+
+    if ftp_candidates:
+        best_ftp = max(ftp_candidates, key=lambda x: x['est'])
+        a = best_ftp['a']
+        rouvy_tag = ' (Rouvy ×0.98)' if a.get('vr') else ''
+        pbs['Bike FTP Estimate'] = {
+            'v': f"{best_ftp['est']}W",
+            'watts': best_ftp['est'],
+            'raw_power': best_ftp['power'],
+            'dur': round(best_ftp['dur']),
+            'date': a['d'],
+            'hr': a.get('hr'),
+            'vr': bool(a.get('vr')),
+            'note': f"Auto FTP: {best_ftp['power']}W × {dur_scale(best_ftp['dur'])}{rouvy_tag} · {a['d']}"
+        }
+
+    # ── SWIM PBs ──────────────────────────────────────────────────────────────
+    swim_acts = [a for a in all_acts if a.get('s') == 'Swim' and a.get('sp') and a.get('dk')]
+
+    swim_buckets = [
+        ('Swim 1000m',  0.85,  1.15,  1.0),
+        ('Swim 1500m',  1.35,  1.65,  1.5),
+        ('Swim 2000m',  1.85,  2.15,  2.0),
+        ('Swim 2500m',  2.25,  2.75,  2.5),
+        ('Swim 3000m+', 2.80, 99.0,   3.0),
+    ]
+    for key, lo, hi, _ in swim_buckets:
+        candidates = [a for a in swim_acts if lo <= a['dk'] <= hi and a['sp'] < 4.0]
+        if candidates:
+            best = min(candidates, key=lambda a: a['sp'])
+            m = int(best['sp'])
+            s = int(round((best['sp'] % 1) * 60))
+            pbs[key] = {
+                'v': f"{m}:{s:02d}/100m",
+                'pace': best['sp'],
+                'date': best['d'],
+                'hr': best.get('hr'),
+                'dk_m': round(best['dk'] * 1000),
+                'note': f"Auto · {best['d']} · {round(best['dk']*1000)}m"
+            }
+
+    # Best overall session pace
+    if swim_acts:
+        best_all = min(swim_acts, key=lambda a: a['sp'])
+        m = int(best_all['sp']); s = int(round((best_all['sp'] % 1) * 60))
+        pbs['Swim Best Session Pace'] = {
+            'v': f"{m}:{s:02d}/100m",
+            'pace': best_all['sp'],
+            'date': best_all['d'],
+            'note': f"Auto · {best_all['d']} · {round(best_all['dk']*1000)}m"
+        }
+
+    # CSS estimate from best lap split (lsp) — most accurate CSS proxy
+    swim_with_lsp = [a for a in swim_acts if a.get('lsp') and a['lsp'] < 3.0]
+    if swim_with_lsp:
+        best_lsp = min(swim_with_lsp, key=lambda a: a['lsp'])
+        m = int(best_lsp['lsp']); s = int(round((best_lsp['lsp'] % 1) * 60))
+        pbs['Swim CSS'] = {
+            'v': f"~{m}:{s:02d}/100m",
+            'pace': best_lsp['lsp'],
+            'date': best_lsp['d'],
+            'lap_m': best_lsp.get('lsp_m'),
+            'note': f"Auto CSS from best {best_lsp.get('lsp_m',100)}m lap · {best_lsp['d']}"
+        }
+
+    return pbs
+
+
+# ─────────────────────────────────────────────────────────────────
 # INJECT INTO HTML
 # ─────────────────────────────────────────────────────────────────
 def inject_into_html(garmin_data, strava_acts):
@@ -617,6 +853,20 @@ def inject_into_html(garmin_data, strava_acts):
 
                 # Sort by date
                 existing["acts"].sort(key=lambda a: a.get("d", ""))
+
+                # ── Compute auto PBs from ALL stored activities ──────────────
+                try:
+                    auto_pbs = compute_pbs_from_acts(existing["acts"])
+                    existing["pbs"] = auto_pbs
+                    pb_count = len(auto_pbs)
+                    print(f"  ✅ Auto-detected {pb_count} PBs from {len(existing['acts'])} activities")
+                    # Print key PBs
+                    for key in ['Run 10km','Run Half Marathon','Bike FTP Estimate','Bike Best NP (Rouvy)','Swim CSS']:
+                        if key in auto_pbs:
+                            print(f"     {key}: {auto_pbs[key]['v']}")
+                except Exception as e:
+                    print(f"  ⚠  PB computation failed: {e}")
+                    import traceback; traceback.print_exc()
 
                 # Write back — use ensure_ascii=False so emoji stored as UTF-8, not \uXXXX
                 new_acts_json = json.dumps(existing, ensure_ascii=False)

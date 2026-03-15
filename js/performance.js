@@ -1347,12 +1347,31 @@ function buildBikeModel_pred() {
 
   let ftp = null, ftpSource = '';
 
-  // ── P1: Explicit FTP PB (user-verified, highest trust) ───────────────
+  // ── P1: Explicit FTP / 1hr power PB (user-verified, highest trust) ───
+  // Check both FTP PB entry AND 1hr power PB — use whichever is higher
   const ftpPb = (D.pbs?.phys||[]).concat(D.pbs?.bike||[])
     .find(p => p.n && p.n.toLowerCase().includes('ftp'));
-  if(ftpPb && ftpPb.v) {
-    const m = String(ftpPb.v).match(/(\d+)/);
-    if(m) { ftp = parseInt(m[1]); ftpSource = `✓ PB entry: ${ftpPb.v}W`; }
+  const hr1Pb = (D.pbs?.bike||[])
+    .find(p => p.n && (p.n.toLowerCase().includes('1 hr') || p.n.toLowerCase().includes('1hr') || p.n.toLowerCase().includes('60 min')));
+
+  const parsePbWatts = (pb) => {
+    if(!pb?.v) return null;
+    const m = String(pb.v).match(/(\d+)/);
+    return m ? parseInt(m[1]) : null;
+  };
+
+  const ftpVal  = parsePbWatts(ftpPb);
+  const hr1Val  = parsePbWatts(hr1Pb); // 1hr sustained = FTP directly
+
+  if(ftpVal || hr1Val) {
+    if(hr1Val && (!ftpVal || hr1Val > ftpVal)) {
+      // 1hr power is higher — it IS FTP by definition (power held for 60min = FTP)
+      ftp = hr1Val;
+      ftpSource = `✓ 1hr PB: ${hr1Pb.v} (FTP = 60min power directly)`;
+    } else if(ftpVal) {
+      ftp = ftpVal;
+      ftpSource = `✓ FTP PB entry: ${ftpPb.v}`;
+    }
   }
 
   // ── P1b: Manual interval entries (from Interval Editor) ─────────────
@@ -1479,16 +1498,49 @@ function buildRunModel_pred() {
   }
 
   // ── P2: HM PB → LT ≈ HM pace × 0.98 ────────────────────────────────
+  // Check both manually stored PB AND Strava auto-detected HM PB
   if(!threshold) {
     const hmPb = (D.pbs?.run||[]).find(p => p.n &&
       (p.n.includes('Half')||p.n.includes('21.1')||p.n.toLowerCase().includes('hm ')));
-    if(hmPb && hmPb.v) {
-      const s = _parseTime(hmPb.v);
-      if(s) { threshold = (s/60/21.1)*0.98; thresholdSource = `→ HM PB ${hmPb.v} → LT = HM pace ×0.98`; }
-    }
+    const stravaHM = STRAVA_ACTS?.pbs?.['Run Half Marathon'];
+    // Use whichever gives a faster threshold
+    let hmTime = null, hmSource = '';
+    if(hmPb?.v) { const t = _parseTime(hmPb.v); if(t) { hmTime = t; hmSource = hmPb.v; } }
+    if(stravaHM?.v) { const t = _parseTime(stravaHM.v); if(t && (!hmTime || t < hmTime)) { hmTime = t; hmSource = stravaHM.v + ' (auto)'; } }
+    if(hmTime) { threshold = (hmTime/60/21.1)*0.98; thresholdSource = `→ HM PB ${hmSource} → LT = HM pace ×0.98`; }
   }
 
-  // ── P3: HR-anchored LT detection ─────────────────────────────────────
+  // ── P2b: 5km / 10km PB → LT via pace scaling ─────────────────────────
+  // Both standalone AND interval-session PBs count — user owns what they enter.
+  // 5km PB pace × 1.07 ≈ LT (Jack Daniels vDOT tables)
+  // 10km PB pace × 1.04 ≈ LT
+  // These are P2b — only fires if HM PB not set, so less precise estimates stay lower priority
+  if(!threshold) {
+    const runPbCandidates = [];
+    const pb5  = (D.pbs?.run||[]).find(p => p.n && (p.n.includes('5km') || p.n.includes('5 km')));
+    const pb10 = (D.pbs?.run||[]).find(p => p.n && (p.n.includes('10km') || p.n.includes('10 km')));
+    if(pb5?.v) {
+      const t = _parseTime(pb5.v); // t = total minutes for 5km
+      if(t && t > 0) {
+        const pace5 = t / 5;         // min/km at 5km pace
+        const ltPace = pace5 * 1.07; // LT ≈ 5km pace × 1.07
+        if(ltPace > 3.0 && ltPace < 7.0) runPbCandidates.push({ pace: ltPace, src: `→ 5km PB ${pb5.v} (${fmtPace(pace5)}/km) × 1.07 → LT` });
+      }
+    }
+    if(pb10?.v) {
+      const t = _parseTime(pb10.v); // t = total minutes for 10km
+      if(t && t > 0) {
+        const pace10 = t / 10;        // min/km
+        const ltPace = pace10 * 1.04; // LT ≈ 10km pace × 1.04
+        if(ltPace > 3.0 && ltPace < 7.0) runPbCandidates.push({ pace: ltPace, src: `→ 10km PB ${pb10.v} (${fmtPace(pace10)}/km) × 1.04 → LT` });
+      }
+    }
+    if(runPbCandidates.length) {
+      const best = runPbCandidates.reduce((b,a) => a.pace < b.pace ? a : b);
+      threshold = best.pace;
+      thresholdSource = best.src;
+    }
+  }
   // Sustained continuous runs (not intervals) where avg HR ≈ LTHR.
   // Running at LTHR HR = running at lactate threshold pace by definition.
   // Guard: exclude anything with interval name patterns (NxMkm, NxMm)
@@ -1662,8 +1714,36 @@ function buildSwimModel_pred() {
     if(m) { css = parseInt(m[1])+parseInt(m[2])/60; cssSource = `✓ CSS PB: ${cssPb.v}/100m`; }
   }
 
+  // ── P1a: Stored swim distance PBs → CSS estimate ─────────────────────
+  // e.g. "Swim 500m: 1:43/100m" — any distance PB can anchor CSS
+  // 500m PB pace × 1.04 ≈ CSS (threshold), 1500m PB pace × 1.00 ≈ CSS
+  if(!css) {
+    const swimDistPbs = [
+      { key: 'Swim 500m',    scale: 1.04 },
+      { key: 'Swim 1000m',   scale: 1.01 },
+      { key: 'Swim 1500m',   scale: 1.00 },
+      { key: 'Swim 2000m',   scale: 0.99 },
+      { key: 'Swim 3000m+',  scale: 0.98 },
+    ];
+    const candidates = [];
+    swimDistPbs.forEach(({key, scale}) => {
+      const pb = D.pbs?.swim?.find(p => p.n && p.n.includes(key.split(' ')[1]));
+      if(pb?.v) {
+        const m = String(pb.v).replace('~','').trim().match(/(\d+):(\d{2})/);
+        if(m) {
+          const pace = parseInt(m[1]) + parseInt(m[2])/60;
+          candidates.push({ cssEst: pace * scale, raw: pace, src: `✓ ${key} PB ${pb.v} × ${scale}` });
+        }
+      }
+    });
+    if(candidates.length) {
+      const best = candidates.reduce((b,a) => a.cssEst < b.cssEst ? a : b);
+      css = best.cssEst;
+      cssSource = best.src;
+    }
+  }
+
   // ── P1b: Manual swim interval entries ────────────────────────────────
-  // Supports multi-set entries (sets[]) and legacy single-value entries.
   // CSS sourced from CSS-effort sets only. Speed/Sprint/Drill ignored for CSS.
   if(!css) {
     const _swimManuals = (D.ivManual||[]).filter(m => m.sport==='swim');

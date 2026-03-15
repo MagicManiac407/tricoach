@@ -648,6 +648,8 @@ document.addEventListener('DOMContentLoaded',()=>{
   updateDashboard();
   applySyncData();
   refreshPlannerFromStrava();
+  // Auto-update D.pbs from Strava-detected PBs (runs silently, only updates if better)
+  setTimeout(autoUpdatePBsFromStrava, 1200);
   checkSyncServer(); // ping local server — updates button status if running
   // Load fresh Garmin + Strava data from Supabase (overrides static injected data)
   loadGarminFromSupabase();

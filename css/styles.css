@@ -82,10 +82,11 @@ hr{border:none;border-top:1px solid var(--border);margin:16px 0;}
 .msb.s4,.msb.s5{border-color:var(--green);background:var(--green-dim);color:var(--green);}
 .day-card{background:var(--surface);border:1px solid var(--border);border-radius:11px;margin-bottom:10px;overflow:hidden;transition:border-color .15s;}
 .day-card:hover{border-color:var(--border2);}
-.day-header{display:grid;grid-template-columns:80px 150px 1fr 1fr 150px;align-items:stretch;min-height:48px;cursor:pointer;}
+.day-header{display:grid;grid-template-columns:80px 150px 1fr 1fr 150px 130px;align-items:stretch;min-height:48px;cursor:pointer;min-width:800px;}
 .day-header.exp{border-bottom:1px solid var(--border);}
 .day-cell{padding:12px 14px;border-right:1px solid var(--border);display:flex;align-items:flex-start;flex-direction:column;gap:3px;}
 .day-cell:last-child{border-right:none;}
+.day-card{overflow-x:auto;}
 .day-name{font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:2px;line-height:1;}
 .dcl{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1.5px;color:var(--text-dim);text-transform:uppercase;margin-bottom:3px;}
 .stag{display:inline-flex;align-items:center;gap:3px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:2px 7px;font-size:10px;color:var(--text-mid);margin:1px;}

@@ -303,7 +303,6 @@ function updateDashboard(){
   }
   // Strava week totals on dashboard
   const wk=getWeekKey(new Date());
-  document.getElementById('d-week-lbl').textContent=weekLabel(wk);
   const t=calcWeekTotalsFromStrava(wk);
   const setEl=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v;};
   setEl('d-run-km',   t.runKm>0?t.runKm.toFixed(1):'—');
@@ -709,14 +708,27 @@ function savePBs(){
     });
     D.pbs[cat]=items;
   });
-  save();renderPBs();closeMyPBModal();showToast('PBs updated ✓');
+  save();
+  renderPBs();
+  closeMyPBModal();
+  // Bust predictor cache — PB changes affect FTP, threshold, CSS, race predictions
+  window._predState = null;
+  // Re-render race predictor if it's visible
+  if(typeof renderRacePredictor==='function' && document.getElementById('page-performance')?.classList.contains('active')){
+    setTimeout(renderRacePredictor, 50);
+  }
+  // Always re-render dashboard race predictor mini widget
+  if(typeof renderDashboardRacePredictor==='function') setTimeout(renderDashboardRacePredictor, 80);
+  // Update goal progress bars that reference FTP/CSS
+  updateDashboard();
+  showToast('PBs updated ✓ — predictor recalculated');
 }
 
 // ===== UTILS =====
 function confirmClear(){if(confirm('Clear all data? Cannot be undone.')){D={mornings:[],checkins:[],pbs:D.pbs,plans:{}};save();updateDashboard();renderHistory();showToast('Data cleared');}}
 
-function showToast(msg,err=false){
-  const t=document.getElementById('toast');t.textContent=msg;t.className='toast'+(err?' err':'');t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500);
+function showToast(msg,err=false,duration=2500){
+  const t=document.getElementById('toast');t.textContent=msg;t.className='toast'+(err?' err':'');t.classList.add('show');setTimeout(()=>t.classList.remove('show'),duration);
 }
 
 // ===== STRAVA DATA =====

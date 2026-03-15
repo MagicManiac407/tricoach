@@ -219,3 +219,132 @@ function save(){
   }
 }
 
+// ===== AUTO-UPDATE D.pbs FROM STRAVA_ACTS.pbs =====
+// Runs on every page load. Compares Strava-detected PBs against manually
+// stored PBs and updates D.pbs wherever Strava found a better value.
+// NEVER downgrades a PB — only updates if Strava detects something better.
+function autoUpdatePBsFromStrava() {
+  const sp = STRAVA_ACTS?.pbs;
+  if(!sp || !Object.keys(sp).length) return;
+
+  const updates = [];
+
+  // ── Helper: parse watts from string like "234W" or "~230W" ──
+  const parseW = (v) => { if(!v) return null; const m = String(v).match(/(\d+)/); return m ? parseInt(m[1]) : null; };
+  // ── Helper: parse pace min/km from string like "4:20" ──
+  const parsePace = (v) => { if(!v) return null; const m = String(v).match(/(\d+):(\d{2})/); return m ? parseInt(m[1]) + parseInt(m[2])/60 : null; };
+  // ── Helper: parse total time in minutes from "46:00" or "1:39:46" ──
+  const parseTime = (v) => {
+    if(!v) return null;
+    const parts = String(v).split(':').map(Number);
+    if(parts.length === 3) return parts[0]*60 + parts[1] + parts[2]/60;
+    if(parts.length === 2) return parts[0] + parts[1]/60;
+    return null;
+  };
+
+  // ── 1. RUN DISTANCE PBs ────────────────────────────────────────
+  const runPbMap = {
+    'Run 5km':           'Run 5km',
+    'Run 10km':          'Run 10km',
+    'Run 15km':          'Run 15km',
+    'Run Half Marathon': 'Run Half Marathon',
+    'Run Marathon':      'Run Marathon',
+  };
+  Object.entries(runPbMap).forEach(([stravaKey, pbName]) => {
+    const detected = sp[stravaKey];
+    if(!detected?.v || !detected?.date) return;
+    const stored = D.pbs?.run?.find(p => p.n === pbName);
+    const detectedTime = parseTime(detected.v);
+    const storedTime = stored ? parseTime(stored.v) : null;
+    // Only update if Strava found a faster time than what's stored
+    if(detectedTime && (!storedTime || detectedTime < storedTime)) {
+      if(stored) {
+        stored.v = detected.v;
+        stored.note = detected.note;
+      } else if(D.pbs?.run) {
+        D.pbs.run.push({ n: pbName, v: detected.v, note: detected.note });
+      }
+      updates.push(`🏃 ${pbName}: ${detected.v}`);
+    }
+  });
+
+  // ── 2. BIKE POWER PBs ──────────────────────────────────────────
+  const bikePbMap = {
+    'Bike 20min Power': '20 min power',
+    'Bike 45min Power': '45 min power',
+    'Bike 60min Power': '1 hr power',
+    'Bike 90min Power': '90 min power',
+  };
+  Object.entries(bikePbMap).forEach(([stravaKey, pbName]) => {
+    const detected = sp[stravaKey];
+    if(!detected?.watts) return;
+    const stored = D.pbs?.bike?.find(p => p.n?.toLowerCase().includes(pbName.split(' ')[0].toLowerCase()) && p.n?.toLowerCase().includes(pbName.split(' ')[1]?.toLowerCase()));
+    const storedW = stored ? parseW(stored.v) : null;
+    if(!storedW || detected.watts > storedW) {
+      if(stored) {
+        stored.v = detected.v;
+        stored.note = detected.note;
+      }
+      updates.push(`🚴 ${pbName}: ${detected.v}`);
+    }
+  });
+
+  // ── 3. FTP — update both phys FTP and bike FTP entry ──────────
+  // Check 1hr power PB and FTP estimate, use whichever is higher
+  const hr1 = D.pbs?.bike?.find(p => p.n?.toLowerCase().includes('1 hr'));
+  const hr1W = hr1 ? parseW(hr1.v) : null;
+  const detected60 = sp['Bike 60min Power'];
+  const detectedFTP = sp['Bike FTP Estimate'];
+
+  // Best FTP from all sources
+  const candidates = [
+    hr1W,
+    detected60?.watts,
+    detectedFTP?.watts,
+  ].filter(Boolean);
+  const bestFTP = candidates.length ? Math.max(...candidates) : null;
+
+  if(bestFTP) {
+    // Update phys FTP entry
+    const physFtp = D.pbs?.phys?.find(p => p.n?.toLowerCase() === 'ftp');
+    const physFtpW = physFtp ? parseW(physFtp.v) : null;
+    if(physFtp && (!physFtpW || bestFTP > physFtpW)) {
+      physFtp.v = `${bestFTP}W`;
+      physFtp.note = detectedFTP?.note || `Auto from Strava activities`;
+      updates.push(`💪 FTP: ${bestFTP}W`);
+    }
+    // Update bike FTP entry
+    const bikeFtp = D.pbs?.bike?.find(p => p.n?.toLowerCase().includes('ftp'));
+    const bikeFtpW = bikeFtp ? parseW(bikeFtp.v) : null;
+    if(bikeFtp && (!bikeFtpW || bestFTP > bikeFtpW)) {
+      bikeFtp.v = `${bestFTP}W`;
+      bikeFtp.note = detectedFTP?.note || `Auto from Strava activities`;
+    }
+  }
+
+  // ── 4. SWIM CSS ────────────────────────────────────────────────
+  const detectedCSS = sp['Swim CSS'];
+  if(detectedCSS?.pace) {
+    const physCSS = D.pbs?.phys?.find(p => p.n?.toLowerCase() === 'css');
+    const storedCSSpace = physCSS ? parsePace((physCSS.v||'').replace('~','').replace('/100m','')) : null;
+    if(!storedCSSpace || detectedCSS.pace < storedCSSpace) {
+      if(physCSS) {
+        physCSS.v = detectedCSS.v;
+        physCSS.note = detectedCSS.note;
+        updates.push(`🏊 CSS: ${detectedCSS.v}`);
+      }
+      // Also update swim CSS PB
+      const swimCSS = D.pbs?.swim?.find(p => p.n?.toLowerCase().includes('css'));
+      if(swimCSS) { swimCSS.v = detectedCSS.v; swimCSS.note = detectedCSS.note; }
+    }
+  }
+
+  if(updates.length > 0) {
+    save();
+    setTimeout(() => {
+      showToast(`🏆 ${updates.length} new auto PB${updates.length>1?'s':''} detected from Strava! ${updates[0]}`, false, 5000);
+      if(typeof renderPBs === 'function') renderPBs();
+    }, 1500);
+    console.log('[TriCoach] Auto PBs updated:', updates);
+  }
+}

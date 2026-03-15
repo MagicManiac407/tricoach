@@ -242,7 +242,6 @@ function calcReadiness(){
   // ── Consecutive bad days cap (date-based, not array-slice) ──────
   // Only fires if you logged 2+ genuinely consecutive calendar days with score <50
   // Missing a day does NOT count as a bad day — only actual logged bad entries
-  const today_d = localDateStr(new Date());
   let consecutiveBad = 0;
   for(let i = 1; i <= 4; i++) {
     const d = new Date(); d.setDate(d.getDate() - i);

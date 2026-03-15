@@ -20,6 +20,7 @@ function renderPlanner(){
       <div class="day-cell dcol-plan"><div class="dcl">Programmed Plan</div><div style="font-size:11px;color:var(--text-mid);line-height:1.5;max-height:44px;overflow:hidden;">${(dd.plan||'').substring(0,120)||'<span style="color:var(--text-dim);font-size:10px;">No plan set</span>'}</div></div>
       <div class="day-cell dcol-done"><div class="dcl">Completed</div><div style="font-size:11px;line-height:1.5;max-height:52px;overflow:hidden;">${renderCompletedPreview(dd.completed||'')}</div></div>
       <div class="day-cell"><div class="dcl">Q / R</div>${renderMiniScores(dd.quality,dd.recovery)}</div>
+      ${renderPlannerHealthCell(di, currentWeekKey)}
     </div>
     <div class="day-body" id="db-${di}" style="display:none;">
       <div class="g2"><div>
@@ -388,3 +389,43 @@ function initPlannerIntervalLog() {
   });
 }
 
+
+// ===== PLANNER HEALTH COLUMN =====
+function renderPlannerHealthCell(dayIndex, weekKey) {
+  // Get the actual calendar date for this day index (Mon=0 ... Sun=6)
+  const [y,mo,d] = weekKey.split('-').map(Number);
+  const monday = new Date(y, mo-1, d);
+  const dayDate = new Date(monday);
+  dayDate.setDate(monday.getDate() + dayIndex);
+  const dateStr = dayDate.getFullYear()+'-'+String(dayDate.getMonth()+1).padStart(2,'0')+'-'+String(dayDate.getDate()).padStart(2,'0');
+
+  const m = D.mornings.find(x => x.date === dateStr);
+
+  if (!m) {
+    return `<div class="day-cell dcol-health" style="min-width:130px;">
+      <div class="dcl">HRV · Sleep · Readiness</div>
+      <div style="font-size:10px;color:var(--text-dim);margin-top:2px;">No log</div>
+    </div>`;
+  }
+
+  // Compute personal baselines
+  const allHRV = D.mornings.filter(x=>x.hrv).map(x=>x.hrv).slice(-30);
+  const baseHRV = allHRV.length >= 5 ? Math.round(allHRV.reduce((a,b)=>a+b,0)/allHRV.length) : 83;
+  const allSleep = D.mornings.filter(x=>x.sleepScore).map(x=>x.sleepScore).slice(-30);
+  const baseSleep = allSleep.length >= 5 ? Math.round(allSleep.reduce((a,b)=>a+b,0)/allSleep.length) : 85;
+
+  const hrvColor = !m.hrv ? 'var(--text-dim)' : m.hrv >= baseHRV ? '#2196f3' : m.hrv >= baseHRV*0.93 ? '#64b5f6' : '#f44336';
+  const sleepColor = !m.sleepScore ? 'var(--text-dim)' : m.sleepScore >= baseSleep ? '#ce93d8' : m.sleepScore >= baseSleep-8 ? '#ff9800' : '#f44336';
+  const rScore = m.readinessScore;
+  const rColor = !rScore ? 'var(--text-dim)' : rScore >= 70 ? '#00e676' : rScore >= 40 ? '#ff9800' : '#f44336';
+  const rLabel = !rScore ? '—' : rScore >= 85 ? 'OPTIMAL' : rScore >= 70 ? 'GOOD' : rScore >= 55 ? 'MOD' : rScore >= 40 ? 'CAUTION' : 'REST';
+
+  return `<div class="day-cell dcol-health" style="min-width:130px;">
+    <div class="dcl">HRV · Sleep · Readiness</div>
+    <div style="display:flex;gap:6px;align-items:center;margin-top:3px;flex-wrap:wrap;">
+      ${m.hrv ? `<span style="font-family:'Bebas Neue',sans-serif;font-size:14px;color:${hrvColor};" title="HRV ${m.hrv} (avg ${baseHRV})">${m.hrv}</span>` : ''}
+      ${m.sleepScore ? `<span style="font-family:'Bebas Neue',sans-serif;font-size:14px;color:${sleepColor};" title="Sleep score ${m.sleepScore} (avg ${baseSleep})">💤${m.sleepScore}</span>` : ''}
+      ${rScore ? `<span style="font-family:'Bebas Neue',sans-serif;font-size:12px;color:${rColor};background:${rColor}22;border-radius:4px;padding:1px 4px;" title="Readiness ${rScore}/100">${rLabel}</span>` : ''}
+    </div>
+  </div>`;
+}
