@@ -265,39 +265,52 @@ function calcWeekTrainingLoad(weekKey) {
 
   const totalHrs = t.totalMin / 60;
 
-  // Volume score (0-35 pts): 10hrs = ~25pts, 15hrs = 35pts, scale linearly
-  const volumeScore = Math.min(35, totalHrs * 2.3);
+  // ── Filter out micro-sessions (warmups/cooldowns < 15min) for session count ──
+  // Get the raw acts for this week to count meaningful sessions only
+  const [wY,wM,wD] = weekKey.split('-').map(Number);
+  const wEnd = new Date(wY,wM-1,wD+6);
+  const wEndStr = wEnd.getFullYear()+'-'+String(wEnd.getMonth()+1).padStart(2,'0')+'-'+String(wEnd.getDate()).padStart(2,'0');
+  const weekActs = STRAVA_ACTS.acts.filter(a => a.d >= weekKey && a.d <= wEndStr && a.mm && a.mm >= 1);
+  const meaningfulSessions = weekActs.filter(a => a.mm >= 15); // 15+ min = real session
+  const meaningfulCount = meaningfulSessions.length;
 
-  // Session count score (0-20 pts): 7 sessions = 20pts
-  const sessionScore = Math.min(20, t.totalSessions * 2.9);
+  // ── Volume score (0-40 pts) — weighted by intensity ──────────────────────
+  // Z2 hours count at 1x, hard hours count at 1.4x (more physiological stress)
+  const hardHrs = weekActs.filter(a=>a.mm>=15&&(a.ef==='hard'||a.ef==='max'||a.iv)).reduce((s,a)=>s+a.mm/60,0);
+  const easyHrs = totalHrs - hardHrs;
+  const weightedHrs = easyHrs + hardHrs * 1.4;
+  const volumeScore = Math.min(40, weightedHrs * 2.5);
 
-  // Effort distribution score (0-25 pts): balanced mix = high score
-  // Ideal: ~20% hard, ~60% z2, ~20% moderate
-  const totalEff = t.hardCount + t.z2Count + t.z3Count;
-  let effortScore = 0;
-  if(totalEff > 0) {
-    const hardRatio = t.hardCount / totalEff;
-    const z2Ratio = t.z2Count / totalEff;
-    // Sweet spot: 15-30% hard, 50-70% z2
-    const hardOk = hardRatio >= 0.1 && hardRatio <= 0.35;
-    const z2Ok = z2Ratio >= 0.4;
-    effortScore = (hardOk ? 12 : hardRatio > 0.35 ? 6 : 8) + (z2Ok ? 13 : 7);
-  } else {
-    effortScore = 10; // no effort data — neutral
+  // ── Session score (0-20 pts) — meaningful sessions only ──────────────────
+  const sessionScore = Math.min(20, meaningfulCount * 2.5);
+
+  // ── Effort distribution (0-20 pts): balanced polarised = best ────────────
+  // Ideal triathlon: 80% easy/Z2, 20% hard (polarised model)
+  const totalMeaningful = meaningfulSessions.length;
+  let effortScore = 10; // neutral if no effort data
+  if(totalMeaningful > 0) {
+    const hardCount = meaningfulSessions.filter(a=>a.ef==='hard'||a.ef==='max'||a.iv).length;
+    const hardRatio = hardCount / totalMeaningful;
+    // Polarised sweet spot: 15-25% hard
+    if(hardRatio >= 0.15 && hardRatio <= 0.25)      effortScore = 20;
+    else if(hardRatio >= 0.1 && hardRatio <= 0.35)  effortScore = 14;
+    else if(hardRatio > 0.35)                        effortScore = 8;  // too much intensity
+    else                                              effortScore = 10; // all easy
   }
 
-  // Sport variety score (0-20 pts): doing all 3 disciplines = 20pts
-  const sports = (t.runSessions > 0 ? 1 : 0) + (t.swimSessions > 0 ? 1 : 0) + (t.bikeSessions > 0 ? 1 : 0);
-  const varietyScore = sports * 7; // max 21, cap at 20
+  // ── Sport variety (0-20 pts) — all 3 disciplines ─────────────────────────
+  const hasSports = (t.runSessions > 0 ? 1 : 0) + (t.swimSessions > 0 ? 1 : 0) + (t.bikeSessions > 0 ? 1 : 0);
+  const varietyScore = Math.min(20, hasSports * 7);
 
-  const rawScore = Math.round(volumeScore + sessionScore + effortScore + Math.min(20, varietyScore));
+  const rawScore = Math.round(volumeScore + sessionScore + effortScore + varietyScore);
   const score = Math.min(100, rawScore);
 
   // Build breakdown detail text
   const parts = [];
   if(totalHrs > 0) parts.push(totalHrs.toFixed(1) + 'h total');
-  if(t.totalSessions > 0) parts.push(t.totalSessions + ' sessions');
-  if(t.hardCount > 0) parts.push(t.hardCount + ' hard');
+  if(meaningfulCount > 0) parts.push(meaningfulCount + ' sessions');
+  const hardCountMeaningful = meaningfulSessions.filter(a=>a.ef==='hard'||a.ef==='max'||a.iv).length;
+  if(hardCountMeaningful > 0) parts.push(hardCountMeaningful + ' hard');
   if(t.z2Count > 0) parts.push(t.z2Count + ' Z2');
   const sportLabels = [t.runSessions?t.runSessions+' runs':'', t.swimSessions?t.swimSessions+' swims':'', t.bikeSessions?t.bikeSessions+' bikes':''].filter(Boolean);
   if(sportLabels.length) parts.push(sportLabels.join(', '));
@@ -408,6 +421,7 @@ function applySyncData() {
     fill('m-sleepscore', garmin.sleepScore);
     fill('m-sleep',      garmin.sleepHrs);
     fill('m-gstress',    garmin.yesterdayStress);
+    fill('m-cal-out',    garmin.calOut);   // ← Garmin active calories burnt
     calcReadiness();
     setTimeout(() => {
       autoSaveMorning();

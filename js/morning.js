@@ -121,15 +121,21 @@ function calcReadiness(){
     score+=pts; breakdown.push({l:'RHR',p:pts,m:15});
   }
 
-  // ── 3. Sleep score — corrected thresholds (20pts) ─────────────
+  // ── 3. Sleep score — personal-baseline-relative (20pts) ──────
   if(sleepScore){
+    // Compute personal avg sleep score from last 30 logged days
+    const sleepHist = D.mornings.filter(x=>x.sleepScore&&x.sleepScore>0).map(x=>x.sleepScore);
+    const personalSleepAvg = sleepHist.length >= 7
+      ? Math.round(sleepHist.slice(-30).reduce((a,b)=>a+b,0) / Math.min(sleepHist.slice(-30).length, 30))
+      : 83; // personal avg fallback (85 over 4 weeks, 87 over year)
+    const sleepDelta = sleepScore - personalSleepAvg;
     let pts=0;
-    if(sleepScore>=88)      {pts=20;good.push('Sleep score '+sleepScore+' — excellent');}
-    else if(sleepScore>=80) {pts=15;good.push('Sleep score '+sleepScore+' — good');}
-    else if(sleepScore>=70) {pts=9; bad.push('Sleep score '+sleepScore+' — average, recovery impacted');}
-    else if(sleepScore>=60) {pts=4; bad.push('Sleep score '+sleepScore+' — poor sleep');}
-    else                    {pts=0; bad.push('Sleep score '+sleepScore+' — very poor, prioritise sleep tonight');}
-    score+=pts; breakdown.push({l:'Sleep score',p:pts,m:20});
+    if(sleepDelta >= 3)        {pts=20;good.push('Sleep score '+sleepScore+' — above your avg ('+personalSleepAvg+') — excellent');}
+    else if(sleepDelta >= -3)  {pts=15;good.push('Sleep score '+sleepScore+' — within your normal range (avg '+personalSleepAvg+')');}
+    else if(sleepDelta >= -8)  {pts=9; bad.push('Sleep score '+sleepScore+' — '+Math.abs(sleepDelta)+' below your avg ('+personalSleepAvg+') — recovery impacted');}
+    else if(sleepDelta >= -15) {pts=4; bad.push('Sleep score '+sleepScore+' — well below your avg ('+personalSleepAvg+') — poor sleep');}
+    else                       {pts=0; bad.push('Sleep score '+sleepScore+' — very poor for you — prioritise sleep tonight');}
+    score+=pts; breakdown.push({l:'Sleep (avg '+personalSleepAvg+')',p:pts,m:20});
   }
 
   // ── 4. Sleep hours (5pts) ─────────────────────────────────────
@@ -201,11 +207,54 @@ function calcReadiness(){
     score+=pts; breakdown.push({l:'Garmin stress '+gstress+' (avg '+stressBaseline+')',p:pts,m:5});
   }
 
-  // ── Consecutive bad days cap ──────────────────────────────────
-  const recentScores=D.mornings.slice(-4,-1).map(x=>x.readinessScore||0).filter(x=>x>0);
-  if(recentScores.length>=2&&recentScores.every(s=>s<50)){
-    score=Math.min(score,45);
-    bad.push('Multiple low-readiness days in a row — full recovery session advised');
+  // ── 9. Nutrition bonus (up to +5pts, never penalises for missing) ─
+  // Only applies if calIn or protein was logged — never punishes for not entering
+  const calIn   = parseFloat(document.getElementById('m-cal-in')?.value)  || null;
+  const calOut  = parseFloat(document.getElementById('m-cal-out')?.value) || null;
+  const protein = parseFloat(document.getElementById('m-protein')?.value) || null;
+  if(calIn || protein) {
+    let nutPts = 0;
+    // Calorie intake vs burn — check fuelling
+    if(calIn && calOut) {
+      const deficit = calOut - calIn;
+      if(deficit < 200)       { nutPts += 3; good.push(`Well fuelled — ${calIn} kcal eaten vs ${calOut} kcal burnt`); }
+      else if(deficit < 500)  { nutPts += 2; }
+      else if(deficit < 800)  { nutPts += 1; bad.push(`Under-fuelled — ${Math.round(deficit)} kcal deficit may slow recovery`); }
+      else                    { nutPts += 0; bad.push(`Large deficit (${Math.round(deficit)} kcal) — prioritise recovery nutrition`); }
+    } else if(calIn) {
+      // No calOut — just check if intake is reasonable for a triathlete (>2000 kcal)
+      if(calIn >= 2500)       { nutPts += 2; good.push(`Good calorie intake (${calIn} kcal)`); }
+      else if(calIn >= 1800)  { nutPts += 1; }
+      else                    { bad.push(`Low calorie intake (${calIn} kcal) — may impact recovery`); }
+    }
+    // Protein adequacy (triathlete target ~1.6–2.0g/kg, ~130–160g for 79kg)
+    if(protein) {
+      if(protein >= 130)      { nutPts += 2; good.push(`Strong protein intake (${protein}g)`); }
+      else if(protein >= 100) { nutPts += 1; }
+      else                    { bad.push(`Low protein (${protein}g) — target 130g+ for recovery`); }
+    }
+    if(nutPts > 0) {
+      score = Math.min(100, score + nutPts);
+      breakdown.push({l:'Nutrition',p:nutPts,m:5});
+    }
+  }
+
+  // ── Consecutive bad days cap (date-based, not array-slice) ──────
+  // Only fires if you logged 2+ genuinely consecutive calendar days with score <50
+  // Missing a day does NOT count as a bad day — only actual logged bad entries
+  const today_d = localDateStr(new Date());
+  let consecutiveBad = 0;
+  for(let i = 1; i <= 4; i++) {
+    const d = new Date(); d.setDate(d.getDate() - i);
+    const ds = localDateStr(d);
+    const entry = D.mornings.find(m => m.date === ds);
+    if(!entry) break;               // gap in logging — stop counting, don't penalise
+    if((entry.readinessScore||0) < 50) consecutiveBad++;
+    else break;                     // had a good day — streak broken
+  }
+  if(consecutiveBad >= 3) {
+    score = Math.min(score, 45);
+    bad.push('3+ consecutive low-readiness days — full recovery session advised');
   }
 
   score=Math.max(0,Math.min(100,Math.round(score)));
@@ -293,9 +342,21 @@ function saveMorning(){
     timestamp:Date.now()
   };
   const existingIdx=D.mornings.findIndex(m=>m.date===today);
-  if(existingIdx>=0){D.mornings[existingIdx]=entry;showToast('Morning check updated ✓');}
-  else{D.mornings.push(entry);showToast('Morning check saved ✓');}
-  save();
+  const isUpdate = existingIdx>=0;
+  if(isUpdate){D.mornings[existingIdx]=entry;} else {D.mornings.push(entry);}
+
+  // Immediate persist — localStorage first, then Supabase right away (not debounced)
+  // so a page refresh doesn't lose today's entry
+  localStorage.setItem('tc26v4', JSON.stringify(D));
+  if(supa && currentUser){
+    clearTimeout(_saveDebounce);
+    showToast('💾 Saving...');
+    pushToSupabase().then(()=>{
+      showToast(isUpdate ? 'Morning check updated ✓ (synced)' : 'Morning check saved ✓ (synced)');
+    });
+  } else {
+    showToast(isUpdate ? 'Morning check updated ✓' : 'Morning check saved ✓');
+  }
   updateDashboard();
 }
 

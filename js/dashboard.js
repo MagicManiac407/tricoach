@@ -431,13 +431,32 @@ function renderReadinessChart() {
 
   // Draw bars
   scores.forEach((score, i) => {
-    if (score === null) return;
     const x = padL + i * barGap + (barGap - barW) / 2;
+    const isToday = i === n - 1;
+    // Past days with no log: show a subtle grey placeholder so gaps are visible
+    const isPast = i < n - 1;
+    if (score === null) {
+      if (isPast) {
+        // Faint grey "missed" bar — short stub at bottom
+        ctx.globalAlpha = 0.2;
+        ctx.fillStyle = '#ffffff';
+        const stubH = 6;
+        ctx.fillRect(x, padT + cH - stubH, barW, stubH);
+        ctx.globalAlpha = 1.0;
+        // Small "?" label for very recent missed days (last 7)
+        if (i >= n - 7 && barW > 10) {
+          ctx.fillStyle = 'rgba(255,255,255,0.25)';
+          ctx.font = '8px DM Sans, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText('?', x + barW/2, padT + cH - 10);
+          ctx.textAlign = 'left';
+        }
+      }
+      return;
+    }
     const barH = Math.max(2, cH * (score / 100));
     const y = padT + cH - barH;
     const color = score >= 70 ? '#00e676' : score >= 40 ? '#ff9800' : '#f44336';
-    // Highlight today
-    const isToday = i === n - 1;
     ctx.globalAlpha = isToday ? 1.0 : 0.75;
     ctx.fillStyle = color;
     // Rounded top corners

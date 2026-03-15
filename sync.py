@@ -508,6 +508,21 @@ def garmin_fetch():
     except:
         pass
 
+    # ── Calories Burnt (active + total from daily stats) ───────────
+    try:
+        stats = client.get_stats(today_s)
+        if stats:
+            active_cal = stats.get("activeKilocalories") or stats.get("activeCalories")
+            total_cal  = stats.get("totalKilocalories") or stats.get("burnedKilocalories")
+            if active_cal and active_cal > 0:
+                result["calOut"] = int(active_cal)
+                print(f"  ✅ Calories burnt (active): {active_cal} kcal")
+            elif total_cal and total_cal > 0:
+                result["calOut"] = int(total_cal)
+                print(f"  ✅ Calories burnt (total): {total_cal} kcal")
+    except Exception as e:
+        print(f"  ⚠  Calories fetch failed: {e}")
+
     print(f"  ✅ Garmin sync complete")
     return result if result else None
 
@@ -703,7 +718,8 @@ def run_sync(do_garmin=True, do_strava=True, days=14):
         messages.append("[Garmin]")
         garmin_data = garmin_fetch()
         if garmin_data:
-            messages.append(f"  ✅ HRV={garmin_data.get('hrv','—')} RHR={garmin_data.get('rhr','—')} Sleep={garmin_data.get('sleepScore','—')}")
+            cal_str = f" CalOut={garmin_data.get('calOut','—')}" if garmin_data.get('calOut') else ""
+            messages.append(f"  ✅ HRV={garmin_data.get('hrv','—')} RHR={garmin_data.get('rhr','—')} Sleep={garmin_data.get('sleepScore','—')}{cal_str}")
         else:
             messages.append("  ⚠  No Garmin data returned")
 
