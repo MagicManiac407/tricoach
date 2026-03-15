@@ -332,8 +332,8 @@ function autoPopulatePlannerFromStrava() {
 
 
 // ===== SYNC DATA — fallback constants (overridden by Supabase garmin_data if available) =====
-const GARMIN_TODAY = {"hrv": 80, "hrv7": 82, "sleepScore": 91, "sleepHrs": 9.2, "rhr": 48, "yesterdayStress": 22, "bodyBattery": 58, "date": "2026-03-13"}; // @@GARMIN_INJECT@@ — do not edit this line
-const SYNC_META = {"synced_at": "2026-03-13T12:13:09.009846", "strava_count": 0};    // @@SYNC_META@@    — do not edit this line
+const GARMIN_TODAY = {"hrv": 88, "hrv7": 80, "sleepScore": 85, "sleepHrs": 10.0, "rhr": 47, "yesterdayStress": 34, "bodyBattery": 72, "date": "2026-03-15"}; // @@GARMIN_INJECT@@ — do not edit this line
+const SYNC_META = {"synced_at": "2026-03-15T12:04:45.772146", "strava_count": 0};    // @@SYNC_META@@    — do not edit this line
 
 // Refresh planner for recent weeks from STRAVA_ACTS (handles duplication safely)
 function refreshPlannerFromStrava() {
