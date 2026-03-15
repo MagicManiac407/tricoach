@@ -595,6 +595,71 @@ function _applyCIWeek() {
   // Disable → if already on current week
   const nextBtn = document.getElementById('ci-next-btn');
   if (nextBtn) nextBtn.disabled = (_ciWeekKey >= getWeekKey(new Date()));
+  // Load saved check-in for this week (or clear the form if none exists)
+  _loadCIFormData(sun);
+}
+
+function _loadCIFormData(sundayDate) {
+  // Find a saved check-in for this week's Sunday
+  const saved = (D.checkins || []).find(c => c.date === sundayDate);
+
+  const setVal = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
+  const setSelect = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
+
+  if (saved) {
+    // Pre-populate all form fields from the saved check-in
+    setVal('ci-block',     saved.block || '');
+    setVal('ci-hours',     saved.hours || '');
+    setVal('ci-hrv',       saved.hrvAvg || '');
+    setSelect('q1', saved.q1 || '');
+    setSelect('q2', saved.q2 || '');
+    setSelect('q3', saved.q3trend || '');
+    setSelect('q4', saved.q4 || '');
+    setSelect('q5', saved.q5 || '');
+    setSelect('q6', saved.q6 || '');
+    setSelect('q7', saved.q7 || '');
+    setSelect('q8', saved.q8 || '');
+    setVal('ci-failed',    saved.failedNote || '');
+    setVal('ci-intention', saved.intention || '');
+    setVal('ci-recap',     saved.recap || '');
+    // Restore score button states for nutrition / lifestress / recovery
+    const scoreMap = {
+      nutrition:         'ci-nut-btns',
+      recovery_protocol: 'ci-rec-btns',
+      lifestress:        'ci-stress-btns'
+    };
+    Object.entries(scoreMap).forEach(([key, rowId]) => {
+      const val = saved[key];
+      ciScores[key] = val || null;
+      const row = document.getElementById(rowId);
+      if (row && val) {
+        row.querySelectorAll('button').forEach((btn, i) => {
+          btn.className = 'sb' + (i + 1 === parseInt(val) ? ' s' + val : '');
+        });
+      } else if (row) {
+        row.querySelectorAll('button').forEach(btn => btn.className = 'sb');
+      }
+    });
+    // Restore the score display
+    window._ciScore = saved.score;
+    const scoreBig = document.getElementById('ci-score-big');
+    if (scoreBig && saved.score) {
+      scoreBig.textContent = saved.score + '/10';
+      scoreBig.style.color = saved.score >= 8 ? 'var(--green)' : saved.score >= 5 ? 'var(--orange)' : 'var(--red)';
+      document.getElementById('ci-result').style.display = 'block';
+    }
+    showToast('📋 Loaded saved check-in for this week');
+  } else {
+    // No saved check-in — clear all subjective fields so previous week doesn't bleed through
+    setVal('ci-block', ''); setVal('ci-hours', ''); setVal('ci-hrv', '');
+    setVal('ci-failed', ''); setVal('ci-intention', ''); setVal('ci-recap', '');
+    ['q1','q2','q3','q4','q5','q6','q7','q8'].forEach(id => setSelect(id, ''));
+    window._ciScore = undefined;
+    const scoreBig = document.getElementById('ci-score-big');
+    if (scoreBig) { scoreBig.textContent = '—/10'; scoreBig.style.color = 'var(--text-dim)'; }
+    const result = document.getElementById('ci-result');
+    if (result) result.style.display = 'none';
+  }
 }
 
 function ciPrevWeek() {
