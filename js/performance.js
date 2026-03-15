@@ -311,10 +311,15 @@ function drawTrendChart(id, pts, opts) {
   (opts.refs||[]).forEach(ref=>{
     const y=yOf(ref.value);
     if(y<pT-2||y>pT+cH+2) return;
-    ctx.strokeStyle=ref.color||'rgba(255,255,255,0.25)'; ctx.lineWidth=1; ctx.setLineDash([5,3]);
+    if(ref.dash){
+      // Goal target line — brighter, different dash pattern
+      ctx.strokeStyle=ref.color||'rgba(0,230,118,0.5)'; ctx.lineWidth=1.5; ctx.setLineDash([4,6]);
+    } else {
+      ctx.strokeStyle=ref.color||'rgba(255,255,255,0.25)'; ctx.lineWidth=1; ctx.setLineDash([5,3]);
+    }
     ctx.beginPath(); ctx.moveTo(pL,y); ctx.lineTo(pL+cW,y); ctx.stroke(); ctx.setLineDash([]);
     ctx.fillStyle=ref.color||'rgba(255,255,255,0.4)'; ctx.font='bold 9px DM Mono,monospace';
-    ctx.fillText(ref.label,pL+6,y-4);
+    ctx.fillText((ref.dash?'⬥ ':'')+ref.label,pL+6,y-4);
   });
 
   // Rolling average
@@ -437,10 +442,16 @@ function renderRunCharts() {
       {min:0, max:4.0, color:'rgba(244,67,54,0.04)'},   // fast zone
       {min:5.5, max:7.0, color:'rgba(33,150,243,0.04)'} // easy zone
     ],
-    refs:[
-      {value:4.43, label:'HM PB pace 4:43', color:'rgba(255,215,0,0.45)'},
-      {value:5.5,  label:'Easy Z2 ceiling', color:'rgba(33,150,243,0.3)'}
-    ],
+    refs:(()=>{
+      const R=buildRunModel_pred();
+      const hmPbEntry=(D.pbs?.run||[]).find(p=>p.n&&p.n.includes('Half'));
+      const hmPace=hmPbEntry?.v?_parseTime(hmPbEntry.v)/21.1:null;
+      const refs=[{value:5.5,label:'Easy Z2 ceiling',color:'rgba(33,150,243,0.3)'}];
+      if(R.threshold) refs.unshift({value:R.threshold,label:'LT pace '+fmtPace(R.threshold)+'/km',color:'rgba(244,67,54,0.45)'});
+      if(hmPace) refs.unshift({value:hmPace,label:'HM PB pace '+fmtPace(hmPace)+'/km',color:'rgba(255,215,0,0.45)'});
+      refs.push({value:4.167,label:'Goal LT 4:10/km',color:'rgba(0,230,118,0.35)',dash:true});
+      return refs;
+    })(),
     tipLines:(a,v)=>[
       `<span style="color:#aabbcc;font-size:10px;">${fmtDate(a.d)}</span>`,
       `Pace: <b style="color:#00e676;">${fmtPace(v)}/km</b>  ·  ${a.dk?a.dk.toFixed(1)+'km':'—'}`,
@@ -658,10 +669,7 @@ function renderLongRunCharts() {
     color: '#69f0ae', label: 'min/km', lowerIsBetter: true,
     effortDots: false, rollingN: 4, H: 220,
     yFmt: v => fmtP(Math.max(0, v)),
-    refs: [
-      {value: 4.43, label: 'HM PB pace 4:43', color: 'rgba(255,215,0,0.45)'},
-      {value: 5.5,  label: 'Easy Z2 ceiling',  color: 'rgba(33,150,243,0.3)'},
-    ],
+    refs: (()=>{ const hmPbEntry=(D.pbs?.run||[]).find(p=>p.n&&p.n.includes('Half')); const hmPace=hmPbEntry?.v?_parseTime(hmPbEntry.v)/21.1:null; const refs=[{value:5.5,label:'Easy Z2 ceiling',color:'rgba(33,150,243,0.3)'}]; if(hmPace) refs.unshift({value:hmPace,label:'HM PB '+fmtP(hmPace)+'/km',color:'rgba(255,215,0,0.45)'}); return refs; })(),
     tipLines: (a,v) => [
       `<span style="color:#aabbcc;font-size:10px;">${fmtDate(a.d)}</span>`,
       `Pace: <b style="color:#69f0ae;">${fmtP(v)}/km</b>  ·  ${a.dk ? a.dk.toFixed(1)+'km' : '—'}`,
@@ -794,14 +802,8 @@ function renderBikeCharts() {
     getValue:a=>a.nw||a.w, color:'#ff9800', label:'Watts', lowerIsBetter:false,
     effortDots:false, rollingN:6, H:240,
     yFmt:v=>Math.round(v)+'W',
-    zones:[
-      {min:207, max:230, color:'rgba(244,67,54,0.05)'},  // threshold zone (90-100% FTP)
-      {min:184, max:207, color:'rgba(255,152,0,0.04)'}   // sweetspot (80-90% FTP)
-    ],
-    refs:[
-      {value:230,label:'FTP ~230W',color:'rgba(244,67,54,0.55)'},
-      {value:207,label:'Sweetspot floor 207W',color:'rgba(255,152,0,0.35)'}
-    ],
+    zones:(()=>{ const B=buildBikeModel_pred(); const ftp=B.ftp; return [{min:ftp*0.88,max:ftp,color:'rgba(255,152,0,0.04)'},{min:ftp*0.75,max:ftp*0.88,color:'rgba(255,193,7,0.03)'}]; })(),
+    refs:(()=>{ const B=buildBikeModel_pred(); const ftp=B.ftp; return [{value:ftp,label:'FTP '+ftp+'W',color:'rgba(244,67,54,0.55)'},{value:ftp*0.88,label:'Sweetspot floor '+Math.round(ftp*0.88)+'W',color:'rgba(255,152,0,0.35)'},{value:300,label:'Goal FTP 300W',color:'rgba(0,230,118,0.3)',dash:true}]; })(),
     tipLines:(a,v)=>[
       `<span style="color:#aabbcc;font-size:10px;">${fmtDate(a.d)}</span>`,
       `NP: <b style="color:#ff9800;">${a.nw?a.nw+'W NP':'—'}</b>  Avg: ${a.w?a.w+'W':'—'}`,
@@ -890,7 +892,7 @@ function renderSwimCharts() {
     getValue:a=>a.sp, color:'#2196f3', label:'min/100m', lowerIsBetter:true,
     effortDots:false, rollingN:5, H:240,
     yFmt:v=>fmtPace(Math.max(0,v)),
-    refs:[{value:1.733,label:'CSS ~1:44',color:'rgba(0,230,118,0.5)'}],
+    refs:(()=>{ const S=buildSwimModel_pred(); return [{value:S.css,label:'CSS '+fmtPace(S.css)+'/100m',color:'rgba(0,230,118,0.5)'},{value:1.667,label:'Goal CSS 1:40/100m',color:'rgba(0,188,212,0.35)',dash:true}]; })(),
     tipLines:(a,v)=>[
       `<span style="color:#aabbcc;font-size:10px;">${fmtDate(a.d)}</span>`,
       `Pace: <b style="color:#2196f3;">${fmtPace(v)}/100m</b>`,
@@ -3458,215 +3460,324 @@ function saveWorkoutEdit(actId) {
 }
 
 // ===== AI PERFORMANCE OVERVIEW (#8) =====
+// ===================================================================
+// TRICOACH INSIGHTS ENGINE — rule-based, runs 100% client-side
+// Replaces the broken Anthropic API call with deep, data-driven analysis
+// ===================================================================
+
+function computeTriCoachInsights() {
+  const R = buildRunModel_pred(), B = buildBikeModel_pred(), S = buildSwimModel_pred();
+  const pred = _calcPrediction(RACE_DISTANCES['70.3'], R, B, S);
+  const fmtP = p => { const m=Math.floor(p),s=Math.round((p%1)*60); return `${m}:${String(s).padStart(2,'0')}`; };
+  const fmtMins = m => { const h=Math.floor(m/60),min=Math.floor(m%60),s=Math.round((m%1)*60); return h>0?`${h}:${String(min).padStart(2,'0')}:${String(s).padStart(2,'0')}`:`${min}:${String(s).padStart(2,'0')}`; };
+
+  // ── Season Goals ─────────────────────────────────────────────────
+  const GOALS = {
+    ftp: 300, ltPace: 4.167, css: 1.667,
+    himSecs: 4.5 * 3600, // 4:30:00
+    swimSplit: 32 * 60, bikeSplit: 2.5 * 3600, runSplit: 1.75 * 3600
+  };
+
+  // ── Current splits ───────────────────────────────────────────────
+  const himSecs = pred.total * 60;
+  const swimSecs = pred.swimMins * 60;
+  const bikeSecs = pred.bikeMins * 60;
+  const runSecs = pred.runMins * 60;
+
+  // ── Gap calculations ─────────────────────────────────────────────
+  const ftpGapW = GOALS.ftp - B.ftp;
+  const ftpGapPct = ftpGapW / GOALS.ftp * 100;
+  const ltGapSecs = Math.round((R.threshold - GOALS.ltPace) * 60);
+  const cssGapSecs = Math.round((S.css - GOALS.css) * 60);
+  const himGapMins = Math.round((himSecs - GOALS.himSecs) / 60);
+  const bikeGapMins = Math.round((bikeSecs - GOALS.bikeSplit) / 60);
+  const runGapMins = Math.round((runSecs - GOALS.runSplit) / 60);
+  const swimGapSecs = Math.round(swimSecs - GOALS.swimSplit);
+
+  // ── Last 8 weeks training load ──────────────────────────────────
+  const weekLoads = [];
+  for(let i=7; i>=0; i--) {
+    const d = new Date(); d.setDate(d.getDate() - i*7);
+    const wk = getWeekKey(d);
+    const t = calcWeekTotalsFromStrava(wk);
+    const tl = calcWeekTrainingLoad(wk);
+    weekLoads.push({ wk, hrs: t.totalMin/60, score: tl?.score||0, label: tl?.label||'—' });
+  }
+  const recentLoad = weekLoads.slice(-4);
+  const avgRecentHrs = recentLoad.reduce((s,w)=>s+w.hrs,0)/4;
+  const highWeeks = recentLoad.filter(w=>w.label==='HIGH'||w.label==='VERY HIGH').length;
+  const thisWeekHrs = weekLoads[7]?.hrs || 0;
+  const lastWeekHrs = weekLoads[6]?.hrs || 0;
+  const weekOnWeekChg = lastWeekHrs > 0 ? (thisWeekHrs - lastWeekHrs) / lastWeekHrs * 100 : 0;
+
+  // ── Polarisation (last 6 weeks runs ≥15min) ─────────────────────
+  const cutoff42 = new Date(); cutoff42.setDate(cutoff42.getDate()-42);
+  const cutoff42str = cutoff42.toISOString().slice(0,10);
+  const recentRuns = STRAVA_ACTS.acts.filter(a=>a.s==='Run' && a.mm>=15 && a.d>=cutoff42str);
+  const easyRuns = recentRuns.filter(a=>a.ef==='easy').length;
+  const hardRuns = recentRuns.filter(a=>a.ef==='hard'||a.iv).length;
+  const modRuns = recentRuns.filter(a=>a.ef==='moderate').length;
+  const totalRuns = recentRuns.length || 1;
+  const easyPct = Math.round(easyRuns/totalRuns*100);
+  const hardPct = Math.round(hardRuns/totalRuns*100);
+  const modPct = Math.round(modRuns/totalRuns*100);
+  const polarisationScore = Math.max(0, 100 - Math.abs(easyPct-80)*1.5 - modPct*2); // 80/0/20 is perfect
+
+  // ── AE (aerobic efficiency) trend ────────────────────────────────
+  const aeRuns = STRAVA_ACTS.acts.filter(a=>a.s==='Run'&&a.hr>0&&a.p>0&&a.mm>=20).slice(-20);
+  let aeTrend = 0;
+  if(aeRuns.length >= 5) {
+    const first5avg = aeRuns.slice(0,5).reduce((s,a)=>s+(1000/a.p/60)/a.hr*1000,0)/5;
+    const last5avg = aeRuns.slice(-5).reduce((s,a)=>s+(1000/a.p/60)/a.hr*1000,0)/5;
+    aeTrend = (last5avg - first5avg) / first5avg * 100;
+  }
+
+  // ── Recovery metrics ─────────────────────────────────────────────
+  const last14 = D.mornings.filter(m=>m.date >= new Date(Date.now()-14*864e5).toISOString().slice(0,10));
+  const last7 = D.mornings.filter(m=>m.date >= new Date(Date.now()-7*864e5).toISOString().slice(0,10));
+  const lastM = D.mornings.length ? D.mornings[D.mornings.length-1] : null;
+  const avgHRV7 = last7.filter(m=>m.hrv).reduce((s,m,_,a)=>s+m.hrv/a.length,0) || 0;
+  const avgSleep7 = last7.filter(m=>m.sleepScore).reduce((s,m,_,a)=>s+m.sleepScore/a.length,0) || 0;
+  const readiness = lastM?.readinessScore || 0;
+
+  // ── Bike specific ────────────────────────────────────────────────
+  const bikeActs6w = STRAVA_ACTS.acts.filter(a=>a.s==='Bike'&&a.d>=cutoff42str&&a.mm>=30);
+  const avgBikeNP = bikeActs6w.filter(a=>a.nw).reduce((s,a,_,arr)=>s+(a.nw/arr.length),0);
+  const avgBikeHrs = bikeActs6w.reduce((s,a)=>s+a.mm/60,0) / 6; // per week avg
+
+  // ── Swim specific ─────────────────────────────────────────────────
+  const swimActs6w = STRAVA_ACTS.acts.filter(a=>a.s==='Swim'&&a.d>=cutoff42str);
+  const avgSwimKm = swimActs6w.reduce((s,a)=>s+(a.dk||0),0) / 6;
+
+  // ── Scoring components ────────────────────────────────────────────
+  const bikeScore = Math.max(0, Math.min(100, 100 - ftpGapPct * 2.0));
+  const runScore = Math.max(0, Math.min(100, 100 - ltGapSecs * 1.5));
+  const swimScore = Math.max(0, Math.min(100, 100 - cssGapSecs * 8));
+  const recoveryScore = Math.min(100, (
+    (avgHRV7 >= 80 ? 100 : avgHRV7 >= 65 ? 75 : 50) * 0.35 +
+    (avgSleep7 >= 82 ? 100 : avgSleep7 >= 75 ? 75 : 50) * 0.30 +
+    (readiness >= 70 ? 100 : readiness >= 50 ? 70 : 40) * 0.35
+  ));
+  const loadScore = highWeeks >= 3 ? 55 : highWeeks >= 2 ? 75 : 90;
+  const overallScore = Math.round(bikeScore*0.30 + runScore*0.30 + swimScore*0.15 + recoveryScore*0.15 + loadScore*0.10);
+
+  // ── Status label ──────────────────────────────────────────────────
+  let status, statusColor;
+  if(overallScore >= 80) { status='BUILDING WELL'; statusColor='var(--green)'; }
+  else if(overallScore >= 65) { status='ON TRACK'; statusColor='#00bcd4'; }
+  else if(overallScore >= 50) { status='MANAGING'; statusColor='var(--orange)'; }
+  else { status='ATTENTION NEEDED'; statusColor='var(--red)'; }
+
+  // ── Headline ──────────────────────────────────────────────────────
+  let headline;
+  const biggestLimiter = ftpGapW >= ltGapSecs*2 ? 'bike' : 'run';
+  if(himGapMins > 30) headline = `${himGapMins}min off HIM goal — ${biggestLimiter} is the primary limiter`;
+  else if(himGapMins > 15) headline = `${himGapMins}min off 4:30 HIM target — strong base, closing the gap`;
+  else headline = `${himGapMins}min off 4:30 target — race-ready, fine-tune the details`;
+
+  // ── Discipline insights ────────────────────────────────────────────
+  const bikeInsights = [];
+  if(ftpGapW > 50) bikeInsights.push({ severity:'high', text:`FTP is ${B.ftp}W — need ${ftpGapW}W more (+${Math.round(ftpGapPct)}%) to hit 300W goal. This is your biggest time saver.` });
+  if(avgBikeHrs < 2.5) bikeInsights.push({ severity:'med', text:`Averaging ${avgBikeHrs.toFixed(1)}h/week on bike in last 6 weeks — increase to 3–4h/week to drive FTP gains.` });
+  if(bikeGapMins > 15) bikeInsights.push({ severity:'med', text:`Bike split ${fmtMins(bikeSecs/60)} vs ${fmtMins(GOALS.bikeSplit/60)} goal — ${bikeGapMins}min gap. Closing FTP from ${B.ftp}W → 300W alone saves ~${Math.round(bikeGapMins*0.7)}min.` });
+  if(avgBikeNP > 0 && avgBikeNP > B.ftp * 0.88) bikeInsights.push({ severity:'low', text:`Recent avg NP ${Math.round(avgBikeNP)}W is above 88% FTP threshold — watch accumulated fatigue.` });
+
+  const runInsights = [];
+  if(ltGapSecs > 20) runInsights.push({ severity:'high', text:`LT pace ${fmtP(R.threshold)}/km vs 4:10 goal — ${ltGapSecs}s/km gap. Run split ${fmtMins(runSecs/60)} vs ${fmtMins(GOALS.runSplit/60)} goal = ${runGapMins}min to find.` });
+  if(easyPct < 75) runInsights.push({ severity:'med', text:`Run polarisation: ${easyPct}% easy / ${modPct}% moderate / ${hardPct}% hard. Shift ${modPct}% moderate runs to easy — moderate zone is a training "no man's land" for HIM prep.` });
+  if(aeTrend > 3) runInsights.push({ severity:'low', text:`Aerobic efficiency trending +${aeTrend.toFixed(1)}% — your easy runs are building engine economy. Keep it up.` });
+  else if(aeTrend < -3) runInsights.push({ severity:'med', text:`Aerobic efficiency down ${Math.abs(aeTrend).toFixed(1)}% — you may be running easy runs too fast. Slow them down.` });
+
+  const swimInsights = [];
+  if(cssGapSecs > 0) swimInsights.push({ severity: cssGapSecs > 8 ? 'med' : 'low', text:`CSS ${fmtP(S.css)}/100m vs 1:40 goal — ${cssGapSecs}s gap. Swim split ${fmtMins(swimSecs/60)} vs ${fmtMins(GOALS.swimSplit/60)} goal. CSS is your closest discipline to target.` });
+  if(avgSwimKm < 2.0) swimInsights.push({ severity:'med', text:`Averaging ${(avgSwimKm*1000).toFixed(0)}m/week swimming. Aim for 4–5km/week in 2 quality sessions to drive CSS improvement.` });
+  else swimInsights.push({ severity:'low', text:`Swimming ${(avgSwimKm*1000).toFixed(0)}m/week average — solid volume. Focus on quality CSS sets (e.g. 6×200m, 4×400m at target pace).` });
+
+  // ── Recovery insights ─────────────────────────────────────────────
+  const recoveryInsights = [];
+  if(highWeeks >= 3) recoveryInsights.push({ severity:'high', text:`${highWeeks} consecutive HIGH load weeks. Schedule a recovery week NOW — reduce volume 30–40% to prevent overreaching.` });
+  if(avgHRV7 > 0 && avgHRV7 < 75) recoveryInsights.push({ severity:'high', text:`HRV 7d avg ${avgHRV7.toFixed(0)} — below baseline. Prioritise sleep and reduce intensity until it recovers.` });
+  else if(avgHRV7 >= 80) recoveryInsights.push({ severity:'low', text:`HRV ${avgHRV7.toFixed(0)} — well recovered. Good window for a quality training block.` });
+  if(avgSleep7 < 78) recoveryInsights.push({ severity:'med', text:`Sleep score avg ${avgSleep7.toFixed(0)}/100 this week — below target. Each hour of sleep deficit costs ~5% next-day performance.` });
+  if(readiness >= 70) recoveryInsights.push({ severity:'low', text:`Readiness ${readiness}/100 — green light for quality training today.` });
+
+  // ── Top 5 ranked recommendations ─────────────────────────────────
+  const allInsights = [
+    ...bikeInsights.map(i=>({...i, sport:'🚴 Bike'})),
+    ...runInsights.map(i=>({...i, sport:'🏃 Run'})),
+    ...swimInsights.map(i=>({...i, sport:'🏊 Swim'})),
+    ...recoveryInsights.map(i=>({...i, sport:'💤 Recovery'}))
+  ];
+  const prioritised = allInsights.sort((a,b) => {
+    const rank = {high:0, med:1, low:2};
+    return rank[a.severity] - rank[b.severity];
+  });
+
+  return {
+    score: overallScore, status, statusColor, headline,
+    scores: { bike: Math.round(bikeScore), run: Math.round(runScore), swim: Math.round(swimScore), recovery: Math.round(recoveryScore) },
+    goals: GOALS,
+    pred: { himSecs, bikeSecs, runSecs, swimSecs, bikeGapMins, runGapMins, swimGapSecs, himGapMins },
+    splits: { him: fmtMins(pred.total), bike: fmtMins(bikeSecs/60), run: fmtMins(runSecs/60), swim: fmtMins(swimSecs/60) },
+    goalSplits: { him: '4:30:00', bike: '2:30:00', run: '1:45:00', swim: '32:00' },
+    fitness: { ftp: B.ftp, ftpGapW, ltPace: R.threshold, ltGapSecs, css: S.css, cssGapSecs, vdot: Math.round(R.vdot) },
+    polarisation: { easyPct, modPct, hardPct, totalRuns, score: Math.round(polarisationScore) },
+    load: { avgRecentHrs: avgRecentHrs.toFixed(1), highWeeks, weekOnWeekChg: weekOnWeekChg.toFixed(0) },
+    aeTrend: aeTrend.toFixed(1),
+    recommendations: prioritised.slice(0, 5),
+    allInsights: prioritised
+  };
+}
+
 function renderAIOverview() {
   const container = document.getElementById('pv-overview-content');
   if(!container) return;
 
-  // Gather all data for AI analysis
-  const acts = STRAVA_ACTS.acts || [];
-  const wk = getWeekKey(new Date());
-  const prevWk = (() => { const d=new Date(wk); d.setDate(d.getDate()-7); return getWeekKey(d); })();
-  const t = calcWeekTotalsFromStrava(wk);
-  const prevT = calcWeekTotalsFromStrava(prevWk);
+  const I = computeTriCoachInsights();
+  const fmtP = p => { const m=Math.floor(p),s=Math.round((p%1)*60); return `${m}:${String(s).padStart(2,'0')}`; };
+  const pctBar = (pct, color) => `<div style="height:6px;border-radius:3px;background:var(--border2);margin-top:4px;"><div style="height:100%;border-radius:3px;background:${color};width:${Math.min(100,Math.max(0,pct))}%;transition:width 0.6s;"></div></div>`;
+  const severityColor = s => s==='high'?'var(--red)':s==='med'?'var(--orange)':'var(--text-dim)';
+  const severityDot = s => s==='high'?'🔴':s==='med'?'🟡':'🟢';
 
-  // Last 7 morning checks
-  const last7Days = [];
-  for(let i=6; i>=0; i--) { const d=new Date(); d.setDate(d.getDate()-i); last7Days.push(localDateStr(d)); }
-  const recentMornings = D.mornings.filter(m => last7Days.includes(m.date));
-  const lastMorning = D.mornings.length ? D.mornings[D.mornings.length-1] : null;
+  // Score progress toward goal (0% = current, 100% = at goal)
+  const ftpPct = Math.round((1 - I.fitness.ftpGapW / (300 - 150)) * 100);
+  const ltPct = Math.round((1 - Math.max(0, I.fitness.ltGapSecs) / (4.633 - 4.167) / 60) * 100);
+  const cssPct = Math.round((1 - Math.max(0, I.fitness.cssGapSecs) / (1.733 - 1.667) / 60) * 100);
+  const himPct = Math.max(0, Math.round(100 - I.pred.himGapMins / 36 * 100));
 
-  // Recent week's activities
-  const [wStart, wEnd] = [wk, (() => { const [y,m,d]=wk.split('-').map(Number); const e=new Date(y,m-1,d+6); return e.getFullYear()+'-'+String(e.getMonth()+1).padStart(2,'0')+'-'+String(e.getDate()).padStart(2,'0'); })()];
-  const weekActs = acts.filter(a => a.d >= wStart && a.d <= wEnd);
-
-  // Last checkin
-  const lastCI = D.checkins.length ? D.checkins[D.checkins.length-1] : null;
-
-  // Performance models
-  let R = null, B = null, S = null, pred703 = null;
-  try {
-    R = buildRunModel_pred(); B = buildBikeModel_pred(); S = buildSwimModel_pred();
-    pred703 = _calcPrediction(RACE_DISTANCES['70.3'], R, B, S);
-  } catch(e) {}
-
-  // Build context for AI
-  const avgHRV = recentMornings.filter(m=>m.hrv).length ? Math.round(recentMornings.filter(m=>m.hrv).reduce((a,m)=>a+m.hrv,0)/recentMornings.filter(m=>m.hrv).length) : null;
-  const avgSleep = recentMornings.filter(m=>m.sleepScore).length ? Math.round(recentMornings.filter(m=>m.sleepScore).reduce((a,m)=>a+m.sleepScore,0)/recentMornings.filter(m=>m.sleepScore).length) : null;
-
-  const dataContext = {
-    athlete: 'Triathlete training for Half Ironman',
-    currentWeek: {
-      totalHrs: t.totalMin ? (t.totalMin/60).toFixed(1) : 0,
-      runKm: t.runKm?.toFixed(1),
-      bikeKm: t.bikeKm?.toFixed(0),
-      swimM: t.swimKm ? (t.swimKm*1000).toFixed(0) : 0,
-      sessions: t.totalSessions,
-      hardSessions: weekActs.filter(a=>a.ef==='hard'||a.ef==='max'||a.iv).length
-    },
-    previousWeek: {
-      totalHrs: prevT.totalMin ? (prevT.totalMin/60).toFixed(1) : 0
-    },
-    healthMetrics7Days: {
-      avgHRV,
-      latestHRV: lastMorning?.hrv,
-      avgSleepScore: avgSleep,
-      latestRHR: lastMorning?.rhr,
-      latestGarminStress: lastMorning?.gstress,
-      latestReadinessScore: lastMorning?.readinessScore,
-      latestLegs: lastMorning?.legs,
-      checkCount: recentMornings.length
-    },
-    weekActivities: weekActs.map(a => ({
-      date: a.d, sport: a.s, distKm: a.dk?.toFixed(1), mins: a.mm?.toFixed(0),
-      hr: a.hr, effort: a.ef, interval: a.iv, watts: a.nw||a.w, pace: a.p
-    })),
-    lastCheckin: lastCI ? {
-      date: lastCI.date, score: lastCI.score, hours: lastCI.hours,
-      freshness: lastCI.q4, sleep: lastCI.q7, motivation: lastCI.q8,
-      trainingLoadTrend: lastCI.q3trend, recap: lastCI.recap
-    } : null,
-    fitness: R && B && S ? {
-      runVDOT: Math.round(R.vdot),
-      runThresholdPace: R.threshold ? (m=>m.toFixed(0)+':'+(Math.round((R.threshold-Math.floor(R.threshold))*60)+'').padStart(2,'0'))(Math.floor(R.threshold)) : null,
-      bikeFTP: Math.round(B.ftp),
-      swimCSS: S.css,
-      pred703: pred703 ? _fmtHMS(pred703.total) : null,
-      runTSB: R.tsb?.toFixed(2),
-      bikeTSB: B.tsb?.toFixed(2)
-    } : null,
-    nutrition: lastMorning ? {
-      calIn: lastMorning.calIn, protein: lastMorning.protein, fuel: lastMorning.fuel
-    } : null
-  };
-
-  // Show loading state
   container.innerHTML = `
-    <div class="card" style="margin-bottom:12px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+    <!-- ── Header Score ── -->
+    <div class="card" style="margin-bottom:12px;padding:20px;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;">
         <div>
-          <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:2px;color:var(--green);">🧠 AI PERFORMANCE ANALYSIS</div>
-          <div style="font-size:10px;color:var(--text-dim);">Comprehensive assessment based on all your training, health and recovery data</div>
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:2px;color:var(--green);">⚡ TRICOACH ANALYSIS</div>
+          <div style="font-size:10px;color:var(--text-dim);">Based on ${STRAVA_ACTS.acts.length} activities · ${D.mornings.length} morning checks · Season goal: Sub 4:30 HIM</div>
         </div>
-        <button class="btn sec sml" onclick="renderAIOverview()">🔄 Refresh</button>
+        <button class="btn sec sml" onclick="renderAIOverview()" style="flex-shrink:0;">🔄 Refresh</button>
       </div>
-      <div id="ai-overview-loading" style="text-align:center;padding:32px;">
-        <div style="font-size:32px;margin-bottom:12px;animation:pulse 1.5s infinite;">🧠</div>
-        <div style="font-family:'Bebas Neue',sans-serif;font-size:16px;color:var(--text-dim);">Analysing your training data…</div>
-        <div style="font-size:11px;color:var(--text-dim);margin-top:8px;">Reviewing ${acts.length} activities, ${D.mornings.length} morning checks, ${D.checkins.length} weekly check-ins</div>
+
+      <!-- Score arc + status -->
+      <div style="display:flex;align-items:center;gap:20px;padding:16px;background:var(--surface2);border-radius:12px;margin-bottom:16px;">
+        <div style="position:relative;width:88px;height:88px;flex-shrink:0;">
+          <svg width="88" height="88" viewBox="0 0 88 88">
+            <circle cx="44" cy="44" r="36" fill="none" stroke="var(--border2)" stroke-width="9"/>
+            <circle cx="44" cy="44" r="36" fill="none" stroke="${I.statusColor}" stroke-width="9" stroke-linecap="round"
+              stroke-dasharray="${2*Math.PI*36}" stroke-dashoffset="${2*Math.PI*36*(1-I.score/100)}"
+              transform="rotate(-90 44 44)" style="transition:stroke-dashoffset 0.8s;"/>
+          </svg>
+          <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;">
+            <div style="font-family:'Bebas Neue',sans-serif;font-size:24px;color:${I.statusColor};line-height:1;">${I.score}</div>
+            <div style="font-size:8px;color:var(--text-dim);">/100</div>
+          </div>
+        </div>
+        <div style="flex:1;">
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:2px;color:${I.statusColor};margin-bottom:4px;">${I.status}</div>
+          <div style="font-size:12px;color:var(--text-mid);line-height:1.5;">${I.headline}</div>
+          <div style="display:flex;gap:16px;margin-top:10px;">
+            ${[['Bike',I.scores.bike,'var(--orange)'],['Run',I.scores.run,'var(--green)'],['Swim',I.scores.swim,'#2196f3'],['Recovery',I.scores.recovery,'#ce93d8']].map(([l,v,c])=>`
+            <div style="text-align:center;">
+              <div style="font-family:'Bebas Neue',sans-serif;font-size:16px;color:${c};">${v}</div>
+              <div style="font-size:9px;color:var(--text-dim);">${l}</div>
+            </div>`).join('')}
+          </div>
+        </div>
       </div>
-      <div id="ai-overview-result" style="display:none;"></div>
+
+      <!-- ── Sub-scores grid ── -->
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:0;">
+        ${[
+          ['Week Load', I.load.avgRecentHrs+'h avg', I.load.highWeeks>=3?'var(--red)':I.load.highWeeks>=2?'var(--orange)':'var(--green)', I.load.highWeeks>=3?'⚠ '+I.load.highWeeks+' high weeks':I.load.weekOnWeekChg>0?'↑ '+I.load.weekOnWeekChg+'% this week':'On plan'],
+          ['Polarisation', I.polarisation.easyPct+'% easy', I.polarisation.easyPct>=75?'var(--green)':I.polarisation.easyPct>=60?'var(--orange)':'var(--red)', I.polarisation.hardPct+'% hard · '+I.polarisation.modPct+'% mod'],
+          ['AE Trend', (I.aeTrend>0?'↑ +':I.aeTrend<0?'↓ ':'')+Math.abs(I.aeTrend)+'%', I.aeTrend>2?'var(--green)':I.aeTrend<-2?'var(--red)':'var(--text-mid)', 'Aerobic efficiency'],
+          ['vDOT', I.fitness.vdot, I.fitness.vdot>=50?'var(--green)':I.fitness.vdot>=44?'var(--orange)':'var(--red)', 'Run fitness index']
+        ].map(([l,v,c,sub])=>`
+        <div style="background:var(--surface2);border-radius:8px;padding:10px;">
+          <div style="font-size:9px;color:var(--text-dim);letter-spacing:1px;text-transform:uppercase;margin-bottom:2px;">${l}</div>
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:18px;color:${c};">${v}</div>
+          <div style="font-size:9px;color:var(--text-dim);">${sub}</div>
+        </div>`).join('')}
+      </div>
     </div>
-    <div id="ai-overview-stats" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px;">
-      ${[
-        ['Week Volume', t.totalMin ? (t.totalMin/60).toFixed(1)+'h' : '—', t.totalMin>=10*60?'var(--green)':t.totalMin>=6*60?'var(--orange)':'var(--text-dim)'],
-        ['Avg HRV 7d', avgHRV||'—', avgHRV>=70?'var(--green)':avgHRV>=55?'var(--orange)':'var(--red)'],
-        ['Sleep Score', avgSleep||'—', avgSleep>=80?'var(--green)':avgSleep>=70?'var(--orange)':'var(--red)'],
-        ['Readiness', lastMorning?.readinessScore||'—', (lastMorning?.readinessScore||0)>=70?'var(--green)':(lastMorning?.readinessScore||0)>=40?'var(--orange)':'var(--red)']
-      ].map(([l,v,c])=>`<div style="background:var(--surface2);border-radius:8px;padding:10px;text-align:center;">
-        <div style="font-size:9px;color:var(--text-dim);letter-spacing:1px;text-transform:uppercase;">${l}</div>
-        <div style="font-family:'Bebas Neue',sans-serif;font-size:24px;color:${c};">${v}</div>
-      </div>`).join('')}
-    </div>`;
 
-  // Call Claude API
-  const prompt = `You are an expert triathlon coach analysing an athlete's training data. Provide a comprehensive performance overview in 4 sections:
+    <!-- ── Goal Gap Section ── -->
+    <div class="card" style="margin-bottom:12px;padding:20px;">
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:2px;color:var(--text-mid);margin-bottom:16px;">🎯 SEASON GOAL TRACKER</div>
 
-1. **PERFORMANCE INDICATOR** (give a score out of 100 and label: OPTIMAL/BUILDING/MANAGING/FATIGUED/REST NEEDED, with a 1-sentence headline)
-2. **TRAINING ASSESSMENT** (2-3 sentences on this week's training load, quality, and progression vs last week)
-3. **RECOVERY & READINESS** (2-3 sentences on HRV trends, sleep quality, stress, and overall recovery status)  
-4. **KEY RECOMMENDATIONS** (3 specific, actionable bullet points for the coming week based on the data)
-
-Be direct, data-specific, and coach-like. Reference actual numbers from the data. If data is missing, note it briefly.
-
-ATHLETE DATA:
-${JSON.stringify(dataContext, null, 2)}
-
-Format your response exactly like this (use these exact section headers):
-## PERFORMANCE INDICATOR
-[Score/100] [LABEL] — [headline]
-
-## TRAINING ASSESSMENT
-[assessment]
-
-## RECOVERY & READINESS
-[assessment]
-
-## KEY RECOMMENDATIONS
-• [recommendation 1]
-• [recommendation 2]
-• [recommendation 3]`;
-
-  fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 1000,
-      messages: [{ role: 'user', content: prompt }]
-    })
-  })
-  .then(r => r.json())
-  .then(data => {
-    const text = data.content?.map(c=>c.text||'').join('') || '';
-    if(!text) { throw new Error('No response from AI'); }
-
-    // Parse the score/label from the first section
-    const scoreMatch = text.match(/(\d+)\/100.*?(OPTIMAL|BUILDING|MANAGING|FATIGUED|REST NEEDED)/i);
-    const score = scoreMatch ? parseInt(scoreMatch[1]) : 70;
-    const label = scoreMatch ? scoreMatch[2].toUpperCase() : 'BUILDING';
-    const scoreColor = score>=80?'var(--green)':score>=60?'var(--orange)':score>=40?'#ff5722':'var(--red)';
-
-    // Render the formatted result
-    const sections = text.split('##').filter(s=>s.trim()).map(s => {
-      const lines = s.trim().split('\n').filter(l=>l.trim());
-      const title = lines[0].trim();
-      const body = lines.slice(1).join('\n').trim();
-      return { title, body };
-    });
-
-    const loadingEl = document.getElementById('ai-overview-loading');
-    const resultEl = document.getElementById('ai-overview-result');
-    if(loadingEl) loadingEl.style.display = 'none';
-    if(resultEl) {
-      resultEl.style.display = 'block';
-      resultEl.innerHTML = `
-        <div style="display:flex;align-items:center;gap:20px;padding:16px;background:var(--surface2);border-radius:10px;margin-bottom:16px;">
-          <div style="position:relative;width:80px;height:80px;flex-shrink:0;">
-            <svg width="80" height="80" viewBox="0 0 80 80">
-              <circle cx="40" cy="40" r="33" fill="none" stroke="var(--border2)" stroke-width="8"/>
-              <circle cx="40" cy="40" r="33" fill="none" stroke="${scoreColor}" stroke-width="8" stroke-linecap="round"
-                stroke-dasharray="${2*Math.PI*33}" stroke-dashoffset="${2*Math.PI*33*(1-score/100)}" transform="rotate(-90 40 40)"/>
-            </svg>
-            <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;">
-              <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;color:${scoreColor};line-height:1;">${score}</div>
-            </div>
-          </div>
-          <div>
-            <div style="font-family:'Bebas Neue',sans-serif;font-size:24px;letter-spacing:2px;color:${scoreColor};">${label}</div>
-            ${sections[0]?.body ? `<div style="font-size:12px;color:var(--text-mid);margin-top:4px;line-height:1.5;">${sections[0].body.replace(/\[Score.*?\]/,'').replace(/OPTIMAL|BUILDING|MANAGING|FATIGUED|REST NEEDED/,'').trim()}</div>` : ''}
+      <!-- HIM split breakdown -->
+      <div style="background:var(--surface2);border-radius:10px;padding:14px;margin-bottom:12px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+          <div style="font-weight:700;font-size:13px;">Half Iron 70.3</div>
+          <div style="text-align:right;">
+            <span style="font-family:'Bebas Neue',sans-serif;font-size:18px;color:${I.pred.himGapMins<=0?'var(--green)':'var(--orange)'};">${I.splits.him}</span>
+            <span style="font-size:10px;color:var(--text-dim);"> / goal 4:30:00</span>
           </div>
         </div>
-        ${sections.slice(1).map(s => `
-          <div style="margin-bottom:14px;">
-            <div style="font-size:11px;font-weight:700;color:var(--text-dim);letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">${s.title}</div>
-            <div style="font-size:12px;color:var(--text-mid);line-height:1.7;">
-              ${s.body.replace(/^•\s*/gm, '<div style="display:flex;gap:8px;margin-bottom:6px;"><span style="color:var(--green);flex-shrink:0;">▸</span><span>').replace(/\n(?=▸|<div)/g, '</span></div>').replace(/\n/g,'<br>')}
-            </div>
-          </div>`).join('')}
-        <div style="font-size:9px;color:var(--text-dim);text-align:right;margin-top:8px;">AI Analysis · ${new Date().toLocaleDateString('en-AU')} · Click Refresh to re-analyse</div>`;
-    }
-  })
-  .catch(err => {
-    const loadingEl = document.getElementById('ai-overview-loading');
-    const resultEl = document.getElementById('ai-overview-result');
-    if(loadingEl) loadingEl.style.display = 'none';
-    if(resultEl) {
-      resultEl.style.display = 'block';
-      resultEl.innerHTML = `<div style="background:rgba(244,67,54,.08);border-radius:8px;padding:16px;color:var(--orange);">
-        <div style="font-weight:700;margin-bottom:8px;">⚠️ AI Analysis Unavailable</div>
-        <div style="font-size:11px;">Could not connect to AI: ${err.message}</div>
-        <div style="font-size:11px;margin-top:8px;">Your manual data summary: HRV ${avgHRV||'—'} · Sleep score ${avgSleep||'—'} · Week volume ${t.totalMin?(t.totalMin/60).toFixed(1)+'h':'—'} · Readiness ${lastMorning?.readinessScore||'—'}/100</div>
-      </div>`;
-    }
-  });
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;font-size:11px;">
+          ${[
+            ['🏊 Swim', I.splits.swim, '32:00', I.pred.swimGapSecs, '#2196f3'],
+            ['🚴 Bike', I.splits.bike, '2:30:00', I.pred.bikeGapMins*60, 'var(--orange)'],
+            ['🏃 Run', I.splits.run, '1:45:00', I.pred.runGapMins*60, 'var(--green)']
+          ].map(([label,cur,goal,gapSec,col])=>{
+            const over = gapSec > 0;
+            const gapStr = Math.abs(gapSec) >= 60 ? Math.round(Math.abs(gapSec)/60)+'min' : Math.abs(gapSec)+'s';
+            return `<div style="background:var(--surface3,var(--bg));border-radius:8px;padding:10px;text-align:center;">
+              <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px;">${label}</div>
+              <div style="font-family:'Bebas Neue',sans-serif;font-size:16px;color:${col};">${cur}</div>
+              <div style="font-size:9px;color:var(--text-dim);">goal ${goal}</div>
+              <div style="font-size:10px;font-weight:700;color:${over?'var(--orange)':'var(--green)'};">${over?'+'+gapStr+' over':gapStr+' under ✓'}</div>
+            </div>`;
+          }).join('')}
+        </div>
+        ${pctBar(himPct, himPct>=80?'var(--green)':himPct>=50?'var(--orange)':'var(--red)')}
+        <div style="font-size:9px;color:var(--text-dim);margin-top:4px;text-align:right;">${himPct}% of the way to goal</div>
+      </div>
+
+      <!-- Fitness benchmarks -->
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">
+        ${[
+          { label:'⚡ FTP', current: I.fitness.ftp+'W', goal:'300W', gap: '+'+I.fitness.ftpGapW+'W needed', pct: ftpPct, col:'var(--orange)' },
+          { label:'🏃 LT Pace', current: fmtP(I.fitness.ltPace)+'/km', goal:'4:10/km', gap: '+'+I.fitness.ltGapSecs+'s/km to find', pct: ltPct, col:'var(--green)' },
+          { label:'🏊 CSS', current: fmtP(I.fitness.css)+'/100m', goal:'1:40/100m', gap: '+'+I.fitness.cssGapSecs+'s/100m to find', pct: cssPct, col:'#2196f3' }
+        ].map(b=>`
+        <div style="background:var(--surface2);border-radius:8px;padding:12px;">
+          <div style="font-size:10px;color:var(--text-dim);margin-bottom:4px;">${b.label}</div>
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:18px;color:${b.col};">${b.current}</div>
+          <div style="font-size:9px;color:var(--text-dim);">goal ${b.goal}</div>
+          ${pctBar(b.pct, b.col)}
+          <div style="font-size:9px;color:var(--text-dim);margin-top:3px;">${b.gap}</div>
+        </div>`).join('')}
+      </div>
+    </div>
+
+    <!-- ── Sport Insights ── -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+      ${[
+        { title:'🚴 Bike', color:'var(--orange)', insights: I.allInsights.filter(i=>i.sport.includes('Bike')) },
+        { title:'🏃 Run', color:'var(--green)', insights: I.allInsights.filter(i=>i.sport.includes('Run')) },
+        { title:'🏊 Swim', color:'#2196f3', insights: I.allInsights.filter(i=>i.sport.includes('Swim')) },
+        { title:'💤 Recovery', color:'#ce93d8', insights: I.allInsights.filter(i=>i.sport.includes('Recovery')) }
+      ].map(s=>`
+      <div class="card" style="padding:14px;">
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:1px;color:${s.color};margin-bottom:10px;">${s.title}</div>
+        ${s.insights.length ? s.insights.map(i=>`
+          <div style="display:flex;gap:8px;margin-bottom:8px;font-size:11px;line-height:1.5;">
+            <span style="flex-shrink:0;margin-top:1px;">${severityDot(i.severity)}</span>
+            <span style="color:var(--text-mid);">${i.text}</span>
+          </div>`).join('') : `<div style="font-size:11px;color:var(--text-dim);">Looking good — no issues detected.</div>`}
+      </div>`).join('')}
+    </div>
+
+    <!-- ── Top Recommendations ── -->
+    <div class="card" style="padding:20px;">
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:2px;color:var(--text-mid);margin-bottom:14px;">🎯 PRIORITY ACTIONS THIS WEEK</div>
+      ${I.recommendations.map((r,i)=>`
+        <div style="display:flex;gap:12px;padding:12px;background:var(--surface2);border-radius:8px;margin-bottom:8px;border-left:3px solid ${severityColor(r.severity)};">
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:20px;color:${severityColor(r.severity)};flex-shrink:0;width:20px;">${i+1}</div>
+          <div>
+            <div style="font-size:10px;font-weight:700;color:${severityColor(r.severity)};letter-spacing:1px;text-transform:uppercase;margin-bottom:2px;">${r.sport}</div>
+            <div style="font-size:12px;color:var(--text-mid);line-height:1.5;">${r.text}</div>
+          </div>
+        </div>`).join('')}
+      <div style="font-size:9px;color:var(--text-dim);text-align:right;margin-top:8px;">TriCoach Insights Engine · Based on all your data · ${new Date().toLocaleDateString('en-AU')}</div>
+    </div>`;
 }
