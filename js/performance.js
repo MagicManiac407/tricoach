@@ -460,6 +460,24 @@ function renderRunCharts() {
     ]
   });
 
+  // ── Pace chart insight callout ────────────────────────────────────
+  const paceInsightEl = document.getElementById('run-pace-insight');
+  if(paceInsightEl && acts.length >= 4) {
+    const R = buildRunModel_pred();
+    const recent8 = acts.filter(a=>a.p).slice(-8);
+    const all = acts.filter(a=>a.p);
+    const recentAvgPace = recent8.reduce((s,a)=>s+a.p,0)/recent8.length;
+    const allAvgPace = all.reduce((s,a)=>s+a.p,0)/all.length;
+    const paceImprovePct = ((allAvgPace - recentAvgPace)/allAvgPace*100).toFixed(1);
+    const improving = recentAvgPace < allAvgPace;
+    const ltGap = R.threshold ? Math.round((recentAvgPace - R.threshold)*60) : null;
+    let msg = improving
+      ? `📈 <b>Running ${paceImprovePct}% faster</b> in your last 8 sessions vs overall average — solid progression.`
+      : `📉 <b>Recent pace ${Math.abs(paceImprovePct)}% slower</b> than overall average — may reflect increased easy running (which is good) or accumulated fatigue.`;
+    if(R.threshold) msg += ` Your lactate threshold is <b>${fmtPace(R.threshold)}/km</b>. Recent avg pace ${fmtPace(recentAvgPace)}/km is ${ltGap > 0 ? ltGap+'s/km slower than — you\'re doing good aerobic work.' : Math.abs(ltGap)+'s/km faster than threshold — ensure easy runs are truly easy (below '+fmtPace(R.threshold+0.5)+'/km).'}`;
+    paceInsightEl.innerHTML = msg;
+  } else if(paceInsightEl) { paceInsightEl.style.display='none'; }
+
   // HR trend — with HR zone bands
   drawTrendChart('c-run-hr', acts.filter(a=>a.hr), {
     getValue:a=>a.hr, color:'#ef5350', label:'bpm', lowerIsBetter:true,
@@ -482,6 +500,28 @@ function renderRunCharts() {
       `<span style="color:${a.ef==='easy'?'#2196f3':a.ef==='hard'?'#f44336':'#ff9800'};font-size:10px;">${a.ef}</span>`
     ]
   });
+
+  // ── HR chart insight callout ──────────────────────────────────────
+  const hrInsightEl = document.getElementById('run-hr-insight');
+  if(hrInsightEl) {
+    const lthr = _getLTHR();
+    const hrActs = acts.filter(a=>a.hr);
+    if(hrActs.length >= 4) {
+      const recent8hr = hrActs.slice(-8);
+      const allHr = hrActs;
+      const recentAvgHR = Math.round(recent8hr.reduce((s,a)=>s+a.hr,0)/recent8hr.length);
+      const allAvgHR = Math.round(allHr.reduce((s,a)=>s+a.hr,0)/allHr.length);
+      const hrDrop = allAvgHR - recentAvgHR;
+      const z2pct = Math.round(hrActs.filter(a=>a.hr<163).length/hrActs.length*100);
+      let hrMsg = hrDrop > 2
+        ? `❤️ <b>HR dropped ${hrDrop}bpm on average</b> vs all-time — cardiac adaptation is working. Same effort, stronger heart.`
+        : hrDrop < -2
+        ? `⚠️ <b>HR ${Math.abs(hrDrop)}bpm higher</b> in recent sessions — could be heat, fatigue, or illness. Monitor closely.`
+        : `❤️ <b>HR stable</b> at ~${recentAvgHR}bpm average — consistent output.`;
+      hrMsg += ` ${z2pct}% of sessions below Z2 ceiling (163bpm). LTHR is ${lthr}bpm — aim for runs at 142–162bpm for aerobic base building.`;
+      hrInsightEl.innerHTML = hrMsg;
+    } else { hrInsightEl.style.display='none'; }
+  }
 
   // AE Trend (existing logic, kept)
   const c1=setupCanvas('c-ae-trend');
@@ -812,6 +852,27 @@ function renderBikeCharts() {
     ]
   });
 
+  // ── Bike power insight callout ────────────────────────────────────
+  const bikeInsightEl = document.getElementById('bike-np-insight');
+  if(bikeInsightEl) {
+    const B = buildBikeModel_pred();
+    const pwActs = acts.filter(a=>a.nw||a.w);
+    if(pwActs.length >= 3) {
+      const recent6 = pwActs.slice(-6);
+      const recentAvgNP = Math.round(recent6.reduce((s,a)=>s+(a.nw||a.w),0)/recent6.length);
+      const allAvgNP = Math.round(pwActs.reduce((s,a)=>s+(a.nw||a.w),0)/pwActs.length);
+      const trending = recentAvgNP > allAvgNP;
+      const ftpPct = Math.round(recentAvgNP/B.ftp*100);
+      const ssLow = Math.round(B.ftp*0.75), ssHigh = Math.round(B.ftp*0.88);
+      let bMsg = `⚡ <b>Recent avg NP: ${recentAvgNP}W</b> (${ftpPct}% of FTP ${B.ftp}W) — `;
+      bMsg += ftpPct >= 88 ? 'threshold zone — high quality work but watch fatigue.' :
+              ftpPct >= 75 ? `sweet spot zone (${ssLow}–${ssHigh}W). Good for FTP gains.` :
+              'below sweet spot — increase intensity or ride duration to drive FTP progress.';
+      bMsg += ` ${trending ? '📈 Power trending up' : '📉 Power trending down'} vs overall avg (${allAvgNP}W). FTP goal: 300W — ${300-B.ftp}W to go.`;
+      bikeInsightEl.innerHTML = bMsg;
+    } else { bikeInsightEl.style.display='none'; }
+  }
+
   // HR trend
   drawTrendChart('c-bike-hr', acts.filter(a=>a.hr), {
     getValue:a=>a.hr, color:'#ef5350', label:'bpm', lowerIsBetter:true,
@@ -900,6 +961,27 @@ function renderSwimCharts() {
       `HR: ${a.hr?a.hr+'bpm':'—'}  ·  <span style="font-size:10px;color:var(--text-dim);">${a.n.length>28?a.n.slice(0,28)+'…':a.n}</span>`
     ]
   });
+
+  // ── Swim insight callout ──────────────────────────────────────────
+  const swimInsightEl = document.getElementById('swim-pace-insight');
+  if(swimInsightEl && acts.length >= 3) {
+    const S = buildSwimModel_pred();
+    const recent6 = acts.slice(-6);
+    const recentAvg = recent6.reduce((s,a)=>s+a.sp,0)/recent6.length;
+    const cssGapSecs = Math.round((S.css - 1.667)*60);
+    const goalGapSecs = Math.round((recentAvg - 1.667)*60);
+    const all = acts;
+    const allAvg = all.reduce((s,a)=>s+a.sp,0)/all.length;
+    const improving = recentAvg < allAvg;
+    let sMsg = `🏊 <b>Recent avg pace: ${fmtPace(recentAvg)}/100m</b> · CSS threshold: ${fmtPace(S.css)}/100m · Goal: 1:40/100m.`;
+    sMsg += improving
+      ? ` 📈 Pace trending faster — good CSS adaptation.`
+      : ` Pace stable — incorporate CSS-specific sets (e.g. 6×200m or 4×400m at 1:40–1:42 pace) to drive improvement.`;
+    sMsg += cssGapSecs > 0
+      ? ` ${cssGapSecs}s/100m to CSS goal — each quality session chips ~1–2s off.`
+      : ` ✅ Already at CSS goal pace — raise target or focus on race-pace OW simulation.`;
+    swimInsightEl.innerHTML = sMsg;
+  } else if(swimInsightEl) { swimInsightEl.style.display='none'; }
 
   // HR trend
   drawTrendChart('c-swim-hr', acts.filter(a=>a.hr), {
@@ -3472,11 +3554,18 @@ function computeTriCoachInsights() {
   const fmtMins = m => { const h=Math.floor(m/60),min=Math.floor(m%60),s=Math.round((m%1)*60); return h>0?`${h}:${String(min).padStart(2,'0')}:${String(s).padStart(2,'0')}`:`${min}:${String(s).padStart(2,'0')}`; };
 
   // ── Season Goals ─────────────────────────────────────────────────
-  const GOALS = {
-    ftp: 300, ltPace: 4.167, css: 1.667,
-    himSecs: 4.5 * 3600, // 4:30:00
-    swimSplit: 32 * 60, bikeSplit: 2.5 * 3600, runSplit: 1.75 * 3600
-  };
+  const GOALS = { ftp: 300, ltPace: 4.167, css: 1.667, himSecs: 4.5 * 3600 };
+
+  // ── Compute goal-fitness splits dynamically via predictor ─────────
+  // Clone models and patch to goal values so splits are internally consistent
+  const goalB2 = {...B, ftp: GOALS.ftp};
+  const goalR2 = {...R, threshold: GOALS.ltPace};
+  const goalS2 = {...S, css: GOALS.css};
+  const goalPred = _calcPrediction(RACE_DISTANCES['70.3'], goalR2, goalB2, goalS2);
+  GOALS.swimSplit = goalPred.swimMins * 60;
+  GOALS.bikeSplit = goalPred.bikeMins * 60;
+  GOALS.runSplit  = goalPred.runMins  * 60;
+  GOALS.himSecs   = goalPred.total    * 60; // actual predicted HIM at goal fitness
 
   // ── Current splits ───────────────────────────────────────────────
   const himSecs = pred.total * 60;
@@ -3490,9 +3579,11 @@ function computeTriCoachInsights() {
   const ltGapSecs = Math.round((R.threshold - GOALS.ltPace) * 60);
   const cssGapSecs = Math.round((S.css - GOALS.css) * 60);
   const himGapMins = Math.round((himSecs - GOALS.himSecs) / 60);
+  // Gaps vs what the predictor says we'd achieve at goal fitness
   const bikeGapMins = Math.round((bikeSecs - GOALS.bikeSplit) / 60);
-  const runGapMins = Math.round((runSecs - GOALS.runSplit) / 60);
-  const swimGapSecs = Math.round(swimSecs - GOALS.swimSplit);
+  const runGapMins  = Math.round((runSecs  - GOALS.runSplit)  / 60);
+  const swimGapSecs = Math.round(swimSecs  - GOALS.swimSplit);
+  const himGapMinsReal = Math.round((himSecs - GOALS.himSecs) / 60);
 
   // ── Last 8 weeks training load ──────────────────────────────────
   const weekLoads = [];
@@ -3617,9 +3708,9 @@ function computeTriCoachInsights() {
     score: overallScore, status, statusColor, headline,
     scores: { bike: Math.round(bikeScore), run: Math.round(runScore), swim: Math.round(swimScore), recovery: Math.round(recoveryScore) },
     goals: GOALS,
-    pred: { himSecs, bikeSecs, runSecs, swimSecs, bikeGapMins, runGapMins, swimGapSecs, himGapMins },
+    pred: { himSecs, bikeSecs, runSecs, swimSecs, bikeGapMins, runGapMins, swimGapSecs, himGapMins: himGapMinsReal||himGapMins },
     splits: { him: fmtMins(pred.total), bike: fmtMins(bikeSecs/60), run: fmtMins(runSecs/60), swim: fmtMins(swimSecs/60) },
-    goalSplits: { him: '4:30:00', bike: '2:30:00', run: '1:45:00', swim: '32:00' },
+    goalSplits: { him: fmtMins(GOALS.himSecs/60), bike: fmtMins(GOALS.bikeSplit/60), run: fmtMins(GOALS.runSplit/60), swim: fmtMins(GOALS.swimSplit/60) },
     fitness: { ftp: B.ftp, ftpGapW, ltPace: R.threshold, ltGapSecs, css: S.css, cssGapSecs, vdot: Math.round(R.vdot) },
     polarisation: { easyPct, modPct, hardPct, totalRuns, score: Math.round(polarisationScore) },
     load: { avgRecentHrs: avgRecentHrs.toFixed(1), highWeeks, weekOnWeekChg: weekOnWeekChg.toFixed(0) },
@@ -3643,7 +3734,8 @@ function renderAIOverview() {
   const ftpPct = Math.round((1 - I.fitness.ftpGapW / (300 - 150)) * 100);
   const ltPct = Math.round((1 - Math.max(0, I.fitness.ltGapSecs) / (4.633 - 4.167) / 60) * 100);
   const cssPct = Math.round((1 - Math.max(0, I.fitness.cssGapSecs) / (1.733 - 1.667) / 60) * 100);
-  const himPct = Math.max(0, Math.round(100 - I.pred.himGapMins / 36 * 100));
+  const himBaseline = 360 * 60; // 6:00 worst-case in secs
+  const himPct = Math.max(0, Math.min(100, Math.round((himBaseline - I.pred.himSecs) / (himBaseline - I.goals.himSecs) * 100)));
 
   container.innerHTML = `
     <!-- ── Header Score ── -->
@@ -3709,7 +3801,7 @@ function renderAIOverview() {
           <div style="font-weight:700;font-size:13px;">Half Iron 70.3</div>
           <div style="text-align:right;">
             <span style="font-family:'Bebas Neue',sans-serif;font-size:18px;color:${I.pred.himGapMins<=0?'var(--green)':'var(--orange)'};">${I.splits.him}</span>
-            <span style="font-size:10px;color:var(--text-dim);"> / goal 4:30:00</span>
+            <span style="font-size:10px;color:var(--text-dim);"> / goal ${I.goalSplits.him}</span>
           </div>
         </div>
         <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;font-size:11px;">

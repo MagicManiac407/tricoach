@@ -929,9 +929,9 @@
         <div><label>Min Distance (km)</label><input type="number" id="rf-dist" value="3" min="1" step="1" style="width:72px;" onchange="renderRunCharts()"></div>
         <div><label>Date Range</label>
           <select id="rf-range" onchange="renderRunCharts()">
-            <option value="all" selected>All time ✓</option>
+            <option value="all">All time</option>
             <option value="365">Last 12 months</option>
-            <option value="180">Last 6 months</option>
+            <option value="180" selected>Last 6 months ✓</option>
             <option value="90">Last 90 days</option>
           </select>
         </div>
@@ -944,8 +944,8 @@
     <div id="run-stats" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px;"></div>
     <div class="card" style="margin-bottom:12px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-        <div class="sl" style="margin:0;">Pace Trend — All Time</div>
-        <div style="font-size:10px;color:var(--text-dim);">Line = 6-session rolling avg · dots = individual sessions coloured by effort · lower = faster · gold dashed = HM PB pace</div>
+        <div class="sl" style="margin:0;">📈 Pace Trend</div>
+        <div style="font-size:10px;color:var(--text-dim);">Green line = 6-session trend · Dots = each run · 🔵 Easy · 🟠 Moderate · 🔴 Hard · Lower is faster · Dashed lines = targets</div>
       </div>
       <div style="display:flex;gap:12px;margin-bottom:8px;font-size:10px;">
         <span style="color:#2196f3;">● Easy</span>
@@ -953,23 +953,25 @@
         <span style="color:#f44336;">● Hard</span>
       </div>
       <canvas id="c-run-pace" height="240" style="width:100%;display:block;"></canvas>
+      <div id="run-pace-insight" style="margin-top:10px;padding:10px 12px;background:var(--surface2);border-radius:8px;font-size:11px;color:var(--text-mid);line-height:1.6;"></div>
     </div>
     <div class="card" style="margin-bottom:12px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-        <div class="sl" style="margin:0;">Heart Rate — Zone Bands</div>
-        <div style="font-size:10px;color:var(--text-dim);">Blue=Z2 · Orange=Z3 · Red=Z4+ zones · Same effort, HR going down = cardiac adaptation ✓</div>
+        <div class="sl" style="margin:0;">❤️ Heart Rate Trend</div>
+        <div style="font-size:10px;color:var(--text-dim);">At the same effort level, if HR drifts lower over time = heart is getting stronger ✓ · Dashed lines = HR zones</div>
       </div>
       <canvas id="c-run-hr" height="240" style="width:100%;display:block;"></canvas>
+      <div id="run-hr-insight" style="margin-top:10px;padding:10px 12px;background:var(--surface2);border-radius:8px;font-size:11px;color:var(--text-mid);line-height:1.6;"></div>
     </div>
     <div class="g2" style="margin-bottom:12px;">
       <div class="card" style="margin:0;">
-        <div class="sl">Aerobic Efficiency (Speed÷HR)</div>
-        <div style="font-size:10px;color:var(--text-dim);margin-bottom:8px;">↑ trending up = base building is working. The most reliable long-term fitness signal.</div>
+        <div class="sl">⚡ Aerobic Efficiency</div>
+        <div style="font-size:10px;color:var(--text-dim);margin-bottom:8px;">Speed ÷ HR — higher = faster for the same heart rate. This is your true aerobic fitness number. ↑ = engine building.</div>
         <canvas id="c-ae-trend" height="200" style="width:100%;display:block;"></canvas>
       </div>
       <div class="card" style="margin:0;">
-        <div class="sl">Pace vs HR Scatter — Fitness Map</div>
-        <div style="font-size:10px;color:var(--text-dim);margin-bottom:8px;">Grey=older sessions · Green=recent · Bottom-right corner = best aerobic fitness.</div>
+        <div class="sl">🎯 Fitness Map (Pace vs HR)</div>
+        <div style="font-size:10px;color:var(--text-dim);margin-bottom:8px;">Each dot = one run. Grey = old, Green = recent. Best fitness = bottom-right (fast pace, low HR). Watch the cluster shift right over time.</div>
         <canvas id="c-ae-scatter" height="220" style="width:100%;display:block;"></canvas>
       </div>
     </div>
@@ -990,9 +992,9 @@
       <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
         <div><label>Date Range</label>
           <select id="lrf-range" onchange="renderLongRunCharts()">
-            <option value="all" selected>All time</option>
+            <option value="all">All time</option>
             <option value="365">Last 12 months</option>
-            <option value="180">Last 6 months</option>
+            <option value="180" selected>Last 6 months ✓</option>
             <option value="90">Last 90 days</option>
           </select>
         </div>
@@ -1050,17 +1052,17 @@
       <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
         <div><label>Ride Type</label>
           <select id="bf-type" onchange="renderBikeCharts()">
-            <option value="all" selected>All rides</option>
-            <option value="rouvy">Rouvy / Indoor only</option>
+            <option value="all">All rides (inc. outdoor)</option>
+            <option value="rouvy" selected>Rouvy / Indoor only ✓</option>
             <option value="outdoor">Outdoor only</option>
           </select>
         </div>
-        <div><label>Min Duration (min)</label><input type="number" id="bf-dur" value="20" min="10" step="5" style="width:72px;" onchange="renderBikeCharts()"></div>
+        <div><label>Min Duration (min)</label><input type="number" id="bf-dur" value="30" min="10" step="5" style="width:72px;" onchange="renderBikeCharts()"></div>
         <div><label>Date Range</label>
           <select id="bf-range" onchange="renderBikeCharts()">
-            <option value="all" selected>All time ✓</option>
+            <option value="all">All time</option>
             <option value="365">Last 12 months</option>
-            <option value="180">Last 6 months</option>
+            <option value="180" selected>Last 6 months ✓</option>
             <option value="90">Last 90 days</option>
           </select>
         </div>
@@ -1070,9 +1072,10 @@
     <div class="card" style="margin-bottom:12px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
         <div class="sl" style="margin:0;">Power Trend (NP / Avg Watts)</div>
-        <div style="font-size:10px;color:var(--text-dim);">Thick line = 6-session rolling avg · red dashed = FTP ~230W</div>
+        <div style="font-size:10px;color:var(--text-dim);">Orange line = 6-session trend · Dashed = your FTP &amp; goal lines · Higher = more power ~230W</div>
       </div>
       <canvas id="c-bike-np" height="240" style="width:100%;display:block;"></canvas>
+      <div id="bike-np-insight" style="margin-top:10px;padding:10px 12px;background:var(--surface2);border-radius:8px;font-size:11px;color:var(--text-mid);line-height:1.6;"></div>
     </div>
     <div class="card" style="margin-bottom:12px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
@@ -1102,9 +1105,9 @@
       <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
         <div><label>Date Range</label>
           <select id="swf-range" onchange="renderSwimCharts()">
-            <option value="all" selected>All time ✓</option>
+            <option value="all">All time</option>
             <option value="365">Last 12 months</option>
-            <option value="180">Last 6 months</option>
+            <option value="180" selected>Last 6 months ✓</option>
           </select>
         </div>
         <div><label>Min Distance (m)</label><input type="number" id="swf-dist" value="300" min="100" step="100" style="width:80px;" onchange="renderSwimCharts()"></div>
@@ -1120,6 +1123,7 @@
         <div style="font-size:10px;color:var(--text-dim);">Thick line = rolling avg · lower = faster · green dashed = CSS ~1:44</div>
       </div>
       <canvas id="c-swim-pace" height="240" style="width:100%;display:block;"></canvas>
+      <div id="swim-pace-insight" style="margin-top:10px;padding:10px 12px;background:var(--surface2);border-radius:8px;font-size:11px;color:var(--text-mid);line-height:1.6;"></div>
     </div>
     <div class="card" style="margin-bottom:12px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
